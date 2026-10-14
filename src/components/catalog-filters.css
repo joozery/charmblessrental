@@ -1,0 +1,10 @@
+.rental-shop { padding-top: 22px; }
+.catalog-filter-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 12px; padding: 14px; background: white; border: 1px solid #f2e4ec; border-radius: 12px; }
+.catalog-filter-row label { display: flex; flex-direction: column; gap: 6px; font-size: 10px; color: #a17c90; flex: 1; min-width: 150px; }
+.catalog-filter-row .shop-select { min-height: 38px; font-size: 11px; }
+.catalog-filter-row select:disabled { color: #bba6b2; background: #faf7f9; cursor: not-allowed; border-color: #f1e9ef; }
+.clear-filters { min-height: 38px; color: #ce2776; font-size: 11px; padding: 8px 15px; border: 1px solid #f3d5e3; border-radius: 8px; }
+.clear-filters:hover { background: #fff1f7; }
+.filter-summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 10px; color: #a88d9d; margin-top: 12px; }
+.filter-summary > span:first-child { color: #ad4c7a; }
+@media(max-width:600px) { .rental-shop { padding-top: 16px; } .catalog-filter-row { gap: 9px; padding: 10px; } .catalog-filter-row label { min-width: 120px; } .filter-summary { font-size: 9px; } }

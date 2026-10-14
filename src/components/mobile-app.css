@@ -1,0 +1,127 @@
+.mobile-app-navigation, .mobile-filter-toggle { display: none; }
+@media(max-width:767px) {
+  html { scroll-padding-top: 72px; }
+  body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); overflow-x: clip; }
+  .container { width: calc(100% - 28px); }
+  .site-header { padding-top: env(safe-area-inset-top); }
+  .site-header > .container { min-height: 58px; padding-block: 8px; }
+  .shop-header .shop-brand { font-size: 13px; gap: 8px; min-width: 0; }
+  .shop-header .shop-brand img { width: 36px !important; height: 36px !important; }
+  .shop-header-actions { gap: 8px; }
+  .shop-header-actions > .cart-trigger { display: none; }
+  .mobile-menu-trigger { display: grid; width: 38px; height: 38px; }
+  .desktop-nav { display: none; }
+  h2, .shop-section-heading h2, .shop-how h2 { font-size: 19px; letter-spacing: -.4px; }
+  .pill { min-height: 42px; font-size: 12px; padding: 10px 17px; }
+  .cover-banner { overflow: hidden; }
+  .cover-banner > img { height: 180px !important; min-height: 0; object-fit: cover; object-position: 65% center; }
+  .cover-copy h1 { font-size: clamp(23px,5.7vw,34px); max-width: 48%; }
+  .cover-copy p { font-size: 9px; line-height: 1.65; max-width: 46%; margin-top: 8px; }
+  .rental-shop { position: relative; padding-top: 14px; padding-bottom: 20px; }
+  .shop-search { display: flex; flex-wrap: wrap; gap: 8px; border: 0; box-shadow: none; padding: 0; background: none; }
+  .shop-search-input { width: calc(100% - 91px); min-height: 44px; padding: 10px; }
+  .shop-search-input input { font-size: 16px; }
+  .shop-search-input input::placeholder { font-size: 12px; }
+  .mobile-filter-toggle { display: flex; align-items: center; justify-content: center; gap: 5px; position: absolute; right: 0; top: 14px; height: 44px; width: 83px; border: 1px solid #e8d8e2; background: white; border-radius: 10px; font-size: 11px; color: #a12863; }
+  .mobile-filter-toggle svg { width: 14px; height: 14px; }
+  .mobile-filter-toggle svg:last-child { width: 10px; }
+  .shop-search .shop-dates, .shop-search > select { display: none; }
+  .shop-search.filters-expanded .shop-dates { display: flex; width: 100%; min-height: 58px; }
+  .shop-search.filters-expanded > select { display: block; width: 100%; min-height: 44px; font-size: 16px; }
+  .shop-dates label { font-size: 10px; }
+  .shop-dates input { font-size: 16px; }
+  .catalog-filter-row { display: none; }
+  .catalog-filter-row.filters-expanded { display: flex; padding: 10px; gap: 8px; }
+  .catalog-filter-row label { min-width: calc(50% - 8px); font-size: 10px; }
+  .catalog-filter-row select { font-size: 16px !important; min-height: 42px !important; width: 100%; }
+  .clear-filters { width: 100%; min-height: 42px; }
+  .filter-summary { margin-top: 8px; font-size: 10px; }
+  .filter-summary > span:last-child { display: none; }
+  .catalog-filter-row.filters-expanded + .filter-summary > span:last-child { display: block; font-size: 9px; }
+  .filter-tabs.shop-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 7px; padding-bottom: 3px; margin-top: 12px; }
+  .shop-tabs button { flex-shrink: 0; min-height: 38px; font-size: 11px; padding: 8px 17px; }
+  .shop-section-heading { margin-top: 20px; margin-bottom: 10px; }
+  .text-link { font-size: 11px; min-height: 32px; }
+  .trending-grid, .product-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 10px; }
+  .shop-card { border-radius: 11px; }
+  .shop-card-image .fashion-photo, .trending-grid .shop-card-image .fashion-photo { aspect-ratio: 4/5; }
+  .shop-card-info { padding: 10px; }
+  .shop-card-info h3 { font-size: 12px; line-height: 1.5; }
+  .shop-price { font-size: 11px; }
+  .shop-price > span { display: block; font-size: 9px; }
+  .shop-card-info .product-details { display: flex; min-height: 34px; margin-top: 5px; font-size: 11px; }
+  .shop-badge { font-size: 9px; top: 8px; left: 8px; padding: 3px 9px; }
+  .demo-note { font-size: 9px; line-height: 1.7; }
+  .promotion-section { padding-block: 0 20px; }
+  .promotion-copy { padding: 20px; }
+  .promotion-copy h2 { font-size: 22px; }
+  .promotion-copy > p { font-size: 11px; }
+  .promotion-visual { height: 180px; }
+  .promotion-note strong { font-size: 14px; }
+  .shop-how { padding-block: 20px; }
+  .shop-how .steps { grid-template-columns: 1fr; gap: 8px; }
+  .shop-how .step { padding: 14px; gap: 12px; }
+  .shop-how .step h3 { font-size: 12px; }
+  .shop-how .step p { font-size: 10px; }
+  .shop-contact { padding-block: 20px; gap: 12px; align-items: flex-start; flex-direction: column; }
+  .shop-contact h2 { font-size: 18px; }
+  footer { padding-top: 20px; }
+  .footer-inner { gap: 15px; flex-wrap: wrap; }
+  .footer-inner .brand-name { font-size: 13px; }
+  .footer-inner img { width: 36px !important; height: 36px !important; }
+  .footer-inner > p { display: none; }
+  .footer-inner nav { gap: 20px; font-size: 11px; }
+  .footer-bottom { font-size: 8px; margin-top: 15px; padding-bottom: 12px; }
+  .mobile-app-navigation { position: fixed; bottom: 0; inset-inline: 0; z-index: 40; display: grid; grid-template-columns: repeat(4,1fr); padding: 5px 10px calc(5px + env(safe-area-inset-bottom)); background: #fffffff5; backdrop-filter: blur(18px); border-top: 1px solid #eee3ea; box-shadow: 0 -4px 20px #60314805; }
+  .mobile-app-navigation > a, .mobile-app-navigation > button { display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; min-height: 52px; color: #9c8492; font-size: 10px; }
+  .mobile-app-navigation a[aria-current=page] { color: #d01470; }
+  .mobile-app-navigation svg { height: 21px; width: 21px; }
+  .mobile-cart-icon { position: relative; }
+  .mobile-cart-icon b { position: absolute; right: -10px; top: -5px; border-radius: 50%; background: #d01470; color: white; font-size: 8px; font-weight: 500; height: 15px; width: 15px; display: grid; place-items: center; }
+  .dialog-panel { top: auto; left: 0; right: 0; bottom: 0; transform: none; width: 100%; max-height: 92dvh; border-radius: 20px 20px 0 0; padding: 24px 18px calc(22px + env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+  .dialog-panel::before { content: ""; display: block; width: 34px; height: 4px; border-radius: 5px; background: #e8dce4; margin: -12px auto 18px; }
+  .dialog-close { width: 36px; height: 36px; top: 14px; right: 14px; }
+  .dialog-panel > h2 { font-size: 19px !important; padding-right: 35px; }
+  .booking-panel { max-height: 94dvh; }
+  .booking-form { gap: 12px; margin-top: 16px; }
+  .booking-form input:not([type=radio]):not([type=checkbox]), .booking-form textarea { font-size: 16px; min-height: 44px; padding: 10px; }
+  .booking-form input::placeholder, .booking-form textarea::placeholder { font-size: 12px; }
+  .booking-date-grid { gap: 8px; }
+  .booking-form label { font-size: 12px; }
+  .booking-method { min-height: 62px; }
+  .booking-method input, .booking-acknowledgment input { width: 18px; height: 18px; flex-shrink: 0; }
+  .booking-method strong { font-size: 11px; }
+  .booking-method b { font-size: 10px; }
+  .booking-price { font-size: 12px; }
+  .booking-help { font-size: 10px; }
+  .booking-remove { min-height: 32px; padding: 6px 2px; }
+  .booking-form > button[type=submit] { min-height: 46px; }
+  .detail-header { position: sticky; top: 0; z-index: 30; background: #fffffff4; backdrop-filter: blur(12px); padding-top: env(safe-area-inset-top); }
+  .detail-header > div { padding-block: 10px; }
+  .detail-header .shop-brand { font-size: 12px; gap: 7px; }
+  .detail-header img { width: 34px; height: 34px; }
+  .detail-header .text-link { font-size: 10px; }
+  .detail-breadcrumb { padding-block: 14px; font-size: 10px; }
+  .detail-layout { grid-template-columns: 1fr; gap: 20px; }
+  .detail-gallery { position: static; }
+  .detail-gallery img { max-height: 420px; border-radius: 12px; }
+  .detail-info h1 { font-size: 26px; }
+  .detail-thai { font-size: 14px; }
+  .detail-pricing { margin-top: 15px; padding-top: 15px; }
+  .detail-pricing strong { font-size: 21px; }
+  .detail-delivery { font-size: 11px; }
+  .detail-packages, .detail-description, .detail-calendar, .detail-terms { padding-top: 16px; margin-top: 20px; }
+  .detail-info h2, .detail-info summary { font-size: 14px; }
+  .detail-packages article { padding: 14px; }
+  .calendar-grid { gap: 5px; }
+  .calendar-grid button { min-height: 38px; }
+  .calendar-toolbar button { min-width: 40px; min-height: 40px; }
+  .detail-related > div { grid-template-columns: repeat(2,1fr); gap: 12px; }
+  .detail-related h2 { font-size: 20px; }
+  .detail-booking-bar { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); gap: 10px; }
+  .detail-booking-bar > div { min-width: 0; }
+  .detail-booking-bar strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+  .detail-booking-bar .pill { flex-shrink: 0; min-height: 44px; }
+  .product-detail-page { padding-bottom: 40px; }
+}
+@media(max-width:360px) { .shop-header .shop-brand { font-size: 12px; } .cover-copy p { font-size: 8px; } .catalog-filter-row label { min-width: 100%; } .booking-date-grid { grid-template-columns: 1fr; } .detail-header .text-link { font-size: 9px; } .detail-booking-bar strong { max-width: 155px; } }

@@ -1,0 +1,36 @@
+.booking-panel { width: min(590px,calc(100% - 24px)); padding: 28px; }
+.booking-items { display: grid; gap: 10px; margin-block: 18px; border-bottom: 1px solid #f1e5eb; padding-bottom: 16px; }
+.booking-items strong { display: block; font-size: 15px; }
+.booking-items span { color: #968292; font-size: 12px; }
+.booking-price { background: #fff2f8; border-radius: 10px; padding: 14px; font-size: 13px; color: #a52061; }
+.booking-price small { display: block; font-size: 10px; color: #968292; margin-top: 4px; }
+.booking-form { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+.booking-form label, .booking-form legend { font-size: 12px; font-weight: 500; }
+.booking-form input:not([type=radio]):not([type=checkbox]), .booking-form textarea { display: block; width: 100%; margin-top: 6px; border: 1px solid #e1d8e1; background: white; border-radius: 8px; padding: 11px 12px; font-size: 13px; font-weight: 400; outline-color: #d01470; }
+.booking-form textarea { min-height: 80px; resize: vertical; }
+.booking-date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.booking-date-summary { font-size: 12px; color: #b3286a; background: #fff6fa; border-radius: 8px; padding: 10px; }
+.booking-date-summary strong { display: block; margin-top: 5px; }
+.booking-help { font-size: 10px; color: #988593; line-height: 1.8; margin-top: -9px; }
+.booking-privacy, .booking-rules { font-size: 11px; color: #8c6b7c; line-height: 1.8; }
+.booking-privacy summary, .booking-rules summary { cursor: pointer; color: #b22767; }
+.booking-form fieldset { display: grid; gap: 8px; }
+.booking-form legend { margin-bottom: 10px; }
+.booking-method { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #eee4ec; border-radius: 9px; cursor: pointer; }
+.booking-method.selected { border-color: #d01470; background: #fff6fa; }
+.booking-method input { accent-color: #d01470; }
+.booking-method span { flex: 1; }
+.booking-method strong { font-size: 12px; font-weight: 500; }
+.booking-method small { display: block; font-size: 10px; color: #9b8493; margin-top: 3px; }
+.booking-method b { font-size: 11px; color: #c02570; white-space: nowrap; font-weight: 500; }
+.booking-map-link { color: #b22767; font-size: 11px; }
+.booking-acknowledgment { display: flex; gap: 9px; align-items: flex-start; line-height: 1.8; }
+.booking-acknowledgment input { accent-color: #d01470; margin-top: 4px; }
+.booking-notice { padding: 12px; background: #faf5f8; border-radius: 8px; font-size: 11px; color: #907181; line-height: 1.8; }
+.booking-error { color: #c72c48; font-size: 12px; }
+.booking-review { display: grid; gap: 16px; margin-top: 20px; }
+.booking-review dt { font-size: 11px; color: #a18997; margin-top: 12px; }
+.booking-review dd { font-size: 13px; overflow-wrap: anywhere; }
+@media(max-width:480px) { .booking-panel { padding: 24px 18px; } .booking-date-grid { gap: 8px; } .booking-method { gap: 8px; padding: 10px; } .booking-method strong { font-size: 11px; } }
+.booking-items > div { position: relative; padding-right: 55px; }
+.booking-remove { position: absolute; right: 0; top: 2px; font-size: 10px; color: #bf2d6d; }

@@ -1,0 +1,9 @@
+.cover-banner { position: relative; background: #fce7ef; }
+.cover-copy { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
+.cover-copy h1 { max-width: 45%; font-size: clamp(30px,3.6vw,58px); }
+.cover-copy p { max-width: 43%; font-size: clamp(11px,1vw,15px); }
+.shop-card-info > .product-details { margin-top: 12px; }
+@media(max-width:600px) { .cover-banner { padding-bottom: 0; } .cover-banner > img { min-height: 180px; object-fit: cover; object-position: 68% center; } .cover-copy h1 { font-size: clamp(22px,5.5vw,31px); max-width: 49%; } .cover-copy p { font-size: 9px; line-height: 1.6; max-width: 46%; margin-top: 9px; } }
+.shop-search { grid-template-columns: minmax(210px,1.5fr) minmax(260px,1.1fr) auto; }
+@media(max-width:1100px) { .shop-search { grid-template-columns: 1fr 1fr; } .shop-search-input { grid-column: 1/-1; } }
+@media(max-width:600px) { .shop-search { grid-template-columns: 1fr; } .shop-search-input, .shop-dates { grid-column: auto; } }

@@ -1,0 +1,7 @@
+.gallery-main { touch-action: manipulation; cursor: zoom-in; }
+.gallery-main > img, .gallery-main > span { pointer-events: none; }
+.gallery-toolbar { z-index: 2; }
+.gallery-original { padding: 9px 10px; min-height: 38px; font-size: 11px; color: white; border-radius: 8px; background: #ffffff15; }
+.gallery-viewer { height: 100dvh; }
+.gallery-stage:not(.is-zoomed) { touch-action: pan-y; }
+@media(max-width:767px) { .product-detail-page { padding-bottom: 30px; } .detail-info > .pill { min-height: 44px; } }

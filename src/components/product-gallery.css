@@ -1,0 +1,24 @@
+.gallery-main { display: block; width: 100%; position: relative; border-radius: 14px; overflow: hidden; background: #f7f0eb; }
+.gallery-main span { position: absolute; bottom: 14px; right: 14px; color: #6b4e60; background: #ffffffed; border-radius: 50px; padding: 7px 12px; font-size: 11px; }
+.gallery-thumbnails { display: flex; overflow-x: auto; gap: 9px; margin-top: 12px; }
+.gallery-thumbnails button { flex-shrink: 0; width: 64px; border: 2px solid transparent; border-radius: 8px; overflow: hidden; }
+.gallery-thumbnails button[aria-pressed=true] { border-color: #d01470; }
+.gallery-thumbnails img { width: 100%; height: 80px; object-fit: cover; }
+.gallery-overlay { position: fixed; inset: 0; z-index: 70; background: #15101cef; }
+.gallery-viewer { position: fixed; inset: 0; z-index: 71; display: flex; flex-direction: column; outline: none; padding: 60px 60px 40px; }
+.gallery-toolbar { position: absolute; top: env(safe-area-inset-top,0px); left: 0; right: 0; display: flex; justify-content: flex-end; align-items: center; gap: 14px; padding: 12px 20px; color: white; font-size: 12px; }
+.gallery-toolbar > span { margin-right: auto; }
+.gallery-toolbar button { min-height: 38px; min-width: 38px; padding: 8px; border-radius: 8px; background: #ffffff15; }
+.gallery-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; }
+.gallery-stage img { width: auto; height: auto; max-height: 100%; max-width: 100%; object-fit: contain; }
+.gallery-stage.is-zoomed { display: block; }
+.gallery-stage.is-zoomed img { width: 160%; height: auto; max-width: none; max-height: none; margin: auto; }
+.gallery-previous, .gallery-next { position: absolute; top: 50%; width: 42px; height: 50px; color: white; font-size: 36px; border-radius: 8px; background: #ffffff20; }
+.gallery-previous { left: 12px; } .gallery-next { right: 12px; }
+.gallery-caption { font-size: 12px; color: #e4d3dd; text-align: center; margin-top: 12px; }
+.booking-items > div { display: flex; align-items: center; gap: 12px; min-height: 78px; }
+.booking-product-photo { flex-shrink: 0; width: 60px; height: 78px; object-fit: cover; object-position: top; border-radius: 7px; }
+.booking-product-text { min-width: 0; }
+.booking-product-text strong { font-size: 13px; }
+.booking-product-text span { font-size: 11px; }
+@media(max-width:767px) { .gallery-main span { bottom: 10px; right: 10px; font-size: 10px; } .gallery-viewer { padding: calc(60px + env(safe-area-inset-top)) 10px calc(24px + env(safe-area-inset-bottom)); } .gallery-previous, .gallery-next { width: 34px; height: 44px; } .gallery-previous { left: 5px; } .gallery-next { right: 5px; } .booking-product-photo { width: 52px; height: 70px; } }

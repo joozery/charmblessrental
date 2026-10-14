@@ -1,0 +1,1 @@
+Social icons from theSVG (https://thesvg.org/), upstream https://github.com/glincker/thesvg, default variants. Facebook, Instagram, LINE: CC0-1.0 according to upstream src/data/icons.json. Downloaded 2026-10-15.
