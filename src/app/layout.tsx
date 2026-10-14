@@ -15,6 +15,7 @@ import "@/components/sample-prices.css";
 import "@/components/product-gallery.css";
 import "@/components/social-rules.css";
 import "@/components/gallery-mobile-fix.css";
+import "@/components/availability.css";
 
 const notoSansThai = Noto_Sans_Thai({
   variable: "--font-noto-sans-thai",

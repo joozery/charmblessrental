@@ -1,0 +1,7 @@
+.calendar-grid button.availability-available { background: #eef9f3; border-color: #b9e6cd; color: #23764a; }
+.calendar-grid button.availability-limited { background: #fff8e8; border-color: #f2dda1; color: #9c711d; }
+.calendar-grid button.availability-full { background: #fff0f2; border-color: #f1c7ce; color: #bc4760; text-decoration: line-through; }
+.calendar-grid button.availability-unknown { background: #faf8fa; border-style: dashed; border-color: #e3d9e1; color: #a2909f; }
+.calendar-grid button.selected { background: #d01470; color: white; border: 1px solid #d01470; text-decoration: none; }
+.availability-legend-available { color: #23764a; } .availability-legend-limited { color: #9c711d; } .availability-legend-full { color: #bc4760; }
+.detail-calendar .availability-summary { color: #8c476a; font-weight: 500; }
