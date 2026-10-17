@@ -10,6 +10,6 @@ export const rentalRules = [
   "🌷 ถ้าจะเลื่อนวันเดินทาง ลูกค้าต้องแจ้งล่วงหน้าก่อน 7 วัน ถ้าไม่แจ้ง ทางร้านไม่คืนเงินทุกกรณี",
   "🌷 ถ้าลูกค้าส่งชุดคืนร้านเกินกำหนดที่ร้านแจ้งไว้ จะมีค่าปรับวันละ 100 บาท‼️ แต่ถ้าชุดที่ลูกค้าเช่าอยู่กระทบคิวลูกค้าท่านถัดไป ต้องชำระตามค่าเช่าจริงที่ลูกค้าคนถัดไปเช่า‼️",
 ];
-export default function RentalRules() {
-  return <div className="rental-rules-content"><h3>📌 กฎของการเช่าชุด 👗</h3><p className="rules-intro">รบกวนอ่านให้ละเอียด 🙏</p><ul>{rentalRules.map(rule => <li key={rule}>{rule}</li>)}</ul></div>;
+export default function RentalRules({ rules = rentalRules }: { rules?: string[] }) {
+  return <div className="rental-rules-content"><h3>📌 กฎของการเช่าชุด 👗</h3><p className="rules-intro">รบกวนอ่านให้ละเอียด 🙏</p><ul>{rules.map((rule, index) => <li key={`${rule}-${index}`}>{rule}</li>)}</ul></div>;
 }

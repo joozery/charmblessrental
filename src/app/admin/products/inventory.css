@@ -83,4 +83,5 @@ body:has(.inventory-page),body:has(.inventory-page) .chrome-shell,body:has(.inve
 .inventory-page .admin-search{min-width:200px}
 .inventory-page .inventory-image-link,.inventory-preview>a{display:inline-flex;align-items:center;gap:5px}
 .inventory-page .inventory-thumbnail{min-height:0;width:auto;padding:3px}.inventory-page .inventory-thumbnail>span>svg{width:12px;height:12px}
+.inventory-page .inventory-status.is-hidden{background:#f0f2f5;color:#758092}
 @media(max-width:760px){.inventory-page .admin-filters>button[role=combobox]{flex:1;min-width:0}.inventory-page .admin-search{flex-basis:100%}}

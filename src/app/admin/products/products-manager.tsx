@@ -12,8 +12,9 @@ import { categoryLabels, type Product } from "@/lib/products";
 type Draft = {
   id?: number; sku: string; name: string; category: string;
   cost: number | null; inventoryStatus: string; description: string; imageUrl: string;
+  color: string; size: string; dailyRate: number | null; deposit: number | null; stock: number; active: boolean;
 };
-const empty: Draft = { sku: "", name: "", category: "เสื้อ", cost: null, inventoryStatus: "อยู่ที่ร้าน", description: "", imageUrl: "" };
+const empty: Draft = { sku: "", name: "", category: "เสื้อ", cost: null, inventoryStatus: "อยู่ที่ร้าน", description: "", imageUrl: "", color: "", size: "", dailyRate: null, deposit: null, stock: 1, active: true };
 const money = (value?: number | null) => value == null ? "—" : value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const numeric = (input: HTMLInputElement) => Number.isNaN(input.valueAsNumber) ? null : input.valueAsNumber;
 export default function AdminProducts({ initialProducts }: { initialProducts: Product[] }) {
@@ -39,7 +40,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
   const original = draft?.id ? products.find(p => p.id === draft.id) : undefined;
   function edit(product?: Product) {
     setError(""); setNotice("");
-    setDraft(product ? { id: product.id, sku: product.sku || "", name: product.name, category: product.category, cost: product.cost ?? null, inventoryStatus: product.inventoryStatus || "", description: product.notes ?? product.description, imageUrl: product.images[0] } : { ...empty });
+    setDraft(product ? { id: product.id, sku: product.sku || "", name: product.name, category: product.category, cost: product.cost ?? null, inventoryStatus: product.inventoryStatus || "", description: product.notes ?? product.description, imageUrl: product.images[0], color: product.color || "", size: product.size || "", dailyRate: product.dailyRate ?? null, deposit: product.deposit ?? null, stock: product.stock ?? 1, active: product.active !== false } : { ...empty });
   }
   async function upload(file?: File) {
     if (!file || !draft) return;
@@ -82,11 +83,11 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
           <Select label="สถานะปัจจุบัน" value={status} onValueChange={value => { setStatus(value); setPage(0); }} options={[{value:"all",label:"ทุกสถานะปัจจุบัน"}, ...statuses.map(s => ({value:s,label:s}))]} />
         </div>
         <div className="admin-table-wrap inventory-table-scroll" tabIndex={0} role="region" aria-label="ตารางข้อมูลสินค้า เลื่อนซ้ายขวาเพื่อดูทุกคอลัมน์"><table className="admin-table inventory-table">
-          <thead><tr><th>Product ID</th><th>รูปสินค้า</th><th>ประเภท</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th className="inventory-money">ต้นทุน</th><th className="inventory-money">รายได้</th><th className="inventory-money">กำไร</th><th>หมายเหตุ</th><th>สถานะปัจจุบัน</th><th>Image URL</th><th>จัดการ</th></tr></thead>
+          <thead><tr><th>Product ID</th><th>รูปสินค้า</th><th>ประเภท</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th className="inventory-money">ราคาเช่า/วัน</th><th>หน้าร้าน</th><th className="inventory-money">ต้นทุน</th><th className="inventory-money">รายได้</th><th className="inventory-money">กำไร</th><th>หมายเหตุ</th><th>สถานะปัจจุบัน</th><th>Image URL</th><th>จัดการ</th></tr></thead>
           <tbody>{paginated.map(p => <tr key={p.id}>
             <td className="inventory-id">{p.legacyId || "—"}</td>
             <td><Button variant="ghost" className="inventory-thumbnail" onClick={() => setPreview(p)} aria-label={`ดูรูป ${p.sku || p.name}`}><Image unoptimized src={p.images[0]} alt={p.name} width={48} height={64} /><span aria-hidden="true"><Icon name="expand" /></span></Button></td>
-            <td>{categoryLabels[p.category] || p.category}</td><td className="inventory-sku">{p.sku || "—"}</td><td className="inventory-name"><strong>{p.name}</strong></td>
+            <td>{categoryLabels[p.category] || p.category}</td><td className="inventory-sku">{p.sku || "—"}</td><td className="inventory-name"><strong>{p.name}</strong></td><td className="inventory-money">{p.dailyRate == null ? "สอบถาม" : money(p.dailyRate)}</td><td><span className={`inventory-status ${p.active === false ? "is-hidden" : ""}`}>{p.active === false ? "ซ่อน" : "แสดง"}</span></td>
             <td className="inventory-money">{money(p.cost)}</td><td className="inventory-money">{money(p.legacyRevenue)}</td><td className={`inventory-money ${(p.legacyProfit ?? 0) < 0 ? "inventory-loss" : "inventory-profit"}`}>{money(p.legacyProfit)}</td>
             <td className="inventory-notes">{p.notes || p.description || "—"}</td><td><span className="inventory-status">{p.inventoryStatus || "—"}</span></td><td>{p.imageStatus === "missing-source" ? <span className="admin-muted">ไม่มีรูปเดิม</span> : <a className="inventory-image-link" href={p.images[0]} target="_blank" rel="noopener noreferrer">เปิดรูป<Icon name="arrow" /></a>}</td>
             <td><Button variant="outline" size="sm" aria-label={`แก้ไข ${p.sku || p.name}`} onClick={() => edit(p)}>แก้ไข</Button></td>
@@ -101,9 +102,14 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       <label>รหัสสินค้า<Input maxLength={150} value={draft.sku} onChange={e => setDraft({ ...draft, sku: e.target.value })} /></label>
       <label className="admin-form-full">ชื่อสินค้า<Input required maxLength={300} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
       <label>ประเภท<Select label="ประเภท" value={draft.category} onValueChange={value => setDraft({...draft,category:value})} options={Array.from(new Set([...categories,draft.category])).map(c => ({value:c,label:categoryLabels[c] || c}))} /></label>
+      <label>ราคาเช่าต่อวัน (บาท)<Input type="number" min="0" step="0.01" value={draft.dailyRate ?? ""} placeholder="เว้นว่าง = สอบถามราคา" onChange={e => setDraft({ ...draft, dailyRate: numeric(e.target) })} /></label>
+      <label>เงินมัดจำ (บาท)<Input type="number" min="0" step="0.01" value={draft.deposit ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, deposit: numeric(e.target) })} /></label>
+      <label>สี<Input maxLength={100} value={draft.color} onChange={e => setDraft({ ...draft, color: e.target.value })} /></label>
+      <label>ไซซ์<Input maxLength={100} value={draft.size} onChange={e => setDraft({ ...draft, size: e.target.value })} /></label>
+      <label>จำนวนชิ้น<Input type="number" min="0" step="1" value={draft.stock} onChange={e => setDraft({ ...draft, stock: Number(e.target.value) })} /></label>
       <label>ต้นทุน (บาท)<Input type="number" min="0" step="0.01" value={draft.cost ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, cost: numeric(e.target) })} /></label>
+      <label className="admin-form-full flex flex-row items-center gap-2"><Input type="checkbox" checked={draft.active} onChange={e => setDraft({ ...draft, active: e.target.checked })} />แสดงสินค้านี้บนหน้าร้าน</label>
       <label>รายได้สะสม (จากต้นฉบับ)<Input readOnly value={money(original?.legacyRevenue)} /></label><label>กำไร (จากต้นฉบับ)<Input readOnly value={money(original?.legacyProfit)} /></label>
-      <label className="admin-form-full">สถานะปัจจุบัน<Input readOnly value={draft.inventoryStatus} /></label>
       <label className="admin-form-full">หมายเหตุ<Textarea rows={3} maxLength={3000} value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>
       <label className="admin-form-full">รูปสินค้า<Input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => upload(e.target.files?.[0])} /><small>อัปโหลด PNG, JPG หรือ WebP ไม่เกิน 5 MB</small>{draft.imageUrl && <Image unoptimized src={draft.imageUrl} alt="ตัวอย่างรูปสินค้า" width={120} height={150} style={{ objectFit: "contain", width: 120, height: 150, borderRadius: 8 }} />}</label>
       <label className="admin-form-full">Image URL<Input required value={draft.imageUrl} onChange={e => setDraft({ ...draft, imageUrl: e.target.value })} /><small>ลิงก์รูปที่จัดเก็บใน Cloudflare R2</small></label>

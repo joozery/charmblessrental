@@ -1,0 +1,28 @@
+import { isAdmin, sameOrigin } from "@/lib/admin-auth";
+import { uploadProductImage } from "@/lib/r2";
+
+function imageType(bytes: Buffer) {
+  if (bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "image/png";
+  if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "image/jpeg";
+  if (bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  return null;
+}
+
+export async function POST(request: Request) {
+  if (!sameOrigin(request) || !await isAdmin()) return Response.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+  if (Number(request.headers.get("content-length")) > 6 * 1024 * 1024) return Response.json({ error: "ไฟล์ต้องไม่เกิน 5 MB" }, { status: 413 });
+  try {
+    const form = await request.formData();
+    const file = form.get("image");
+    if (!(file instanceof File) || !file.size || file.size > 5 * 1024 * 1024) {
+      return Response.json({ error: "เลือกรูปภาพขนาดไม่เกิน 5 MB" }, { status: 400 });
+    }
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const type = imageType(bytes);
+    if (!type) return Response.json({ error: "รองรับรูป PNG, JPG และ WebP เท่านั้น" }, { status: 400 });
+    const url = await uploadProductImage(bytes, type, "storefront");
+    return Response.json({ url });
+  } catch {
+    return Response.json({ error: "อัปโหลดไม่สำเร็จ กรุณาตรวจสอบการตั้งค่า R2 แล้วลองอีกครั้ง" }, { status: 500 });
+  }
+}

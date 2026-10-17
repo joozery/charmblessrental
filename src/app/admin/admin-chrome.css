@@ -55,3 +55,56 @@ body:has(.chrome-shell){padding-bottom:0;background:#f5f6f8}
 @media(max-width:1100px){.chrome-topbar{padding-inline:22px}.chrome-header-left,.chrome-header-actions{gap:12px}.chrome-breadcrumb>span,.chrome-breadcrumb>.chrome-icon:nth-of-type(1){display:none}.chrome-command-trigger{min-width:140px}}
 @media(max-width:760px){.chrome-shell{display:block}.chrome-sidebar{display:none}.chrome-shell .chrome-workspace{margin-left:0}.chrome-collapse-button{display:none}.chrome-mobile-trigger{display:grid}.chrome-topbar{min-height:60px;padding:8px 16px}.chrome-header-left,.chrome-header-actions{gap:8px}.chrome-header-divider,.chrome-account-copy,.chrome-breadcrumb>a,.chrome-breadcrumb>.chrome-icon{display:none}.chrome-command-trigger{min-width:32px;width:32px;padding:8px;background:transparent;border:0}.chrome-command-trigger>span,.chrome-command-trigger>kbd{display:none}.chrome-account-trigger{gap:2px}.chrome-account-trigger>.chrome-icon{margin-left:3px}.chrome-shell .admin-main{padding:24px 16px}.chrome-shell .admin-page-title h1{font-size:23px}.chrome-command-dialog{top:80px}.chrome-session-error{margin-inline:16px}}
 @media(prefers-reduced-motion:reduce){.chrome-shell *,.chrome-mobile-sidebar,.chrome-mobile-overlay,.chrome-command-dialog,.chrome-command-overlay,.chrome-account-menu{animation:none!important;transition:none!important}}
+
+/* Reworked navigation hierarchy and admin header */
+.chrome-sidebar{background:#fff;box-shadow:8px 0 30px rgb(37 27 40 / 4%)}
+.chrome-brand-row{height:76px;margin-bottom:21px;padding-inline:18px;background:linear-gradient(120deg,#fff 35%,#fbf7fa)}
+.chrome-brand-symbol{width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,#f8eff4,#eadce6);border-color:#e6d4df;color:#754a64;box-shadow:0 3px 9px rgb(112 70 96 / 9%)}
+.chrome-brand-copy{font-size:16px;font-weight:700;letter-spacing:-.55px;color:#292530}
+.chrome-brand-copy>span{color:#998794;font-size:7px;letter-spacing:1.35px}
+.chrome-navigation{gap:13px}
+.chrome-nav-group{display:flex;flex-direction:column;gap:3px}
+.chrome-group-label{padding:0 11px 4px;color:#9a8f9a;font-size:9px;font-weight:650;letter-spacing:1px;text-transform:uppercase}
+.chrome-nav-link{min-height:41px;padding:8px 11px;border-radius:8px;color:#64616d}
+.chrome-nav-link:hover{background:#f8f5f8;color:#37323d}
+.chrome-nav-icon{width:20px;height:20px;color:#8b8792}
+.chrome-nav-icon>.chrome-icon{width:18px;height:18px}
+.chrome-nav-copy strong{font-size:12px;font-weight:500}
+.chrome-nav-link.is-active{background:#f5edf2;border-color:#eee0e8;color:#714b63;box-shadow:inset 3px 0 #875c77}
+.chrome-nav-link.is-active::before{display:none}
+.chrome-nav-link.is-active .chrome-nav-icon{color:#875c77}
+.chrome-nav-link.is-active .chrome-nav-copy strong{font-weight:650}
+.chrome-nav-count{background:#f0edf1;color:#77717e}
+.chrome-nav-link.is-active .chrome-nav-count{background:#fff;color:#79516c;box-shadow:0 0 0 1px #e9dce5}
+.chrome-sidebar-footer{padding-top:13px}
+.chrome-sidebar-footer>a{min-height:48px;padding:8px 10px;border-color:#ece7ec;border-radius:9px;background:#faf9fa;box-shadow:none}
+.chrome-sidebar-footer>a:hover{background:#f5edf2;border-color:#e9dce5}
+.chrome-store-copy strong{font-weight:600}
+.chrome-topbar{min-height:72px;padding-inline:32px;background:linear-gradient(90deg,#fff 0%,#fff 68%,#fcfafc 100%);border-bottom-color:#ece9ee;box-shadow:0 4px 18px rgb(37 27 40 / 3%)}
+.chrome-header-left,.chrome-header-actions{gap:14px}
+.chrome-collapse-button{width:35px;height:35px;border:1px solid #ebe7ed;border-radius:9px;background:#fff;color:#77717e}
+.chrome-collapse-button:hover{background:#f7f1f5;border-color:#e8d9e3;color:#79516c}
+.chrome-breadcrumb-block{display:flex;min-width:0;flex-direction:column;gap:4px}
+.chrome-breadcrumb-label{color:#9b8795;font-size:8px;font-weight:650;letter-spacing:1.2px}
+.chrome-breadcrumb{gap:7px;font-size:10px}
+.chrome-breadcrumb>a{width:25px;height:25px;border-radius:7px;background:#faf8fa}
+.chrome-breadcrumb strong{padding:4px 8px;border:1px solid #eee7ed;border-radius:6px;background:#fbf8fa;color:#493e4b;font-size:10px}
+.chrome-command-trigger{min-width:185px;height:36px;border-radius:9px;background:#f8f7f9}
+.chrome-command-trigger>span{font-size:10px}
+.chrome-system-status{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid #eee8ee;border-radius:7px;background:#fff;color:#817581;font-size:9px;white-space:nowrap}
+.chrome-system-status i{width:6px;height:6px;border-radius:50%;background:#98758d;box-shadow:0 0 0 3px #f4edf2}
+.chrome-account-trigger{padding:4px 7px 4px 5px;border:1px solid #eee9ef;border-radius:10px;background:#fff}
+.chrome-account-trigger:hover,.chrome-account-trigger[data-state=open]{border-color:#e5d8e2;background:#faf7f9}
+.chrome-avatar{width:33px;height:33px;background:linear-gradient(145deg,#f6edf3,#e8d9e4);color:#704a62}
+.chrome-account-copy strong{color:#393440;font-size:10px}
+.chrome-account-copy small{font-size:8px}
+.chrome-shell[data-collapsed=true] .chrome-nav-group{gap:4px}
+.chrome-shell[data-collapsed=true] .chrome-group-label{display:none}
+.chrome-shell[data-collapsed=true] .chrome-nav-link{min-height:42px}
+.chrome-mobile-sidebar .chrome-nav-group{margin-bottom:3px}
+.chrome-mobile-sidebar .chrome-group-label{padding-top:3px}
+@media(max-width:1100px){.chrome-system-status{display:none}}
+@media(max-width:760px){.chrome-topbar{min-height:64px;padding:8px 14px}.chrome-breadcrumb-block{gap:0}.chrome-breadcrumb-label{display:none}.chrome-system-status{display:none}.chrome-command-trigger{border-radius:8px}}
+.chrome-command-dialog{top:min(12vh,96px);width:min(430px,calc(100vw - 28px));max-height:calc(100dvh - 120px);border-radius:12px;box-shadow:0 20px 70px rgb(33 16 39 / 25%)}
+.chrome-command-input{gap:9px;padding:12px 14px}.chrome-command-input>.chrome-icon{width:18px;height:18px}.chrome-command-input>input{font-size:13px}.chrome-command-results{max-height:min(390px,calc(100dvh - 205px));overflow-y:auto;padding:7px}.chrome-command-results>p{margin:3px 8px 6px;font-size:8px}.chrome-command-result{gap:9px;padding:8px;border-radius:7px}.chrome-command-result>span{padding:6px;border-radius:7px}.chrome-command-result>span>.chrome-icon{width:16px;height:16px}.chrome-command-result strong{font-size:11px}.chrome-command-result small{margin-top:2px;font-size:9px}.chrome-command-empty{padding:20px 12px;font-size:11px}.chrome-command-foot{padding:9px 14px;font-size:8px}.chrome-command-foot>span:last-child{font-size:7px}
+@media(max-width:760px){.chrome-command-dialog{top:70px;width:calc(100vw - 24px);max-height:calc(100dvh - 86px)}.chrome-command-results{max-height:calc(100dvh - 170px)}}
