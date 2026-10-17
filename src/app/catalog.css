@@ -1,6 +1,6 @@
 @import "tailwindcss";
 :root { --background: #fff; --foreground: #29252a; --pink: #ab285c; --muted: #827b7e; --line: #ece7e4; }
-@theme inline { --color-background: var(--background); --color-foreground: var(--foreground); --font-sans: var(--font-noto-sans-thai); --font-mono: var(--font-geist-mono); }
+@theme inline { --color-background: var(--background); --color-foreground: var(--foreground); --font-sans: var(--font-noto-sans-thai); --font-mono: var(--font-noto-sans-thai); }
 * { scrollbar-width: none; }
 *::-webkit-scrollbar { display: none; }
 html { scroll-behavior: smooth; scroll-padding-top: 90px; }
@@ -11,7 +11,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--pink); outline-
 .container { width: min(1320px, calc(100% - 64px)); margin-inline: auto; }
 .site-header { position: sticky; top: 0; z-index: 30; background: #ffffffef; backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); }
 .site-header > .container { min-height: 76px; padding-block: 10px; }
-.brand-monogram { width: 45px; height: 45px; position: relative; display: grid; place-items: center; border: 1px solid #cf9baa; border-radius: 50%; font-family: Georgia, serif; font-style: italic; font-size: 29px; letter-spacing: -3px; color: var(--pink); padding-right: 4px; }
+.brand-monogram { width: 45px; height: 45px; position: relative; display: grid; place-items: center; border: 1px solid #cf9baa; border-radius: 50%; font-family:var(--font-noto-sans-thai),sans-serif; font-style: italic; font-size: 29px; letter-spacing: -3px; color: var(--pink); padding-right: 4px; }
 .brand-monogram span { position: absolute; right: -3px; top: 0; font-size: 15px; background: white; }
 .brand-name { font-size: 16px; font-weight: 650; letter-spacing: 1.2px; }
 .brand-name > span { display: block; font-size: 9px; color: var(--pink); letter-spacing: 3.5px; margin-top: 3px; font-weight: 500; }
@@ -79,7 +79,7 @@ h2 { font-size: 26px; line-height: 1.45; font-weight: 600; letter-spacing: -.6px
 .product-card:hover .product-visual img { transform: scale(1.025); }
 .product-tag { position: absolute; left: 9px; top: 9px; background: #ffffffdf; color: #655459; font-size: 9px; padding: 4px 7px; border-radius: 3px; }
 .product-info { padding: 11px 1px 0; }
-.product-english { font-family: Georgia, serif; font-size: 16px; color: #42373b; }
+.product-english { font-family:var(--font-noto-sans-thai),sans-serif; font-size: 16px; color: #42373b; }
 .product-info h3 { font-size: 11px; color: #83787c; margin-top: 3px; font-weight: 400; }
 .product-meta { display: flex; align-items: center; justify-content: space-between; gap: 5px; border-top: 1px solid #e9e2dd; padding-top: 8px; margin-top: 10px; }
 .product-meta > span { font-size: 9px; color: #8c8285; }
@@ -90,7 +90,7 @@ h2 { font-size: 26px; line-height: 1.45; font-weight: 600; letter-spacing: -.6px
 .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
 .step { border: 1px solid var(--line); border-radius: 7px; padding: 20px; }
 .step-top { display: flex; align-items: center; justify-content: space-between; }
-.step-top > span { font-family: Georgia,serif; font-size: 30px; color: #c4a1ad; }
+.step-top > span { font-family:var(--font-noto-sans-thai),sans-serif; font-size: 30px; color: #c4a1ad; }
 .step-top svg { height: 26px; width: 26px; color: var(--pink); stroke-width: 1.2; }
 .step h3 { font-size: 15px; font-weight: 550; margin-top: 8px; }
 .step p { font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -191,3 +191,6 @@ body { background: #fffcfd; }
 .cart-items h3 { font-size: 12px; } .cart-items p { font-size: 11px; color: #9d8897; } .cart-items button { margin-left: auto; color: var(--pink); }
 @media(max-width:1100px) { .shop-search { grid-template-columns: 1fr 1fr; } .shop-filter, .shop-select { min-height: 38px; } .shop-brand { font-size: 16px; } }
 @media(max-width:600px) { .shop-header { gap: 10px; } .shop-header .shop-brand { gap: 8px; font-size: 12px; } .shop-header-actions { gap: 7px; } .cart-trigger { padding: 8px 12px !important; font-size: 10px !important; } .header-favorite > svg { width: 18px; } .rental-banner-inner { height: 240px; grid-template-columns: 1.2fr 1fr; } .rental-banner-copy { padding-left: 0; } .rental-banner h1 { font-size: 31px; } .rental-banner p { font-size: 10px; max-width: 200px; } .banner-portraits { height: 270px; gap: 6px; grid-template-columns: 1fr; } .banner-portraits .fashion-photo:nth-child(2) { display: none; } .shop-intro { padding-block: 16px; gap: 10px; } .shop-intro .brand-monogram { width: 42px; height: 42px; font-size: 28px; } .shop-intro h2 { font-size: 15px; } .shop-intro p { font-size: 9px; } .shop-intro > button { padding: 8px 12px; font-size: 10px; min-height: 36px; } .shop-search { gap: 7px; padding: 9px; } .shop-search-input, .shop-dates { grid-column: 1/-1; } .shop-dates input { font-size: 12px; } .shop-filter { justify-content: center; } .shop-tabs { gap: 6px; } .shop-tabs button { font-size: 10px; padding: 8px 14px; } .trending-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } .shop-card-info { padding: 10px; } .shop-card-info h3 { font-size: 11px; } .shop-price { font-size: 10px; } .shop-price > span { display: block; font-size: 8px; } .shop-section-heading h2 { font-size: 21px; } .shop-how h2 { font-size: 21px; } .shop-contact { align-items: flex-start; flex-direction: column; gap: 12px; } }
+
+/* One font across pages, native controls, and portalled Radix content. */
+html,body,button,input,select,textarea,kbd,code,pre{font-family:var(--font-noto-sans-thai),sans-serif}

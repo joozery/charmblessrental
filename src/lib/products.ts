@@ -1,10 +1,16 @@
-export const products = [
-  { id: 1, dailyRate: 250, color: "โรส", name: "Rose Satin Dress", thai: "เดรสซาตินสีโรส", category: "dress", image: "rose-dress", images: ["/images/rose-dress.png"], tag: "ชุดออกงาน", description: "เดรสซาตินโทนโรส ลุคเรียบหรูสำหรับงานเลี้ยงและวันพิเศษ" },
-  { id: 2, dailyRate: 300, color: "ฟ้า", name: "Blue Ruffle Dress", thai: "เดรสระบายสีฟ้า", category: "dress", image: "blue-dress", images: ["/images/blue-dress.png"], tag: "ชุดออกงาน", description: "เดรสเปิดไหล่พร้อมระบายสีฟ้า สำหรับลุคหวานสดใส" },
-  { id: 3, dailyRate: 350, color: "ขาว", name: "Cloud Puffer", thai: "พัฟเฟอร์สีขาว", category: "winter", image: "white-puffer", images: ["/images/white-puffer.png"], tag: "เสื้อกันหนาว", description: "เสื้อพัฟเฟอร์สีขาว แมตช์ง่ายสำหรับทริปฤดูหนาว" },
-  { id: 4, dailyRate: 300, color: "น้ำตาล", name: "Chocolate Leather", thai: "แจ็กเก็ตหนังสีน้ำตาล", category: "jacket", image: "brown-jacket", images: ["/images/brown-jacket.png"], tag: "แจ็กเก็ต", description: "แจ็กเก็ตหนังโทนช็อกโกแลตพร้อมเข็มขัด เติมความเท่ให้ลุคของคุณ" },
-  { id: 5, dailyRate: 200, color: "ทอป", name: "Cozy Winter Boots", thai: "บูทกันหนาวสีทอป", category: "boots", image: "winter-boots", images: ["/images/winter-boots.png"], tag: "รองเท้า", description: "รองเท้าบูทโทนทอป บุขนสีครีมสำหรับแต่งลุคหน้าหนาว" },
-  { id: 6, dailyRate: 450, color: "ไอวอรี", name: "Ivory Wool Coat", thai: "โค้ทวูลสีไอวอรี", category: "winter", image: "cream-coat", images: ["/images/cream-coat.png"], tag: "เสื้อกันหนาว", description: "โค้ทวูลตัวยาวสีไอวอรี สำหรับลุคอบอุ่นและเรียบหรู" },
-];
-
-export type Product = typeof products[number];
+export type Product = {
+  id: number; name: string; thai: string; category: string; color: string;
+  dailyRate: number | null; image: string; images: string[]; tag: string; description: string;
+  active?: boolean; stock?: number; size?: string; deposit?: number | null;
+  legacyId?: string; sku?: string; cost?: number | null; legacyRevenue?: number | null;
+  legacyProfit?: number | null; inventoryStatus?: string; notes?: string; imageStatus?: string;
+};
+export const categoryLabels: Record<string, string> = {
+  dress: "ชุดออกงาน", winter: "เสื้อกันหนาว", jacket: "แจ็กเก็ต", boots: "รองเท้า",
+  ...Object.fromEntries(["ชุดเซ็ต", "ขนเฟอร์", "เสื้อ", "หนัง", "ชุดเดรส", "สเวตเตอร์", "กางเกง", "JACKET", "ผ้าพันคอ", "กระเป๋า", "กล้อง", "รองเท้า", "หมวก", "กระโปรง", "โปรโมชั่น", "ฝากร้าน", "ค่าปรับ", "เครดิต", "การจ่ายเงิน"].map(c => [c,c])),
+};
+export function publicProduct(p: Product): Product {
+  return { id: p.id, name: p.name, thai: p.thai, category: p.category, color: p.color, dailyRate: p.dailyRate,
+    image: p.image, images: p.images, tag: p.tag, description: p.description, active: p.active, stock: p.stock,
+    size: p.size, deposit: p.deposit, sku: p.sku };
+}

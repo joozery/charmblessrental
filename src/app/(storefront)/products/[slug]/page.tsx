@@ -1,15 +1,17 @@
+import { publicProduct } from "@/lib/products";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { products } from "@/lib/products";
+import { getProducts } from "@/lib/product-store";
 import ProductDetail from "@/components/product-detail";
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
 async function ProductContent({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = products.find((item) => item.image === slug);
+  const products = await getProducts();
+  const product = products.filter(p => p.active !== false && (p.stock ?? 1) > 0).find((item) => item.image === slug);
   if (!product) notFound();
-  return <ProductDetail product={product} />;
+  return <ProductDetail product={publicProduct(product)} />;
 }
 
 export default function Page({ params }: ProductPageProps) {
