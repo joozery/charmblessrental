@@ -18,7 +18,12 @@ export function validPhone(value: string) {
   const phone = value.replace(/[\s()-]/g, "");
   return /^0[689]\d{8}$/.test(phone) || /^\+[1-9]\d{7,14}$/.test(phone);
 }
-const shortDate = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+const shortDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "—";
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return "—";
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
+};
 
 export default function BookingForm({ items, initialStart = "", initialEnd = "", trigger, onRemove }: { items: BookingItem[]; initialStart?: string; initialEnd?: string; trigger?: ReactNode; onRemove?: (id: number) => void }) {
   const [start, setStart] = useState(initialStart);
