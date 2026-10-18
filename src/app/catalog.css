@@ -194,3 +194,16 @@ body { background: #fffcfd; }
 
 /* One font across pages, native controls, and portalled Radix content. */
 html,body,button,input,select,textarea,kbd,code,pre{font-family:var(--font-noto-sans-thai),sans-serif}
+
+/* Arrows: closer to their label and slightly bolder so they read clearly at small sizes */
+.text-link, .product-details, .booking-map-link { gap: 5px; }
+.text-link svg, .product-details svg, .booking-map-link svg, .pill svg { stroke: currentColor; stroke-width: .6px; transition: transform .15s ease; }
+.text-link:hover svg, .product-details:hover svg { transform: translateX(2px); }
+.text-link svg { width: 15px; height: 15px; }
+.product-details svg { width: 14px; height: 14px; }
+
+/* Collapsible sections: replace the browser's black triangle with a pink chevron that rotates when open */
+details > summary { list-style: none; display: flex; align-items: center; gap: 8px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: ""; flex: none; width: 14px; height: 14px; background: var(--pink); transition: transform .15s ease; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15'%3E%3Cpath d='M5.5 3 10 7.5 5.5 12' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15'%3E%3Cpath d='M5.5 3 10 7.5 5.5 12' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+details[open] > summary::before { transform: rotate(90deg); }
