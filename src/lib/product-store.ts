@@ -4,6 +4,10 @@ import { database } from "./mongodb";
 import { type Product } from "./products";
 export async function getProducts(): Promise<Product[]> {
   await connection();
+  return readProducts();
+}
+// No request-time API calls, so it is safe inside a "use cache" scope.
+export async function readProducts(): Promise<Product[]> {
   const collection = (await database()).collection<Product>("products");
   const stored = await collection.find({}, { projection: { _id: 0 } }).sort({ id: 1 }).toArray();
   return stored;

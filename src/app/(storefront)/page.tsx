@@ -76,7 +76,7 @@ export default function Home() {
           </Tabs.Content></Tabs.Root>
         </section>
         <section className="container promotion-section" aria-label="โปรโมชั่น Charm Bless Rental">
-          {settings.promotionImage && <div className="promotion-image-banner" style={{ width: "100%", aspectRatio: "1983 / 793", backgroundImage: `url("${settings.promotionImage}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", borderRadius: 12 }} role="img" aria-label="ภาพโปรโมชั่นร้าน Charm Bless Rental" />}
+          {settings.promotionImage && <Image className="promotion-image-banner" src={settings.promotionImage} alt="ภาพโปรโมชั่นร้าน Charm Bless Rental" width={1983} height={793} sizes="(max-width: 1280px) 100vw, 1280px" unoptimized={settings.promotionImage.startsWith("https://")} loading="lazy" style={{ width: "100%", height: "auto", aspectRatio: "1983 / 793", objectFit: "cover", borderRadius: 12 }} />}
         </section>
         <section id="how-to-rent" className="shop-how"><div className="container"><h2>{settings.howTitle}</h2><div className="steps">{settings.howSteps.map(({title,description},i) => <div className="step" key={`${title}-${i}`}><span className="step-number">{i+1}</span><Icon name={["calendar","bag","chat"][i] || "check"} /><div><h3>{title}</h3><p>{description}</p></div></div>)}</div></div></section>
         <section id="contact" className="shop-contact container"><div><h2>{settings.contactTitle}</h2><p>{settings.contactDescription}</p></div><ContactButton>ติดต่อร้าน</ContactButton></section>

@@ -1,5 +1,6 @@
 import { currentAdmin, sameOrigin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
+import { revalidateTag } from "next/cache";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/store-settings";
 
 const isImage = (value: unknown) => typeof value === "string" && value.length <= 2000 && (!value || value.startsWith("/") && !value.startsWith("//") || (() => { try { const url = new URL(value); return url.protocol === "https:"; } catch { return false; } })());
@@ -14,5 +15,6 @@ export async function POST(request: Request) {
   }
   const settings: StoreSettings = { ...defaultStoreSettings, ...body } as StoreSettings;
   await (await database()).collection<StoreSettings & { _id?: string }>("storeSettings").updateOne({ _id: "main" }, { $set: settings, $setOnInsert: { _id: "main" } }, { upsert: true });
+  revalidateTag("catalog", { expire: 0 });
   return Response.json({ settings });
 }
