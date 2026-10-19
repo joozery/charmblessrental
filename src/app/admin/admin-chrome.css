@@ -108,3 +108,35 @@ body:has(.chrome-shell){padding-bottom:0;background:#f5f6f8}
 .chrome-command-dialog{top:min(12vh,96px);width:min(430px,calc(100vw - 28px));max-height:calc(100dvh - 120px);border-radius:12px;box-shadow:0 20px 70px rgb(33 16 39 / 25%)}
 .chrome-command-input{gap:9px;padding:12px 14px}.chrome-command-input>.chrome-icon{width:18px;height:18px}.chrome-command-input>input{font-size:13px}.chrome-command-results{max-height:min(390px,calc(100dvh - 205px));overflow-y:auto;padding:7px}.chrome-command-results>p{margin:3px 8px 6px;font-size:8px}.chrome-command-result{gap:9px;padding:8px;border-radius:7px}.chrome-command-result>span{padding:6px;border-radius:7px}.chrome-command-result>span>.chrome-icon{width:16px;height:16px}.chrome-command-result strong{font-size:11px}.chrome-command-result small{margin-top:2px;font-size:9px}.chrome-command-empty{padding:20px 12px;font-size:11px}.chrome-command-foot{padding:9px 14px;font-size:8px}.chrome-command-foot>span:last-child{font-size:7px}
 @media(max-width:760px){.chrome-command-dialog{top:70px;width:calc(100vw - 24px);max-height:calc(100dvh - 86px)}.chrome-command-results{max-height:calc(100dvh - 170px)}}
+
+/* Sidebar refinement: readable type, clearer groups and active state */
+.chrome-shell{--chrome-sidebar-width:252px}
+.chrome-sidebar,.chrome-mobile-sidebar{padding-inline:14px}
+.chrome-sidebar .chrome-brand-row,.chrome-mobile-sidebar .chrome-brand-row{margin-inline:-14px;margin-bottom:18px;padding-inline:20px}
+.chrome-brand-copy{font-size:18px}
+.chrome-brand-copy>span{margin-top:4px;font-size:10px;letter-spacing:1.2px}
+.chrome-navigation{gap:20px}
+.chrome-nav-group{gap:3px}
+.chrome-group-label{padding:0 12px 6px;color:#8a8190;font-size:11px;font-weight:650;letter-spacing:.9px}
+.chrome-nav-link{min-height:44px;gap:12px;padding:9px 12px;border-radius:10px}
+.chrome-nav-icon{width:32px;height:32px;border-radius:9px;background:#f4f2f5;color:#7d7684;transition:background .16s,color .16s}
+.chrome-nav-icon>.chrome-icon{width:18px;height:18px}
+.chrome-nav-link:hover .chrome-nav-icon{background:#ece6ec;color:#5f4457}
+.chrome-nav-copy strong{font-size:14px;font-weight:500}
+.chrome-nav-count{min-width:26px;height:24px;padding:0 7px;border-radius:999px;font-size:12px;font-weight:600}
+.chrome-nav-link.is-active{background:#f5eaf0;border-color:#ebd7e3;box-shadow:none}
+.chrome-nav-link.is-active .chrome-nav-icon{background:#79516c;color:#fff}
+.chrome-nav-link.is-active .chrome-nav-copy strong{font-weight:650}
+.chrome-nav-link.is-active .chrome-nav-count{background:#79516c;color:#fff;box-shadow:none}
+.chrome-sidebar-footer>a{min-height:56px;padding:10px 12px;border-radius:12px}
+.chrome-store-copy strong{font-size:14px}
+.chrome-store-copy small{font-size:12px}
+.chrome-sidebar-footer>a>.chrome-icon:first-child{width:32px;height:32px;padding:7px;border-radius:9px;background:#f0e8ee;color:#79516c}
+.chrome-shell[data-collapsed=true] .chrome-nav-link{padding:6px 0;min-height:44px;border-radius:10px}
+.chrome-shell[data-collapsed=true] .chrome-sidebar,.chrome-shell[data-collapsed=true] .chrome-sidebar-footer{padding-inline:10px}
+.chrome-shell[data-collapsed=true] .chrome-sidebar .chrome-brand-row{margin-inline:-10px;padding:0}
+.chrome-shell[data-collapsed=true] .chrome-sidebar-footer>a>.chrome-icon:first-child{padding:7px}
+
+/* Hide sidebar scrollbar (still scrollable) */
+.chrome-sidebar,.chrome-mobile-sidebar{scrollbar-width:none;-ms-overflow-style:none}
+.chrome-sidebar::-webkit-scrollbar,.chrome-mobile-sidebar::-webkit-scrollbar{display:none}

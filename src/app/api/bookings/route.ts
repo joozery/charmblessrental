@@ -10,6 +10,7 @@ const methods = ["pickup", "ems", "messenger"];
 type BookingRecord = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; stock: number }[]; createdAt: Date; updatedAt: Date };
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
+  try {
   const body = await request.json().catch(() => null);
   if (!body || !Array.isArray(body.items) || body.items.length < 1 || body.items.length > 20 || body.items.some((item: { id?: unknown }) => typeof item?.id !== "number" || !Number.isSafeInteger(item.id) || item.id < 1) || !validDay(body.start) || !validDay(body.end) || body.start < thaiDay() || body.end <= body.start || (Date.parse(`${body.end}T00:00:00Z`) - Date.parse(`${body.start}T00:00:00Z`)) / 86400000 > 90 || typeof body.name !== "string" || !body.name.trim() || body.name.trim().length > 120 || typeof body.phone !== "string" || !(/^(?:0[689]\d{8}|\+[1-9]\d{7,14})$/.test(body.phone.replace(/[\s()-]/g, ""))) || !methods.includes(body.method) || (body.method !== "pickup" && (typeof body.address !== "string" || !body.address.trim() || body.address.length > 1000)) || (body.pin !== undefined && (typeof body.pin !== "string" || body.pin.length > 1000)) || (body.note !== undefined && (typeof body.note !== "string" || body.note.length > 2000)) || body.acceptPrivacy !== true) return Response.json({ error: "กรุณาตรวจสอบข้อมูลการจองและยอมรับการใช้ข้อมูลติดต่อ" }, { status: 400 });
   const ids = [...new Set((body.items as { id: number }[]).map(item => item.id))];
@@ -30,4 +31,8 @@ export async function POST(request: Request) {
     createdAt: new Date(), updatedAt: new Date(),
   });
   return Response.json({ requestId, estimatedTotal }, { status: 201 });
+  } catch (error) {
+    console.error("Booking request failed:", error);
+    return Response.json({ error: "ระบบรับคำขอจองขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งหรือติดต่อร้านทาง LINE" }, { status: 503 });
+  }
 }

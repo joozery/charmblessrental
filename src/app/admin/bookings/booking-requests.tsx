@@ -1,42 +1,114 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
+import { Dialog } from "radix-ui";
 import { Icon } from "@/components/ui/icon";
+import type { RentalDocumentDefaults } from "@/lib/store-settings";
 
-type RequestRow = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null }[]; createdAt: string };
+type Quote = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string };
+type StoreInfo = { logoImage: string; lineUrl: string; instagramUrl: string; rentalRules: string[]; rentalDocument: RentalDocumentDefaults };
+type RequestRow = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null }[]; createdAt: string };
 const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
-const money = (value: number | null) => value === null ? "สอบถามราคา" : `${value.toLocaleString("th-TH", { maximumFractionDigits: 2 })} บาท`;
+const money = (value: number | null) => value === null ? "สอบถามราคา" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const statuses = [{ key: "new", label: "ใหม่" }, { key: "contacted", label: "ติดต่อแล้ว" }, { key: "confirmed", label: "ยืนยันแล้ว" }, { key: "cancelled", label: "ยกเลิก" }];
 const methodLabel = (value: string) => value === "pickup" ? "รับเองที่ร้าน" : value === "ems" ? "ไปรษณีย์ / EMS" : "แมสเซนเจอร์";
 function safeUrl(value: string) { try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) ? url.href : ""; } catch { return ""; } }
-
-export default function BookingRequests({ initial }: { initial: RequestRow[] }) {
-  const [rows, setRows] = useState(initial);
-  const [filter, setFilter] = useState("all");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const visible = rows.filter(row => filter === "all" || row.status === filter);
-  const statusLabel = (key: string) => statuses.find(status => status.key === key)?.label || key;
-  async function update(id: string, status: string) {
-    setBusy(id); setError("");
-    try {
-      const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || "อัปเดตสถานะไม่สำเร็จ");
-      setRows(current => current.map(row => row._id === id ? { ...row, status } : row));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "อัปเดตสถานะไม่สำเร็จ"); }
-    finally { setBusy(null); }
+const blankQuote = (row: RequestRow, defaults: RentalDocumentDefaults): Quote => ({ rental: row.items.every(item => typeof item.dailyRate === "number") ? row.items.reduce((sum, item) => sum + (item.dailyRate || 0), 0) * row.days : 0, shipping: row.deliveryFee || 0, ...defaults });
+function quoteForRow(row: RequestRow, defaults: RentalDocumentDefaults): Quote {
+  const quote = { ...blankQuote(row, defaults), ...row.quote };
+  for (const key of ["bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod"] as const) {
+    if (!quote[key]) quote[key] = defaults[key];
   }
+  return quote;
+}
+
+function RentalDocument({ row, quote, store, printOnly = false }: { row: RequestRow; quote: Quote; store: StoreInfo; printOnly?: boolean }) {
+  const dayMonth = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "numeric", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
+  return <article className="rental-paper" id={printOnly ? undefined : "rental-paper"}>
+    <header className="rental-paper-brand"><div className="rental-paper-wordmark">{store.logoImage && <Image unoptimized src={store.logoImage} alt="" width={76} height={76} />}<span><strong>CHARM BLESS <i>Rental</i></strong><small>CLOTHES FOR SPECIAL MOMENTS</small></span></div><div className="rental-paper-title"><strong>ใบรายละเอียดการเช่า</strong><small>RENTAL DETAILS</small></div></header>
+    <div className="rental-paper-columns">
+      <section className="rental-paper-section"><h3>ข้อมูลลูกค้า</h3><p><b>ชื่อ–นามสกุลผู้เช่า</b><span>{row.name}</span></p><p><b>เบอร์โทรศัพท์</b><span>{row.phone}</span></p><p><b>ที่อยู่สำหรับจัดส่ง</b><span>{row.address || "รับเองที่ร้าน"}</span></p></section>
+      <section className="rental-paper-section"><h3>ข้อมูลการเช่า</h3><p><b>วันที่จอง</b><span>{dateLabel(row.createdAt)}</span></p><p><b>กำหนดคืน</b><span>{dateLabel(row.end)}</span></p><p><b>วันใช้งาน</b><span>{dayMonth(row.start)}–{dayMonth(row.end)}</span></p><p><b>ระยะเวลาเช่า</b><span>{row.days} วัน</span></p></section>
+    </div>
+    <section className="rental-paper-section rental-paper-items"><h3>รายการสินค้าเช่า</h3><table><thead><tr><th>ลำดับ</th><th>รูป</th><th>รหัสสินค้า / รายการ</th><th>จำนวน</th><th>ราคาเช่า (บาท)</th></tr></thead><tbody>{row.items.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{item.image ? <Image unoptimized src={item.image} alt="" width={45} height={56} /> : <span>—</span>}</td><td><b>{item.sku}</b><span>{item.name}</span></td><td>1</td><td>{item.dailyRate === null ? "สอบถาม" : money(item.dailyRate * row.days)}</td></tr>)}</tbody></table></section>
+    <div className="rental-paper-columns rental-paper-payment-row">
+      <section className="rental-paper-section rental-paper-total"><h3>สรุปยอดค่าเช่า</h3><p><span>ค่าเช่ารวม</span><b>{money(quote.rental)}</b></p><p><span>เงินประกัน</span><b>{money(quote.deposit)}</b></p><p><span>ค่าจัดส่ง</span><b>{money(quote.shipping)}</b></p><strong><span>ยอดรวมสุทธิ</span><b>{money(quote.rental + quote.deposit + quote.shipping)} บาท</b></strong></section>
+      <section className="rental-paper-section rental-paper-bank"><h3>ช่องทางชำระเงิน</h3><div><span className="rental-paper-qr">{quote.qrImage && safeUrl(quote.qrImage) ? <Image unoptimized src={safeUrl(quote.qrImage)} alt="QR ชำระเงิน" width={130} height={130} /> : <>QR<br />ชำระเงิน</>}</span><p><b>ข้อมูลบัญชีร้าน</b><span>ธนาคาร　:　{quote.bank || "กรอกชื่อธนาคาร"}</span><span>เลขที่บัญชี　:　{quote.accountNumber || "กรอกเลขบัญชี"}</span><span>ชื่อบัญชี　:　{quote.accountName || "กรอกชื่อบัญชี"}</span></p></div><small>ตรวจสอบยอดและบัญชีก่อนโอน</small></section>
+    </div>
+    <div className="rental-paper-reminder"><strong>ส่งคืนภายในวันที่กำหนด {dateLabel(row.end)} ก่อน 18:00 น.</strong><span>แจ้งเลขพัสดุทาง Inbox ภายใน 20:00 น.</span></div>
+    <section className="rental-paper-section rental-paper-rules"><h3>เงื่อนไขการเช่า</h3><ol>{store.rentalRules.slice(0, 5).map((rule, index) => <li key={`${index}-${rule}`}>{rule}</li>)}</ol></section>
+    <section className="rental-paper-section rental-paper-return"><h3>ข้อมูลสำหรับส่งคืน</h3><div><strong>CHARM BLESS Rental</strong><span>ที่อยู่ส่งคืน　:　{quote.returnAddress || "ติดต่อร้านเพื่อขอที่อยู่ส่งคืน"}</span><span>เบอร์โทรศัพท์　:　{quote.returnPhone || "ติดต่อร้านทาง LINE"}</span><span>วิธีส่งคืน　:　{quote.returnMethod || "ไปรษณีย์ / Flash / KEX"}</span></div></section>
+    <footer className="rental-paper-social">{store.instagramUrl && <span>◎ {store.instagramUrl.replace(/^https?:\/\/(www\.)?instagram\.com\//, "@").replace(/\/$/, "")}</span>}<small>โปรดตรวจสอบข้อมูลก่อนชำระเงิน</small></footer>
+  </article>;
+}
+
+export default function BookingRequests({ initial, store }: { initial: RequestRow[]; store: StoreInfo }) {
+  const [rows, setRows] = useState(initial); const [filter, setFilter] = useState("all"); const [busy, setBusy] = useState<string | null>(null); const [error, setError] = useState("");
+  const [detailId, setDetailId] = useState<string | null>(initial[0]?._id || null);
+  const [query, setQuery] = useState(""); const [period, setPeriod] = useState("all"); const [cutoff, setCutoff] = useState("");
+  const [quoteRow, setQuoteRow] = useState<RequestRow | null>(null); const [quote, setQuote] = useState<Quote | null>(null); const [savingQuote, setSavingQuote] = useState(false);
+  const visible = rows.filter(row => (filter === "all" || row.status === filter) && (!cutoff || row.createdAt >= cutoff) && (!query.trim() || [row._id, row.name, row.phone, ...row.items.flatMap(item => [item.name, item.sku])].some(value => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))));
+  const detail = visible.find(row => row._id === detailId) || visible[0] || null;
+  const statusLabel = (key: string) => statuses.find(status => status.key === key)?.label || key;
+  function openQuote(row: RequestRow) { setQuoteRow(row); setQuote(quoteForRow(row, store.rentalDocument)); }
+  async function update(id: string, status: string) { setBusy(id); setError(""); try { const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "อัปเดตสถานะไม่สำเร็จ"); setRows(current => current.map(row => row._id === id ? { ...row, status } : row)); } catch (cause) { setError(cause instanceof Error ? cause.message : "อัปเดตสถานะไม่สำเร็จ"); } finally { setBusy(null); } }
+  async function saveQuote() { if (!quoteRow || !quote) return false; setSavingQuote(true); setError(""); try { const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: quoteRow._id, action: "saveQuote", quote }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "บันทึกใบสรุปไม่สำเร็จ"); setRows(current => current.map(row => row._id === quoteRow._id ? { ...row, quote } : row)); return true; } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกใบสรุปไม่สำเร็จ"); return false; } finally { setSavingQuote(false); } }
+  async function printQuote() { if (await saveQuote()) window.print(); }
+  async function downloadPng() {
+    if (!quoteRow || !quote || !(await saveQuote())) return;
+    const source = document.getElementById("rental-paper"); if (!source) return;
+    const clone = source.cloneNode(true) as HTMLElement;
+    const originals = [source, ...Array.from(source.querySelectorAll<HTMLElement>("*"))];
+    const copies = [clone, ...Array.from(clone.querySelectorAll<HTMLElement>("*"))];
+    originals.forEach((element, index) => { const style = getComputedStyle(element); const declarations = Array.from(style).map(name => `${name}:${style.getPropertyValue(name)}`).join(";"); copies[index].setAttribute("style", declarations); });
+    clone.style.width = `${source.offsetWidth}px`; clone.style.height = "auto";
+    const width = source.offsetWidth, height = source.scrollHeight, scale = 2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * scale}" height="${height * scale}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml">${new XMLSerializer().serializeToString(clone)}</div></foreignObject></svg>`;
+    try {
+      const image = new window.Image(); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("เบราว์เซอร์ไม่สามารถแปลงตัวอย่างเอกสารเป็นภาพได้")); });
+      const canvas = document.createElement("canvas"); canvas.width = width * scale; canvas.height = height * scale;
+      const context = canvas.getContext("2d"); if (!context) throw new Error("ไม่สามารถสร้างภาพได้"); context.drawImage(image, 0, 0);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("สร้างไฟล์ PNG ไม่สำเร็จ")), "image/png"));
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `${quoteRow._id}-rental-summary.png`; link.click(); URL.revokeObjectURL(url);
+    } catch { setError("แปลงภาพไม่สำเร็จ เบราว์เซอร์หรือรูปภายนอกไม่อนุญาตให้ส่งออก PNG กรุณาใช้ดาวน์โหลด PDF"); }
+  }
+
   return <main className="admin-main bookings-page">
-    <header className="bookings-header"><div><span className="bookings-eyebrow">BOOKING INBOX</span><h1>คำขอจองจากหน้าร้าน</h1><p>คำขอใหม่ยังไม่ใช่การยืนยันจอง กรุณาตรวจสอบคิวและติดต่อยืนยันกับลูกค้า</p></div><span className="bookings-total"><Icon name="booking" />{rows.length.toLocaleString("th-TH")} รายการ</span></header>
+    <header className="bookings-inbox-header">
+      <div><span className="bookings-eyebrow">BOOKING INBOX</span><h1>คำขอจองจากหน้าร้าน</h1><p>คำขอใหม่ยังไม่ใช่การยืนยันจอง กรุณาตรวจสอบคิวและติดต่อยืนยันกับลูกค้า</p></div>
+      <div className="bookings-inbox-stats" aria-label="จำนวนคำขอตามสถานะ"><button type="button" className={filter === "all" ? "is-active" : ""} onClick={() => setFilter("all")}><span>ทั้งหมด</span><strong>{rows.length.toLocaleString("th-TH")}</strong><small>รายการ</small></button>{statuses.map(status => <button type="button" key={status.key} className={filter === status.key ? "is-active is-" + status.key : "is-" + status.key} onClick={() => setFilter(status.key)}><span>{status.label}</span><strong>{rows.filter(row => row.status === status.key).length.toLocaleString("th-TH")}</strong><small>รายการ</small></button>)}</div>
+    </header>
     {error && <p className="admin-error" role="alert">{error}</p>}
-    <section className="bookings-panel"><div className="bookings-filter" aria-label="กรองสถานะ"><button className={filter === "all" ? "is-active" : ""} onClick={() => setFilter("all")}>ทั้งหมด {rows.length}</button>{statuses.map(status => <button key={status.key} className={filter === status.key ? "is-active" : ""} onClick={() => setFilter(status.key)}>{status.label} {rows.filter(row => row.status === status.key).length}</button>)}</div>
-      {visible.length ? <div className="booking-request-list">{visible.map(row => <article className="booking-request-card" key={row._id}>
-        <div className="booking-request-top"><div><span className="booking-request-id">{row._id}</span><span className={`booking-request-status is-${row.status}`}>{statusLabel(row.status)}</span></div><time>{dateLabel(row.createdAt)}</time></div>
-        <div className="booking-request-grid"><div><span>ลูกค้า</span><strong>{row.name}</strong><a href={`tel:${row.phone.replace(/[^+\d]/g, "")}`}>{row.phone}</a></div><div><span>ช่วงวันเช่า · {row.days} วัน</span><strong>{dateLabel(row.start)} – {dateLabel(row.end)}</strong><small>{methodLabel(row.method)}</small></div><div><span>ประมาณการ</span><strong>{money(row.estimatedTotal)}</strong><small>ค่าส่ง {money(row.deliveryFee)}</small></div>{row.address && <div className="booking-request-wide"><span>ที่อยู่จัดส่ง</span><strong>{row.address}</strong>{safeUrl(row.pin) && <a href={safeUrl(row.pin)} target="_blank" rel="noopener noreferrer">เปิดหมุดแผนที่ <Icon name="arrow" /></a>}</div>}{row.note && <div className="booking-request-wide"><span>หมายเหตุ</span><strong>{row.note}</strong></div>}</div>
-        <div className="booking-request-products">{row.items.map(item => <div key={item.id}>{item.image && <Image unoptimized src={item.image} alt="" width={40} height={50} />}<span><strong>{item.name}</strong><small>{item.sku || "ไม่มีรหัสสินค้า"} · {money(item.dailyRate)} / วัน</small></span></div>)}</div>
-        <div className="booking-request-actions"><a href={`tel:${row.phone.replace(/[^+\d]/g, "")}`}><Icon name="chat" />โทรหาลูกค้า</a><label>อัปเดตสถานะ<select value={row.status} disabled={busy === row._id} onChange={event => update(row._id, event.target.value)}>{statuses.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></label></div>
-      </article>)}</div> : <div className="bookings-empty"><Icon name="booking" /><strong>ไม่มีคำขอในสถานะนี้</strong><span>คำขอจองใหม่จากหน้าร้านจะแสดงที่นี่</span></div>}
-    </section>
+    <div className="bookings-inbox-toolbar"><label className="bookings-search"><Icon name="search" /><input type="search" placeholder="ค้นหาเลขคำขอ ชื่อลูกค้า หรือสินค้า" value={query} onChange={event => setQuery(event.target.value)} /></label><label className="bookings-period"><Icon name="calendar" /><select value={period} onChange={event => { const value = event.target.value; setPeriod(value); setCutoff(value === "all" ? "" : new Date(Date.now() - Number(value) * 86400000).toISOString()); }}><option value="all">ทุกช่วงเวลา</option><option value="7">7 วันล่าสุด</option><option value="30">30 วันล่าสุด</option></select></label><button type="button" className="bookings-refresh" onClick={() => window.location.reload()} aria-label="รีเฟรชคำขอ"><Icon name="success" /></button></div>
+    <div className="bookings-inbox-layout">
+      <section className="bookings-inbox-list" aria-label="รายการคำขอจอง">
+        <div className="bookings-inbox-filters"><button type="button" className={filter === "all" ? "is-active" : ""} onClick={() => setFilter("all")}>ทั้งหมด <b>{rows.length}</b></button>{statuses.map(status => <button type="button" key={status.key} className={filter === status.key ? "is-active" : ""} onClick={() => setFilter(status.key)}>{status.label} <b>{rows.filter(row => row.status === status.key).length}</b></button>)}</div>
+        <div className="bookings-inbox-rows">{visible.length ? visible.map(row => <button type="button" key={row._id} className={detail?._id === row._id ? "bookings-inbox-row is-selected" : "bookings-inbox-row"} onClick={() => setDetailId(row._id)} aria-pressed={detail?._id === row._id}>
+          <span className="bookings-row-request"><strong>{row._id}</strong><small>{dateLabel(row.createdAt)}</small></span>
+          <span className="bookings-row-customer"><strong>{row.name}</strong><small>☎ ••• ••• {row.phone.slice(-4)}</small></span>
+          <span className="bookings-row-product">{row.items[0]?.image && <Image unoptimized src={row.items[0].image} alt="" width={36} height={48} />}<span><strong>{row.items[0]?.sku || row.items[0]?.name || "สินค้า"}</strong><small>{row.items.length > 1 ? row.items.length + " รายการ" : row.items[0]?.name}</small></span></span>
+          <span className="bookings-row-dates"><strong>{dateLabel(row.start)} – {dateLabel(row.end)}</strong><small>{row.days} วัน | {methodLabel(row.method)}</small></span>
+          <span className="bookings-row-money"><strong>{row.estimatedTotal === null ? "สอบถามราคา" : money(row.estimatedTotal) + " บาท"}</strong><small>ค่าส่ง {money(row.deliveryFee)} บาท</small></span>
+          <span className={"booking-request-status is-" + row.status}>{statusLabel(row.status)}</span>
+        </button>) : <div className="bookings-inbox-empty"><Icon name="search" /><strong>ไม่พบคำขอจอง</strong><span>ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ</span></div>}</div>
+        <div className="bookings-inbox-list-footer"><span>{visible.length.toLocaleString("th-TH")} รายการ</span><span>แสดงคำขอทั้งหมดแล้ว</span></div>
+      </section>
+      <aside className="bookings-detail-panel" aria-label="รายละเอียดคำขอจอง">{detail ? <>
+        <div className="bookings-detail-heading"><div><span>รายละเอียดคำขอ</span><h2>{detail._id}</h2><small>สร้างคำขอ {dateLabel(detail.createdAt)}</small></div><span className={"booking-request-status is-" + detail.status}>{statusLabel(detail.status)}</span></div>
+        {detail.status !== "cancelled" && <div className="bookings-status-steps" aria-label="ความคืบหน้าคำขอ">{statuses.slice(0, 3).map((status, index) => <div key={status.key} className={statuses.findIndex(item => item.key === detail.status) >= index ? "is-current" : ""}><span>{index + 1}</span><small>{status.label}</small></div>)}</div>}
+        <div className="bookings-detail-section"><Icon name="users" /><div><h3>ข้อมูลลูกค้า</h3><strong>{detail.name}</strong><a href={"tel:" + detail.phone.replace(/[^+\d]/g, "")}>{detail.phone}</a>{detail.address && <p>{detail.address}</p>}{safeUrl(detail.pin) && <a href={safeUrl(detail.pin)} target="_blank" rel="noopener noreferrer">เปิดหมุดแผนที่</a>}</div></div>
+        <div className="bookings-detail-section"><Icon name="calendar" /><div><h3>ช่วงวันเช่า</h3><strong>{dateLabel(detail.start)} – {dateLabel(detail.end)}</strong><p>{detail.days} วัน | {methodLabel(detail.method)}</p></div></div>
+        <div className="bookings-detail-section"><Icon name="box" /><div><h3>สินค้า</h3><div className="bookings-detail-products">{detail.items.map(item => <div key={item.id}>{item.image && <Image unoptimized src={item.image} alt="" width={44} height={56} />}<span><strong>{item.sku || item.name}</strong><small>{item.name}</small></span></div>)}</div></div></div>
+        <div className="bookings-detail-section"><Icon name="booking" /><div className="bookings-detail-amount"><h3>ยอดประมาณการ</h3><strong>{detail.estimatedTotal === null ? "สอบถามราคา" : money(detail.estimatedTotal) + " บาท"}</strong><p>ค่าจัดส่ง {money(detail.deliveryFee)} บาท</p></div></div>
+        {detail.note && <div className="bookings-detail-section"><Icon name="chat" /><div><h3>หมายเหตุจากลูกค้า</h3><p>{detail.note}</p></div></div>}
+        <div className="bookings-detail-section bookings-detail-status"><Icon name="sliders" /><div><h3>สถานะคำขอ</h3><select value={detail.status} disabled={busy === detail._id} onChange={event => update(detail._id, event.target.value)} aria-label="อัปเดตสถานะคำขอ">{statuses.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></div></div>
+        <div className="bookings-detail-actions"><Link href="/admin/availability" className="bookings-detail-primary"><Icon name="calendar" />ตรวจสอบคิวว่าง</Link><div><a href={"tel:" + detail.phone.replace(/[^+\d]/g, "")}><Icon name="chat" />โทรหาลูกค้า</a><button type="button" onClick={() => openQuote(detail)}><Icon name="booking" />ดูใบสรุป</button></div>{detail.status !== "cancelled" && <button type="button" className="bookings-detail-cancel" disabled={busy === detail._id} onClick={() => update(detail._id, "cancelled")}>ยกเลิกคำขอ</button>}</div>
+        {detail.status === "new" && <p className="bookings-detail-warning"><Icon name="help" />ตรวจสอบคิวก่อนยืนยันคำขอ</p>}
+      </> : <div className="bookings-detail-placeholder"><Icon name="booking" /><strong>เลือกรายการเพื่อดูรายละเอียด</strong></div>}</aside>
+    </div>
+    <Dialog.Root open={!!quoteRow} onOpenChange={open => { if (!open && !savingQuote) setQuoteRow(null); }}><Dialog.Portal><Dialog.Overlay className="admin-dialog-overlay quote-overlay"/><Dialog.Content className="admin-dialog quote-dialog"><Dialog.Title>ใบสรุปก่อนชำระเงิน</Dialog.Title><Dialog.Description>กรอกข้อมูลให้ครบ แล้วตรวจตัวอย่างเอกสารตามแบบร้าน</Dialog.Description>{quoteRow && quote && <><div className="quote-editor"><label>ค่าเช่ารวม<input type="number" min="0" value={quote.rental} onChange={event => setQuote({ ...quote, rental: Number(event.target.value) })}/></label><label>เงินประกัน<input type="number" min="0" value={quote.deposit} onChange={event => setQuote({ ...quote, deposit: Number(event.target.value) })}/></label><label>ค่าจัดส่ง<input type="number" min="0" value={quote.shipping} onChange={event => setQuote({ ...quote, shipping: Number(event.target.value) })}/></label><label>ธนาคาร<input value={quote.bank} onChange={event => setQuote({ ...quote, bank: event.target.value })}/></label><label>ชื่อบัญชี<input value={quote.accountName} onChange={event => setQuote({ ...quote, accountName: event.target.value })}/></label><label>เลขบัญชี<input value={quote.accountNumber} onChange={event => setQuote({ ...quote, accountNumber: event.target.value })}/></label><label className="quote-editor-wide">ลิงก์ QR<input value={quote.qrImage} placeholder="https://…" onChange={event => setQuote({ ...quote, qrImage: event.target.value })}/></label><label>ที่อยู่ส่งคืน<input value={quote.returnAddress} onChange={event => setQuote({ ...quote, returnAddress: event.target.value })}/></label><label>เบอร์โทรร้าน<input value={quote.returnPhone} onChange={event => setQuote({ ...quote, returnPhone: event.target.value })}/></label><label>วิธีส่งคืน<input value={quote.returnMethod} onChange={event => setQuote({ ...quote, returnMethod: event.target.value })}/></label></div><RentalDocument row={quoteRow} quote={quote} store={store}/><div className="quote-actions"><button type="button" onClick={printQuote} disabled={savingQuote}>เปิด / ดาวน์โหลด PDF</button><button type="button" onClick={downloadPng} disabled={savingQuote}>ดาวน์โหลด PNG</button><button type="button" onClick={saveQuote} disabled={savingQuote}>{savingQuote ? "กำลังบันทึก…" : "บันทึกราคา"}</button></div></>}</Dialog.Content><div className="rental-print-only" aria-hidden="true">{quoteRow && quote && <RentalDocument row={quoteRow} quote={quote} store={store} printOnly />}</div></Dialog.Portal></Dialog.Root>
   </main>;
 }
