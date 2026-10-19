@@ -20,8 +20,10 @@ async function call(path: string, init: RequestInit) {
 }
 
 type TextMessage = { type: "text"; text: string };
-export const replyLine = (replyToken: string, messages: TextMessage[]) => call("/message/reply", { method: "POST", body: JSON.stringify({ replyToken, messages }) });
-export const pushLine = (to: string, messages: TextMessage[]) => call("/message/push", { method: "POST", body: JSON.stringify({ to, messages }) });
+type ImageMessage = { type: "image"; originalContentUrl: string; previewImageUrl: string };
+type LineMessage = TextMessage | ImageMessage;
+export const replyLine = (replyToken: string, messages: LineMessage[]) => call("/message/reply", { method: "POST", body: JSON.stringify({ replyToken, messages }) });
+export const pushLine = (to: string, messages: LineMessage[]) => call("/message/push", { method: "POST", body: JSON.stringify({ to, messages }) });
 export async function lineProfileName(userId: string) {
   try { return String((await (await call(`/profile/${encodeURIComponent(userId)}`, { method: "GET" })).json()).displayName || ""); } catch { return ""; }
 }
