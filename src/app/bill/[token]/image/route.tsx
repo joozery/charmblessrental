@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   const qr = quote.qrImage ? safeUrl(quote.qrImage) : "";
   const logo = settings.logoImage && /^https?:/.test(settings.logoImage) ? settings.logoImage : "";
   const addressLines = Math.max(1, Math.ceil((doc.address || "").length / 34));
-  const height = 700 + doc.items.length * 74 + addressLines * 28 + (qr ? 170 : 0) + 130;
+  const height = 770 + doc.items.length * 80 + addressLines * 30 + (qr ? 190 : 0) + 130;
 
   const card = (title: string, children: React.ReactNode, flex?: number) => <div style={{ display: "flex", flexDirection: "column", ...(flex ? { flex } : { flexShrink: 0 }), border: `1px solid ${line}`, borderRadius: 14, overflow: "hidden", background: "#fff" }}><div style={{ display: "flex", padding: "8px 16px", background: soft, color: accent, fontSize: 20, fontWeight: 700 }}>{title}</div><div style={{ display: "flex", flexDirection: "column", padding: "10px 16px", gap: 6 }}>{children}</div></div>;
   const field = (label: string, value: string) => <div key={label} style={{ display: "flex", flexDirection: "column" }}><span style={{ fontSize: 16, color: "#7a6f78" }}>{label}</span><span style={{ fontSize: 21, fontWeight: 700, lineHeight: 1.35 }}>{value}</span></div>;
