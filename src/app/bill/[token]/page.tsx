@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { database } from "@/lib/mongodb";
 import { getStoreSettings } from "@/lib/store-settings";
 import { RentalDocument, dateLabel, money, quoteForRow, type DocRow } from "@/components/rental-document";
@@ -12,6 +13,7 @@ type BillDoc = Omit<DocRow, "createdAt"> & { status: string; payment?: "unpaid" 
 type PageProps = { params: Promise<{ token: string }> };
 
 async function Content({ params }: PageProps) {
+  await connection();
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) notFound();
   const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1 } });
