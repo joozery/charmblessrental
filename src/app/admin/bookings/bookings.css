@@ -193,3 +193,15 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 @media(max-width:1450px){.bookings-inbox-row{grid-template-columns:minmax(105px,1.1fr) minmax(90px,.9fr) minmax(145px,1.45fr) minmax(95px,1fr) auto}.bookings-row-product{display:none!important}}
 @media(max-width:1180px){.bookings-inbox-header{align-items:stretch;flex-direction:column}.bookings-inbox-stats{min-width:0;width:100%}.bookings-inbox-layout{grid-template-columns:1fr}.bookings-detail-panel{position:static}.bookings-row-product{display:flex!important}.bookings-inbox-row{grid-template-columns:minmax(105px,1.1fr) minmax(90px,.9fr) minmax(90px,1fr) minmax(145px,1.45fr) minmax(95px,1fr) auto}}
 @media(max-width:760px){.bookings-inbox-header{padding:17px}.bookings-inbox-header h1{font-size:23px}.bookings-inbox-stats{grid-template-columns:repeat(5,minmax(0,1fr))}.bookings-inbox-stats button{padding:9px 3px}.bookings-inbox-stats button span{font-size:8px}.bookings-inbox-stats button strong{font-size:15px}.bookings-inbox-toolbar{flex-wrap:wrap}.bookings-search{flex-basis:100%}.bookings-period{flex:1;width:auto}.bookings-inbox-row{grid-template-columns:1fr auto;gap:8px}.bookings-row-product{display:none!important}.bookings-row-customer,.bookings-row-dates,.bookings-row-money{grid-column:1/-1}.bookings-inbox-row .booking-request-status{grid-column:2;grid-row:1}.bookings-inbox-row strong{white-space:normal}.bookings-inbox-filters{flex-wrap:nowrap;overflow-x:auto}.bookings-inbox-filters button{flex:none}.bookings-detail-panel{padding:15px}}
+
+/* Bill link & payment */
+.bookings-pay-badge{display:inline-block;margin:6px 0 8px;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:650}
+.bookings-pay-badge.is-unpaid{background:#fff4df;color:#9a6918}
+.bookings-pay-badge.is-paid{background:#e9f6ee;color:#277c51}
+.bookings-bill-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.bookings-bill-buttons button,.bookings-bill-buttons a{display:inline-flex;align-items:center;height:34px;padding:0 12px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;color:#344054;font:inherit;font-size:12px;font-weight:600;text-decoration:none;cursor:pointer}
+.bookings-bill-buttons button:first-child{border-color:#79516c;background:#79516c;color:#fff}
+.bookings-bill-buttons button:disabled{opacity:.55;cursor:wait}
+.bookings-line-state{margin:0 0 8px!important;color:#98a2b3;font-size:12px}
+.bookings-line-state.is-linked{color:#06a050;font-weight:600}
+.bookings-bill-buttons button:disabled{opacity:.45;cursor:not-allowed}

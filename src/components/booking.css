@@ -34,3 +34,15 @@
 @media(max-width:480px) { .booking-panel { padding: 24px 18px; } .booking-date-grid { gap: 8px; } .booking-method { gap: 8px; padding: 10px; } .booking-method strong { font-size: 11px; } }
 .booking-items > div { position: relative; padding-right: 55px; }
 .booking-remove { position: absolute; right: 0; top: 2px; font-size: 10px; color: #bf2d6d; }
+
+/* Post-submit steps */
+.booking-request-code{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px dashed #d9b9ca;border-radius:10px;background:#fff}
+.booking-request-code span{color:#907181;font-size:11px}
+.booking-request-code strong{flex:1;min-width:0;overflow-wrap:anywhere;font-size:14px;letter-spacing:.3px}
+.booking-request-code button{padding:6px 12px;border:1px solid #d9b9ca;border-radius:999px;background:#faf5f8;color:#79516c;font-size:12px;cursor:pointer}
+.booking-next-steps{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.booking-next-steps li{display:flex;gap:12px;align-items:flex-start}
+.booking-next-steps b{display:grid;flex:0 0 auto;place-items:center;width:26px;height:26px;border-radius:50%;background:#79516c;color:#fff;font-size:13px}
+.booking-next-steps strong,.booking-next-steps small{display:block}
+.booking-next-steps strong{font-size:13px;line-height:1.5}
+.booking-next-steps small{margin-top:2px;color:#907181;font-size:11px;line-height:1.6}

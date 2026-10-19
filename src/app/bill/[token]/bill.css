@@ -1,0 +1,20 @@
+body:has(.bill-page){background:#f5f6f8}
+.bill-page{max-width:900px;margin:0 auto;padding:24px 16px 48px;color:#202938;font-family:var(--font-noto-sans-thai),sans-serif}
+.bill-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px;padding:20px 22px;border:1px solid #ecdde6;border-radius:16px;background:linear-gradient(120deg,#fff 30%,#f8ecf2);box-shadow:0 2px 10px #79516c0f}
+.bill-head span{color:#79516c;font-size:12px;font-weight:650;letter-spacing:1.1px}
+.bill-head h1{margin:4px 0 2px;font-size:24px;font-weight:700}
+.bill-head p{margin:0;color:#667085;font-size:14px}
+.bill-status{padding:7px 16px;border-radius:999px;background:#fff4df;color:#9a6918;font-size:14px;white-space:nowrap}
+.bill-status.is-paid{background:#e9f6ee;color:#277c51}
+.bill-notice{padding:22px;border:1px solid #e4e7ec;border-radius:12px;background:#fff;font-size:15px;line-height:1.7;text-align:center}
+.bill-pay{margin-bottom:14px;padding:16px 20px;border:1px solid #f3d79b;border-radius:12px;background:#fffaf0;font-size:14px}
+.bill-pay ol{margin:8px 0 0;padding-left:20px;line-height:1.9}
+.bill-actions{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.bill-button{display:inline-flex;align-items:center;justify-content:center;height:42px;padding:0 18px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#344054;font:inherit;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
+.bill-button.is-primary{border-color:#79516c;background:#79516c;color:#fff}
+.bill-meta{margin:0 0 10px;color:#667085;font-size:13px}
+.bill-paper{overflow-x:auto}
+.bill-paper .rental-paper{margin-top:0}
+@media(max-width:560px){.bill-head{flex-direction:column;align-items:flex-start}.bill-button{flex:1 1 100%}}
+@media print{.bill-head,.bill-pay,.bill-actions,.bill-meta{display:none!important}.bill-page{padding:0}.bill-paper .rental-paper{border:0;box-shadow:none}}
+@media print{body > *:not(.rental-print-only){display:revert!important}.bill-paper{overflow:visible}}
