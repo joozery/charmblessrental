@@ -205,3 +205,33 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-line-state{margin:0 0 8px!important;color:#98a2b3;font-size:12px}
 .bookings-line-state.is-linked{color:#06a050;font-weight:600}
 .bookings-bill-buttons button:disabled{opacity:.45;cursor:not-allowed}
+
+/* Payment, fulfillment, deposit and timeline */
+.bookings-inline-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;padding:11px;border:1px solid #eadde4;border-radius:9px;background:#fcf8fa}
+.bookings-inline-form label{display:flex;flex-direction:column;gap:4px;min-width:0;color:#475467;font-size:12px}
+.bookings-inline-form input,.bookings-inline-form select{min-width:0;height:34px;padding:6px 9px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#344054;font:inherit;font-size:12px}
+.bookings-inline-form input[type=file]{height:auto;padding:6px}
+.bookings-inline-form .is-wide,.bookings-inline-form>p,.bookings-inline-form>div:last-child{grid-column:1/-1}
+.bookings-inline-form>p{margin:0;color:#475467;font-size:12px;line-height:1.6}
+.bookings-inline-form>div:last-child{display:flex;justify-content:flex-end;gap:8px}
+.bookings-inline-form button,.bookings-fulfillment-wait button,.bookings-fulfillment-done button,.bookings-timeline-load{padding:7px 12px;border:1px solid #d0d5dd;border-radius:7px;background:#fff;color:#344054;font:inherit;font-size:12px;cursor:pointer}
+.bookings-inline-form button.is-primary{border-color:#79516c;background:#79516c;color:#fff}
+.bookings-fulfillment-wait,.bookings-fulfillment-done{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:8px 0 0;color:#667085;font-size:12px}
+.bookings-fulfillment-done{color:#277c51;font-weight:550}.bookings-fulfillment-done svg{width:15px;height:15px}
+.bookings-fulfillment-done small{flex-basis:100%;color:#667085;font-weight:400}
+.bookings-fulfillment-wait button,.bookings-fulfillment-done button{padding:5px 10px}
+.bookings-deposit-head{display:flex;align-items:center;gap:10px;margin:6px 0 2px}.bookings-deposit-head strong{font-size:16px}
+.bookings-deposit-badge{padding:3px 8px;border-radius:999px;background:#fff2e7;color:#ad642c;font-size:11px}
+.bookings-deposit-badge.is-refunded{background:#e9f6ee;color:#277c51}.bookings-deposit-badge.is-partial{background:#eef4ff;color:#3559a8}.bookings-deposit-badge.is-forfeited{background:#fdecec;color:#a33a3a}
+.bookings-deposit-meta{margin:2px 0;color:#667085;font-size:11px}
+.bookings-deposit-refund{margin-top:8px;padding:9px 11px;border-radius:8px;background:#f8f9fb;font-size:12px}.bookings-deposit-refund p{margin:2px 0}
+.bookings-evidence{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.bookings-evidence a{color:#79516c;font-size:12px}
+.bookings-evidence span{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 9px;border:1px solid #eadde4;border-radius:999px;background:#fff}
+.bookings-evidence span button{padding:0 6px;border:0;background:transparent;color:#a33a3a;font-size:14px;line-height:1}
+.bookings-timeline ol{margin:8px 0 0;padding:0;list-style:none;border-left:2px solid #eadde4}
+.bookings-timeline ol>li{position:relative;padding:0 0 12px 14px;font-size:12px}.bookings-timeline ol>li::before{content:"";position:absolute;left:-6px;top:5px;width:10px;height:10px;border:2px solid #fff;border-radius:50%;background:#b58aa5}
+.bookings-timeline ol>li>strong{display:block;color:#273142;font-weight:550}.bookings-timeline ol>li>small{display:block;color:#667085;font-size:11px}
+.bookings-timeline ul{margin:5px 0 0;padding:6px 9px;list-style:none;border-radius:6px;background:#f8f9fb;color:#475467;font-size:11px}
+.bookings-timeline ul span{display:inline-block;min-width:84px;margin-right:6px;color:#667085}
+.bookings-timeline-load{margin-top:6px}
+@media(max-width:560px){.bookings-inline-form{grid-template-columns:1fr}}

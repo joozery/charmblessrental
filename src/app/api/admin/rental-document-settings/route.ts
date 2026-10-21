@@ -1,4 +1,5 @@
-import { currentAdmin, sameOrigin } from "@/lib/admin-auth";
+import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
+import { audit, diff } from "@/lib/audit";
 import { database } from "@/lib/mongodb";
 import type { RentalDocumentDefaults, StoreSettings } from "@/lib/store-settings";
 
@@ -18,9 +19,14 @@ function validDefaults(value: unknown): value is RentalDocumentDefaults {
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
-  if (!await currentAdmin()) return Response.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+  const auth = await requireAdmin("settings");
+  if (auth.error) return auth.error;
   const body: unknown = await request.json().catch(() => null);
   if (!validDefaults(body)) return Response.json({ error: "ตรวจสอบข้อมูลใบรายละเอียดการเช่าอีกครั้ง" }, { status: 400 });
-  await (await database()).collection<StoreSettings & { _id: string }>("storeSettings").updateOne({ _id: "main" }, { $set: { rentalDocument: body } }, { upsert: true });
+  const settings = (await database()).collection<StoreSettings & { _id: string }>("storeSettings");
+  const before = await settings.findOne({ _id: "main" }, { projection: { rentalDocument: 1 } });
+  await settings.updateOne({ _id: "main" }, { $set: { rentalDocument: body } }, { upsert: true });
+  const changes = diff(before?.rentalDocument, body as unknown as Record<string, unknown>);
+  if (changes.length) await audit(request, auth.admin, { action: "settings.rental_document", targetType: "settings", targetId: "rentalDocument", summary: "แก้ไขค่าเริ่มต้นใบรายละเอียดการเช่า", changes });
   return Response.json({ settings: body });
 }

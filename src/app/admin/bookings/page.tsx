@@ -1,17 +1,23 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { currentAdmin } from "@/lib/admin-auth";
+import { pageAdmin } from "@/lib/admin-auth";
+import { deposits } from "@/lib/finance";
+import { permissionsOf } from "@/lib/permissions";
 import { database } from "@/lib/mongodb";
 import { getStoreSettings } from "@/lib/store-settings";
 import BookingRequests from "./booking-requests";
 import "./bookings.css";
 
 export const metadata = { title: "คำขอจอง | Charm Bless", robots: { index: false, follow: false } };
-type BookingDoc = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; quote?: Partial<{ rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string }>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null }[]; createdAt: Date; payment?: "unpaid" | "paid"; billToken?: string; lineUserId?: string; lineName?: string; lineSentAt?: Date };
-async function Content() {
-  if (!await currentAdmin()) redirect("/admin/login");
-  const rows = await (await database()).collection<BookingDoc>("bookingRequests").find({}, { projection: { _id: 1, status: 1, name: 1, phone: 1, address: 1, pin: 1, note: 1, method: 1, start: 1, end: 1, days: 1, deliveryFee: 1, estimatedTotal: 1, quote: 1, items: 1, createdAt: 1, payment: 1, billToken: 1, lineUserId: 1, lineName: 1, lineSentAt: 1 } }).sort({ createdAt: -1 }).limit(500).toArray();
-  const settings = await getStoreSettings();
-  return <BookingRequests initial={rows.map(({ lineUserId, lineSentAt, ...row }) => ({ ...row, lineLinked: !!lineUserId, lineSentAt: lineSentAt ? new Date(lineSentAt).toISOString() : "", _id: String(row._id), createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString() }))} store={{ logoImage: settings.logoImage, lineUrl: settings.lineUrl, instagramUrl: settings.instagramUrl, rentalRules: settings.rentalRules, rentalDocument: settings.rentalDocument }} />;
+type BookingDoc = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; quote?: Partial<{ rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string }>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null }[]; createdAt: Date; payment?: "unpaid" | "paid"; billToken?: string; lineUserId?: string; lineName?: string; lineSentAt?: Date; paidAt?: Date | null; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date; byName: string }; returned?: { at: Date; condition: string; note: string; byName: string } };
+type Query = { id?: string | string[] };
+const iso = (value?: Date | null) => value ? new Date(value).toISOString() : "";
+async function Content({ searchParams }: { searchParams: Promise<Query> }) {
+  const admin = await pageAdmin("bookings");
+  const { id } = await searchParams;
+  const db = await database();
+  const rows = await db.collection<BookingDoc>("bookingRequests").find({}, { projection: { _id: 1, status: 1, name: 1, phone: 1, address: 1, pin: 1, note: 1, method: 1, start: 1, end: 1, days: 1, deliveryFee: 1, estimatedTotal: 1, quote: 1, items: 1, createdAt: 1, payment: 1, billToken: 1, lineUserId: 1, lineName: 1, lineSentAt: 1, paidAt: 1, shipment: 1, returned: 1 } }).sort({ createdAt: -1 }).limit(500).toArray();
+  const [settings, depositRows] = await Promise.all([getStoreSettings(), deposits(db).find({ _id: { $in: rows.map(row => String(row._id)) } }).toArray()]);
+  const depositById = new Map(depositRows.map(({ refund, ...row }) => [row._id, { amount: row.amount, status: row.status, receivedAt: iso(row.receivedAt), receivedByName: row.receivedByName, ...(refund ? { refund: { ...refund, date: iso(refund.date), at: iso(refund.at) } } : {}) }]));
+  return <BookingRequests selected={typeof id === "string" ? id : ""} permissions={permissionsOf(admin)} initial={rows.map(({ lineUserId, lineSentAt, paidAt, shipment, returned, ...row }) => ({ ...row, lineLinked: !!lineUserId, lineSentAt: iso(lineSentAt), paidAt: iso(paidAt), ...(shipment ? { shipment: { carrier: shipment.carrier, trackingNumber: shipment.trackingNumber, byName: shipment.byName, shippedAt: iso(shipment.shippedAt) } } : {}), ...(returned ? { returned: { condition: returned.condition, note: returned.note, byName: returned.byName, at: iso(returned.at) } } : {}), ...(depositById.has(String(row._id)) ? { deposit: depositById.get(String(row._id)) } : {}), _id: String(row._id), createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString() }))} store={{ logoImage: settings.logoImage, lineUrl: settings.lineUrl, instagramUrl: settings.instagramUrl, rentalRules: settings.rentalRules, rentalDocument: settings.rentalDocument }} />;
 }
-export default function Page() { return <Suspense fallback={<main className="admin-loading" role="status">กำลังโหลดคำขอจอง…</main>}><Content /></Suspense>; }
+export default function Page({ searchParams }: { searchParams: Promise<Query> }) { return <Suspense fallback={<main className="admin-loading" role="status">กำลังโหลดคำขอจอง…</main>}><Content searchParams={searchParams} /></Suspense>; }

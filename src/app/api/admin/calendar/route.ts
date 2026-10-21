@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
-import type { Product } from "@/lib/products";
+import { productsByLegacyIds } from "@/lib/product-store";
 
 const validDay = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 
@@ -21,8 +21,7 @@ export async function GET(request: Request) {
   const ids = rentals.map(rental => rental.legacyId as string);
   const items = ids.length ? await db.collection("rentalItems").find({ rentalId: { $in: ids } }, { projection: { _id: 0, rentalId: 1, productLegacyId: 1, productName: 1, sku: 1 } }).toArray() : [];
   const productIds = [...new Set(items.map(item => item.productLegacyId).filter((id): id is string => typeof id === "string"))];
-  const products = productIds.length ? await db.collection<Product>("products").find({ legacyId: { $in: productIds } }, { projection: { _id: 0, legacyId: 1, name: 1, sku: 1, image: 1, images: 1, imageStatus: 1 } }).toArray() : [];
-  const productByLegacy = new Map(products.map(product => [product.legacyId, product]));
+  const productByLegacy = await productsByLegacyIds(db, productIds);
   const rentalsById = new Map(rentals.map(rental => [rental.legacyId, rental]));
   return NextResponse.json({ rentals: [...rentalsById.values()].map(rental => ({
     ...rental,

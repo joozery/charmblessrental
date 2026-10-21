@@ -5,9 +5,10 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DropdownMenu } from "radix-ui";
+import type { Permission } from "@/lib/permissions";
 
 export default function AdminChrome({ user, counts, children }: {
-  user: { name: string; email?: string; username: string; role: "owner" | "admin" };
+  user: { name: string; email?: string; username: string; role: "owner" | "admin"; permissions: Permission[] };
   counts: { products: number; admins: number; bookings: number };
   children: React.ReactNode;
 }) {
@@ -21,25 +22,27 @@ export default function AdminChrome({ user, counts, children }: {
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
   const commandInput = useRef<HTMLInputElement>(null);
-  const role = user.role === "owner" ? "เจ้าของร้าน" : "แอดมินสินค้า";
+  const role = user.role === "owner" ? "เจ้าของร้าน" : "แอดมิน";
   const initials = Array.from(user.name || user.username).slice(0, 2).join("").toUpperCase();
+  const allowed = (permission?: Permission) => !permission || user.permissions.includes(permission);
   const navigation = [
     { href: "/admin", title: "ภาพรวม", description: "แดชบอร์ดร้าน", icon: "home" as const, count: null as number | null },
-    { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null },
-    { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings },
-    { href: "/admin/finance", title: "สรุปการเงิน", description: "ยอดเช่า ยอดชำระ และเงินประกัน", icon: "payment" as const, count: null as number | null },
-    { href: "/admin/store-settings", title: "ตั้งค่าหน้าร้าน", description: "ข้อความและช่องทางติดต่อหน้าร้าน", icon: "sliders" as const, count: null as number | null },
-    { href: "/admin/rental-document-settings", title: "ตั้งค่าใบรายละเอียดการเช่า", description: "บัญชีชำระเงินและข้อมูลส่งคืน", icon: "payment" as const, count: null as number | null },
-    { href: "/admin/products", title: "จัดการสินค้า", description: "คอลเลกชันและสินค้าให้เช่า", icon: "grid" as const, count: counts.products },
-    { href: "/admin/availability", title: "จัดการคิวว่าง", description: "จำนวนชุดว่างรายวัน", icon: "calendar" as const, count: null as number | null },
+    { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
+    { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, permission: "bookings" as Permission },
+    { href: "/admin/finance", title: "สรุปการเงิน", description: "ยอดเช่า ยอดชำระ และเงินประกัน", icon: "payment" as const, count: null as number | null, permission: "finance" as Permission },
+    { href: "/admin/store-settings", title: "ตั้งค่าหน้าร้าน", description: "ข้อความและช่องทางติดต่อหน้าร้าน", icon: "sliders" as const, count: null as number | null, permission: "settings" as Permission },
+    { href: "/admin/rental-document-settings", title: "ตั้งค่าใบรายละเอียดการเช่า", description: "บัญชีชำระเงินและข้อมูลส่งคืน", icon: "payment" as const, count: null as number | null, permission: "settings" as Permission },
+    { href: "/admin/products", title: "จัดการสินค้า", description: "คอลเลกชันและสินค้าให้เช่า", icon: "grid" as const, count: counts.products, permission: "products" as Permission },
+    { href: "/admin/availability", title: "จัดการคิวว่าง", description: "จำนวนชุดว่างรายวัน", icon: "calendar" as const, count: null as number | null, permission: "products" as Permission },
+    { href: "/admin/activity", title: "ประวัติการทำรายการ", description: "ใครทำอะไร เมื่อใด และการเข้าสู่ระบบ", icon: "history" as const, count: null as number | null, permission: "activity" as Permission },
     ...(user.role === "owner" ? [{ href: "/admin/admins", title: "จัดการแอดมิน", description: "ทีมงานและสิทธิ์ใช้งาน", icon: "users" as const, count: counts.admins }] : []),
-  ];
+  ].filter(item => allowed(item.permission));
   const navigationGroups = [
     { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings"].includes(item.href)) },
     { label: "จัดการร้าน", items: navigation.filter(item => ["/admin/finance", "/admin/store-settings", "/admin/products", "/admin/availability"].includes(item.href)) },
     { label: "เอกสารการเช่า", items: navigation.filter(item => item.href === "/admin/rental-document-settings") },
-    ...(user.role === "owner" ? [{ label: "ทีมงาน", items: navigation.filter(item => item.href === "/admin/admins") }] : []),
-  ];
+    { label: "ทีมงาน", items: navigation.filter(item => ["/admin/admins", "/admin/activity"].includes(item.href)) },
+  ].filter(group => group.items.length);
   const current = navigation.find(item => item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href)) || navigation[0];
   const commands = [...navigation, { href: "/", title: "เปิดหน้าร้าน", description: "ชมหน้าร้าน Charm Bless Rental", icon: "store" as const, count: 0 }].filter(item => `${item.title} ${item.description}`.includes(query.trim()));
   useEffect(() => {

@@ -2,7 +2,7 @@ import {
   ArrowLeftIcon, ArrowRightIcon, ArrowTopRightIcon, BackpackIcon, CalendarIcon,
   CardStackIcon, FileTextIcon, PaperPlaneIcon,
   ChatBubbleIcon, CheckCircledIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon,
-  ChevronRightIcon, ChevronUpIcon, Cross2Icon, CubeIcon, DashboardIcon, EnterIcon,
+  ChevronRightIcon, ChevronUpIcon, CounterClockwiseClockIcon, Cross2Icon, CubeIcon, DashboardIcon, EnterIcon,
   ExitIcon, HeartIcon, HomeIcon, ImageIcon, LockClosedIcon, MagnifyingGlassIcon,
   MixerHorizontalIcon, HamburgerMenuIcon, PersonIcon, PinLeftIcon, PlusIcon,
   QuestionMarkCircledIcon, RocketIcon, SizeIcon, StarIcon, TokensIcon, ZoomInIcon,
@@ -19,7 +19,7 @@ const icons = {
   heart: HeartIcon, chat: ChatBubbleIcon, sliders: MixerHorizontalIcon, bag: BackpackIcon,
   box: CubeIcon, dress: BackpackIcon, diamond: TokensIcon, truck: RocketIcon,
   help: QuestionMarkCircledIcon, enter: EnterIcon, zoom: ZoomInIcon,
-  booking: FileTextIcon, payment: CardStackIcon, delivery: PaperPlaneIcon,
+  history: CounterClockwiseClockIcon, booking: FileTextIcon, payment: CardStackIcon, delivery: PaperPlaneIcon,
 };
 export type IconName = keyof typeof icons;
 export function Icon({ name, className = "", ...props }: { name: IconName } & ComponentProps<typeof PlusIcon>) {

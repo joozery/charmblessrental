@@ -1,4 +1,4 @@
-import { isAdmin, sameOrigin } from "@/lib/admin-auth";
+import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
 import { uploadProductImage } from "@/lib/r2";
 
 function imageType(bytes: Buffer) {
@@ -9,7 +9,9 @@ function imageType(bytes: Buffer) {
 }
 
 export async function POST(request: Request) {
-  if (!sameOrigin(request) || !await isAdmin()) return Response.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+  if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
+  const auth = await requireAdmin("settings");
+  if (auth.error) return auth.error;
   if (Number(request.headers.get("content-length")) > 6 * 1024 * 1024) return Response.json({ error: "ไฟล์ต้องไม่เกิน 5 MB" }, { status: 413 });
   try {
     const form = await request.formData();

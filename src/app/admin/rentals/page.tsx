@@ -1,9 +1,8 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { currentAdmin } from "@/lib/admin-auth";
+import { pageAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
-import type { Product } from "@/lib/products";
+import { productsByLegacyIds } from "@/lib/product-store";
 import RentalHistory from "./rental-history";
 import "./rental-history.css";
 
@@ -23,8 +22,7 @@ const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Numbe
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 async function Content({ searchParams }: { searchParams: SearchParams }) {
-  const admin = await currentAdmin();
-  if (!admin) redirect("/admin/login");
+  await pageAdmin("rentals");
   const query = await searchParams;
   const q = one(query.q).trim().slice(0, 100);
   const status = one(query.status);
@@ -60,8 +58,7 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
   const ids = rentals.map(rental => rental.legacyId);
   const rentalItems = ids.length ? await db.collection<RentalItem>("rentalItems").find({ rentalId: { $in: ids } }, { projection: { _id: 0 } }).toArray() : [];
   const productIds = [...new Set(rentalItems.map(item => item.productLegacyId).filter((id): id is string => !!id))];
-  const products = productIds.length ? await db.collection<Product>("products").find({ legacyId: { $in: productIds } }, { projection: { _id: 0, legacyId: 1, name: 1, sku: 1, images: 1, image: 1, imageStatus: 1 } }).toArray() : [];
-  const productsByLegacyId = new Map(products.map(product => [product.legacyId, product]));
+  const productsByLegacyId = await productsByLegacyIds(db, productIds);
   const itemsByRental = new Map<string, { productName: string; sku: string; agreedPrice: number | null; notes: string; image?: string }[]>();
   for (const item of rentalItems) {
     const product = productsByLegacyId.get(item.productLegacyId || "");

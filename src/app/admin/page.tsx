@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { currentAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
-import { getProducts } from "@/lib/product-store";
+import { getProducts, productsByLegacyIds } from "@/lib/product-store";
 import type { Product } from "@/lib/products";
 import RentalCalendar from "./rental-calendar";
 import "./dashboard.css";
@@ -18,7 +18,7 @@ type Rental = {
   legacyStatus?: string; total?: number | null;
 };
 type RentalItem = { rentalId: string; productLegacyId?: string; productName?: string; sku?: string };
-type PageQuery = { from?: string | string[]; to?: string | string[]; date?: string | string[]; status?: string | string[] };
+type PageQuery = { from?: string | string[]; to?: string | string[]; date?: string | string[]; status?: string | string[]; denied?: string | string[] };
 const bangkokDay = (value: Date | string | null | undefined) => value ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)) : "";
 const sourceDay = (value: Date | string | null | undefined) => value ? new Date(value).toISOString().slice(0, 10) : "";
 const nextDay = (day: string, offset: number) => { const date = new Date(`${day}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + offset); return date.toISOString().slice(0, 10); };
@@ -28,7 +28,7 @@ const money = (amount: number | null | undefined) => amount == null ? "—" : `$
 const plain = (value: string | undefined) => value?.trim() || "—";
 const validDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && sourceDay(`${value}T12:00:00Z`) === value;
 
-async function Dashboard({ from, to, date, status }: PageQuery) {
+async function Dashboard({ from, to, date, status, denied }: PageQuery) {
   const admin = await currentAdmin();
   if (!admin) redirect("/admin/login");
   const today = bangkokDay(new Date());
@@ -62,13 +62,14 @@ async function Dashboard({ from, to, date, status }: PageQuery) {
   const items = relevantIds.length ? await db.collection<RentalItem>("rentalItems").find({ rentalId: { $in: relevantIds } }, { projection: { _id: 0, rentalId: 1, productLegacyId: 1, productName: 1, sku: 1 } }).toArray() : [];
   const firstItem = new Map<string, RentalItem>();
   for (const item of items) if (!firstItem.has(item.rentalId)) firstItem.set(item.rentalId, item);
-  const productByLegacy = new Map(products.map(product => [product.legacyId, product]));
-  const productFor = (rental: Rental): Product | undefined => productByLegacy.get(firstItem.get(rental.legacyId)?.productLegacyId);
+  const productByLegacy = await productsByLegacyIds(db, [...new Set(items.map(item => item.productLegacyId).filter((id): id is string => !!id))]);
+  const productFor = (rental: Rental): Product | undefined => productByLegacy.get(firstItem.get(rental.legacyId)?.productLegacyId || "");
   const missingImage = products.filter(product => product.imageStatus === "missing-source" || !product.images?.[0]).length;
   const queue = [...shipping.map(rental => ({ rental, kind: "จัดส่ง" as const, day: sourceDay(rental.shipDate) })), ...returning.map(rental => ({ rental, kind: "คืน" as const, day: sourceDay(rental.returnDate) }))].sort((a, b) => a.day.localeCompare(b.day)).slice(0, 5);
   const statusParams = new URLSearchParams({ from: start, to: end, status: "รอชำระเงิน" });
 
   return <main className="admin-main dashboard-page">
+    {denied && <p className="admin-error" role="alert">บัญชีของคุณไม่มีสิทธิ์เข้าหน้านั้น กรุณาติดต่อเจ้าของร้านหากต้องการสิทธิ์เพิ่ม</p>}
     <header className="dashboard-header">
       <div><span className="dashboard-eyebrow">CHARM BLESS RENTAL · หลังบ้าน</span><h1>ภาพรวมร้าน</h1><p>ติดตามรายการเช่า การจัดส่ง และกำหนดคืนจากข้อมูลในระบบ</p></div>
       <form action="/admin" method="get" className="dashboard-date-form"><Icon name="calendar" /><label htmlFor="dashboard-from">จากวันที่</label><input id="dashboard-from" type="date" name="from" defaultValue={start} required /><label htmlFor="dashboard-to">ถึงวันที่</label><input id="dashboard-to" type="date" name="to" defaultValue={end} required />{selectedStatus !== "all" && <input type="hidden" name="status" value={selectedStatus} />}<button type="submit">แสดงข้อมูล</button></form>

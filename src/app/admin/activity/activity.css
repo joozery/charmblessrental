@@ -1,0 +1,26 @@
+body:has(.activity-page),body:has(.activity-page) .chrome-shell,body:has(.activity-page) .chrome-workspace{background:#f5f6f8}
+.chrome-shell .activity-page{max-width:1200px;padding:28px;color:#202938}
+.activity-eyebrow{display:block;color:#79516c;font-size:11px;font-weight:650;letter-spacing:1.1px}
+.activity-header h1{margin:5px 0 3px;color:#17202e;font-size:27px;font-weight:650;letter-spacing:-.4px}
+.activity-header p{margin:0 0 18px;color:#667085;font-size:13px;line-height:1.6}
+.activity-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin-bottom:12px;padding:10px;border:1px solid #dfe3e8;border-radius:8px;background:#fff}
+.activity-filters label{display:flex;flex-direction:column;gap:4px;min-width:130px;flex:1;color:#475467;font-size:11px}
+.activity-filters input,.activity-filters select{height:34px;min-width:0;padding:5px 8px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#344054;font:inherit;font-size:12px}
+.activity-filters button{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border:0;border-radius:6px;background:#252a33;color:#fff;font:inherit;font-size:12px;cursor:pointer}
+.activity-filters button svg{width:14px;height:14px}.activity-filters a{align-self:center;color:#667085;font-size:12px}
+.activity-count{margin:0 0 10px;color:#667085;font-size:12px}
+.activity-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.activity-item{padding:12px 14px;border:1px solid #e0e4e9;border-left:4px solid #d0d5dd;border-radius:8px;background:#fff}
+.activity-item.is-auth{border-left-color:#5b9bd5}.activity-item.is-bookings{border-left-color:#b58aa5}.activity-item.is-finance{border-left-color:#2e9e67}.activity-item.is-products{border-left-color:#d29b55}.activity-item.is-settings{border-left-color:#7a8699}.activity-item.is-admins{border-left-color:#6b5bd5}.activity-item.is-failed{border-left-color:#d9604f;background:#fffafa}
+.activity-item-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.activity-item-head strong{flex:1;min-width:200px;color:#273142;font-size:13px;font-weight:550}
+.activity-item-head time{color:#667085;font-size:11px;white-space:nowrap}
+.activity-badge{padding:3px 8px;border-radius:999px;background:#f0f2f5;color:#475467;font-size:11px;white-space:nowrap}
+.activity-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 0;color:#667085;font-size:11px}
+.activity-meta span{display:inline-flex;align-items:center;gap:4px}.activity-meta svg{width:12px;height:12px}.activity-meta a{color:#79516c}
+.activity-changes{width:100%;margin-top:8px;border-collapse:collapse;font-size:11px}
+.activity-changes th{padding:5px 8px;background:#f8f9fb;color:#667085;font-weight:500;text-align:left}
+.activity-changes td{padding:5px 8px;border-top:1px solid #eef0f3;color:#344054;overflow-wrap:anywhere;vertical-align:top}
+.activity-changes td:first-child{width:22%;color:#667085}.activity-changes td:last-child{color:#17202e;font-weight:550}
+.activity-empty{padding:40px 16px;border:1px dashed #d0d5dd;border-radius:8px;background:#fff;color:#667085;text-align:center;font-size:13px}
+@media(max-width:650px){.chrome-shell .activity-page{padding:22px 14px}.activity-filters label{min-width:calc(50% - 4px)}.activity-changes td:first-child{width:30%}}

@@ -1,13 +1,12 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { currentAdmin } from "@/lib/admin-auth";
+import { pageAdmin } from "@/lib/admin-auth";
 import { getProducts } from "@/lib/product-store";
 import AvailabilityManager from "./availability-manager";
 import "./availability.css";
 
 export const metadata = { title: "จัดการคิวว่าง | Charm Bless", robots: { index: false, follow: false } };
 async function Content() {
-  if (!await currentAdmin()) redirect("/admin/login");
+  await pageAdmin("products");
   const products = (await getProducts()).map(product => ({ id: product.id, name: product.name, sku: product.sku }));
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit" }).format(new Date());
   return <AvailabilityManager products={products} initialMonth={today} />;

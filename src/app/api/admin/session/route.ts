@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { configured, sameOrigin, sessionToken } from "@/lib/admin-auth";
+import { configured, currentAdmin, sameOrigin, sessionToken } from "@/lib/admin-auth";
+import { audit } from "@/lib/audit";
 import { adminAccounts, hashPassword, verifyPassword } from "@/lib/admin-accounts";
 const attempts = new Map<string, { count: number; until: number }>();
 let dummyHash: Promise<string> | undefined;
@@ -21,14 +22,20 @@ export async function POST(request: Request) {
       : await collection.findOne({ username: email, $or: [{ email: { $exists: false } }, { email: "" }] });
     dummyHash ??= hashPassword("invalid-login-placeholder");
     const valid = await verifyPassword(body.password, account?.passwordHash || await dummyHash);
-    if (!account || !account.active || !valid) return Response.json({ error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
+    if (!account || !account.active || !valid) {
+      await audit(request, account ? { _id: account._id, name: account.name, email: account.email, username: account.username } : null, { action: "auth.login_failed", targetType: "admin", targetId: account?._id || "", actorEmail: email, summary: !account ? `เข้าสู่ระบบไม่สำเร็จ: ไม่พบบัญชี ${email}` : !account.active ? "เข้าสู่ระบบไม่สำเร็จ: บัญชีถูกปิดใช้งาน" : "เข้าสู่ระบบไม่สำเร็จ: รหัสผ่านไม่ถูกต้อง" });
+      return Response.json({ error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
+    }
     attempts.delete(email);
+    await audit(request, account, { action: "auth.login", targetType: "admin", targetId: account._id, summary: "เข้าสู่ระบบ" });
     (await cookies()).set("admin_session", sessionToken(account), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/", maxAge: 28800 });
     return Response.json({ ok: true });
   } catch { return Response.json({ error: "เชื่อมต่อระบบบัญชีไม่สำเร็จ กรุณาลองใหม่" }, { status: 503 }); }
 }
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
+  const admin = await currentAdmin().catch(() => null);
+  if (admin) await audit(request, admin, { action: "auth.logout", targetType: "admin", targetId: admin._id, summary: "ออกจากระบบ" });
   (await cookies()).delete("admin_session");
   return Response.json({ ok: true });
 }

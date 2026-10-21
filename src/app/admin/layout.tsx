@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { currentAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
+import { can, permissionsOf } from "@/lib/permissions";
 import AdminChrome from "./admin-chrome";
 import "./admin.css";
 import "./admin-chrome.css";
@@ -11,9 +12,9 @@ async function Workspace({ children }: { children: React.ReactNode }) {
   const [products, admins, bookings] = await Promise.all([
     db.collection("products").countDocuments(),
     admin.role === "owner" ? db.collection("admins").countDocuments() : Promise.resolve(0),
-    db.collection("bookingRequests").countDocuments({ status: "new" }),
+    can(admin, "bookings") ? db.collection("bookingRequests").countDocuments({ status: "new" }) : Promise.resolve(0),
   ]);
-  return <AdminChrome user={{ name: admin.name, email: admin.email, username: admin.username, role: admin.role }} counts={{ products, admins, bookings }}>{children}</AdminChrome>;
+  return <AdminChrome user={{ name: admin.name, email: admin.email, username: admin.username, role: admin.role, permissions: permissionsOf(admin) }} counts={{ products, admins, bookings }}>{children}</AdminChrome>;
 }
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<main className="admin-loading" role="status">กำลังโหลดพื้นที่จัดการร้าน…</main>}><Workspace>{children}</Workspace></Suspense>;

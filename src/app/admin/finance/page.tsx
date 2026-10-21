@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 import FinanceTransactions from "./finance-transactions";
-import { currentAdmin } from "@/lib/admin-auth";
+import { pageAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
+import { deposits, transactions } from "@/lib/finance";
 import "./finance.css";
 
 export const metadata = { title: "สรุปการเงิน | Charm Bless", robots: { index: false, follow: false } };
@@ -13,7 +13,6 @@ type Query = { from?: string | string[]; to?: string | string[] };
 type Rental = { legacyId: string; customerName?: string; enteredAt?: Date | null; paidAt?: Date | null; legacyStatus?: string; rentalTotal?: number | null; deposit?: number | null; shipping?: number | null; total?: number | null; bankId?: string; slips?: string[] };
 type Summary = { count: number; rentalTotal: number; deposit: number; shipping: number; total: number; pendingCount: number; pendingTotal: number };
 type Trend = { _id: string; total: number; count: number };
-type FinanceTransaction = { _id: string; type: "income" | "expense"; category: string; amount: number; date: Date; note?: string; createdBy?: string };
 
 const one = (value?: string | string[]) => Array.isArray(value) ? value[0] : value || "";
 const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T12:00:00Z`));
@@ -23,8 +22,7 @@ const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "num
 const monthLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { month: "short", year: "2-digit", timeZone: "UTC" }).format(new Date(`${value}-01T12:00:00Z`));
 
 async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
-  const admin = await currentAdmin();
-  if (!admin) redirect("/admin/login");
+  await pageAdmin("finance");
   const query = await searchParams;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const defaultFrom = `${today.slice(0, 7)}-01`;
@@ -56,8 +54,16 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
     ]).toArray(),
     rentals.find(paidMatch, { projection: { _id: 0, legacyId: 1, customerName: 1, paidAt: 1, legacyStatus: 1, total: 1, bankId: 1, slips: 1 } }).sort({ paidAt: -1 }).limit(8).toArray(),
     rentals.find({ ...match, legacyStatus: "รอชำระเงิน" }, { projection: { _id: 0, legacyId: 1, customerName: 1, enteredAt: 1, total: 1 } }).sort({ enteredAt: -1 }).limit(8).toArray(),
-    db.collection<FinanceTransaction>("financeTransactions").find(transactionMatch, { projection: { _id: 1, type: 1, category: 1, amount: 1, date: 1, note: 1, createdBy: 1 } }).sort({ date: -1, _id: -1 }).toArray(),
+    transactions(db).find(transactionMatch, { projection: { _id: 1, type: 1, category: 1, amount: 1, date: 1, note: 1, createdBy: 1, createdByName: 1, bookingId: 1, source: 1, voided: 1 } }).sort({ date: -1, _id: -1 }).toArray(),
   ]);
+  const [heldDeposits, depositPeriod] = await Promise.all([
+    deposits(db).find({ status: "held" }, { projection: { _id: 1, customerName: 1, amount: 1, receivedAt: 1 } }).sort({ receivedAt: 1 }).toArray(),
+    reversed ? Promise.resolve(null) : deposits(db).aggregate<{ received: number; refunded: number; deducted: number }>([
+      { $match: { status: { $ne: "void" } } },
+      { $group: { _id: null, received: { $sum: { $cond: [{ $and: [{ $gte: ["$receivedAt", startDate] }, { $lt: ["$receivedAt", endDate] }] }, "$amount", 0] } }, refunded: { $sum: { $cond: [{ $and: [{ $gte: ["$refund.date", startDate] }, { $lt: ["$refund.date", endDate] }] }, "$refund.amount", 0] } }, deducted: { $sum: { $cond: [{ $and: [{ $gte: ["$refund.date", startDate] }, { $lt: ["$refund.date", endDate] }] }, "$refund.deducted", 0] } } } },
+    ]).next(),
+  ]);
+  const heldTotal = heldDeposits.reduce((sum, row) => sum + row.amount, 0);
   const summary = summaryResult || { count: 0, rentalTotal: 0, deposit: 0, shipping: 0, total: 0, pendingCount: 0, pendingTotal: 0 };
   const paid = paidResult || { count: 0, total: 0 };
   const maxTrend = Math.max(1, ...trend.map(row => row.total));
@@ -88,7 +94,13 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
       <article className="is-paid"><span className="finance-metric-icon"><Icon name="check" /></span><div><span>ยอดที่มีวันที่ชำระบันทึก</span><strong>{amount(paid.total)}</strong><small>{paid.count.toLocaleString("th-TH")} รายการ · กรองตามวันที่ชำระ</small></div></article>
       <article className="is-pending"><span className="finance-metric-icon"><Icon name="calendar" /></span><div><span>สถานะรอชำระเงิน</span><strong>{amount(summary.pendingTotal)}</strong><small>{summary.pendingCount.toLocaleString("th-TH")} รายการ · กรองตามวันที่ลงข้อมูล</small></div></article>
     </section>
-    <FinanceTransactions initial={transactionRows.map(row => ({ ...row, _id: String(row._id), date: row.date.toISOString(), note: row.note || "" }))} today={today} />
+    <FinanceTransactions initial={transactionRows.map(({ voided, ...row }) => ({ ...row, _id: String(row._id), date: row.date.toISOString(), note: row.note || "", ...(voided ? { voided: { reason: voided.reason, byName: voided.byName, at: voided.at.toISOString() } } : {}) }))} today={today} />
+    <section className="finance-panel finance-deposits" aria-labelledby="finance-deposits-title">
+      <div className="finance-panel-head"><div><span className="finance-eyebrow">SECURITY DEPOSITS</span><h2 id="finance-deposits-title">เงินประกันชุด</h2></div><span className="finance-panel-caption">แยกจากรายรับ</span></div>
+      <div className="finance-ledger-totals"><article><span>ถืออยู่ตอนนี้ (ต้องคืนลูกค้า)</span><strong>{amount(heldTotal)}</strong></article><article><span>รับเงินประกันในช่วงนี้</span><strong className="is-income">{amount(depositPeriod?.received)}</strong></article><article><span>คืนแล้ว / หักไว้ในช่วงนี้</span><strong>{amount(depositPeriod?.refunded)} <small>/ {amount(depositPeriod?.deducted)}</small></strong></article></div>
+      {heldDeposits.length ? <div className="finance-list">{heldDeposits.slice(0, 12).map(row => <article key={row._id}><div><strong><Link href={`/admin/bookings?id=${encodeURIComponent(row._id)}`}>{row._id}</Link></strong><span>{row.customerName || "ไม่ระบุชื่อลูกค้า"} · รับเมื่อ {dateLabel(row.receivedAt)}</span></div><strong>{amount(row.amount)}</strong></article>)}</div> : <p className="finance-empty">ไม่มีเงินประกันที่รอคืน</p>}
+      <p className="finance-panel-note">เงินประกันบันทึกอัตโนมัติเมื่อยืนยันชำระในหน้าคำขอจอง และคืนได้หลังรับคืนสินค้า ยอดที่หักไว้จะลงเป็นรายรับหมวด “ค่าปรับ”{heldDeposits.length > 12 ? ` · แสดง 12 จาก ${heldDeposits.length.toLocaleString("th-TH")} รายการ` : ""}</p>
+    </section>
     <div className="finance-main-grid">
       <section className="finance-panel finance-trend"><div className="finance-panel-head"><div><span className="finance-eyebrow">RENTAL VALUE</span><h2>ยอดรวมรายการเช่าตามช่วงเวลา</h2></div><span className="finance-panel-caption">{isDaily ? "รายวัน" : "รายเดือน"}</span></div>{trend.length ? <div className="finance-chart" role="img" aria-label="กราฟยอดรวมรายการเช่า"><div className="finance-chart-y"><span>{amount(maxTrend)}</span><span>{amount(maxTrend / 2)}</span><span>0 บาท</span></div><div className="finance-chart-bars">{trend.map(row => <div className="finance-chart-column" key={row._id} title={`${isDaily ? dayLabel(row._id) : monthLabel(row._id)} · ${amount(row.total)} · ${row.count} รายการ`}><div className="finance-chart-track"><span style={{ height: `${Math.max(3, row.total / maxTrend * 100)}%` }} /></div><small>{isDaily ? dayLabel(row._id) : monthLabel(row._id)}</small></div>)}</div></div> : <p className="finance-empty">ไม่มีรายการเช่าในช่วงวันที่นี้</p>}<p className="finance-panel-note">เป็นยอดตามข้อมูลที่ลงรายการ ไม่ใช่กำไรสุทธิ และรวมเงินประกันกับค่าจัดส่งไว้ด้วย</p></section>
       <section className="finance-panel finance-breakdown"><div className="finance-panel-head"><div><span className="finance-eyebrow">AMOUNT BREAKDOWN</span><h2>ส่วนประกอบยอดรวม</h2></div></div><div className="finance-breakdown-content"><div className="finance-pie" role="img" aria-label={`สัดส่วนยอดรวมองค์ประกอบ: ${pieSlices.map(slice => `${slice.label} ${slice.share.toFixed(1)} เปอร์เซ็นต์`).join(", ")}`} style={{ background: pieBackground }} /><div className="finance-breakdown-legend">{pieSlices.map(slice => <div className="finance-breakdown-row" key={slice.className}><span><i className={slice.className} />{slice.label}</span><strong>{slice.share.toFixed(1)}%<small>{amount(slice.value)}</small></strong></div>)}</div></div><div className="finance-breakdown-total"><span>รวมทั้งหมด</span><strong>{amount(summary.total)}</strong></div><p className="finance-panel-note">เงินประกันแยกจากรายได้ค่าเช่า เนื่องจากอาจต้องคืนให้ลูกค้าหลังจบการเช่า</p></section>
