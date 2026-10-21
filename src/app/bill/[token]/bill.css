@@ -18,3 +18,24 @@ body:has(.bill-page){background:#f5f6f8}
 @media(max-width:560px){.bill-head{flex-direction:column;align-items:flex-start}.bill-button{flex:1 1 100%}}
 @media print{.bill-head,.bill-pay,.bill-actions,.bill-meta{display:none!important}.bill-page{padding:0}.bill-paper .rental-paper{border:0;box-shadow:none}}
 @media print{body > *:not(.rental-print-only){display:revert!important}.bill-paper{overflow:visible}}
+.bill-track{margin-bottom:14px;padding:16px 20px;border:1px solid #e4e7ec;border-radius:12px;background:#fff}
+.bill-track h2{margin:0 0 12px;font-size:16px;font-weight:650}
+.bill-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:0 0 6px;padding:0;list-style:none}
+.bill-steps li{display:grid;justify-items:center;gap:5px;color:#98a2b3;font-size:12px;line-height:1.35;text-align:center}
+.bill-steps span{display:grid;place-items:center;width:26px;height:26px;border:1px solid #d0d5dd;border-radius:50%;background:#fff;font-size:12px;font-weight:650}
+.bill-steps li.is-done{color:#79516c;font-weight:600}.bill-steps li.is-done span{border-color:#79516c;background:#79516c;color:#fff}
+.bill-track-box{margin-top:12px;padding:12px 14px;border-radius:10px;background:#faf7f9;font-size:14px;line-height:1.7}
+.bill-track-box strong{display:block;margin-bottom:4px}
+.bill-track-box p{margin:0}
+.bill-track-box ul{margin:0;padding:0;list-style:none}.bill-track-box li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding:4px 0}
+.bill-track-box li b{color:#9a6918;font-weight:600}.bill-track-box li b.is-ready{color:#277c51}
+.bill-tracking{letter-spacing:.5px}
+.bill-reported{color:#1d5bbf}
+.bill-return-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.bill-return-form label{display:flex;flex-direction:column;gap:4px;color:#475467;font-size:13px}
+.bill-return-form input,.bill-return-form select{height:42px;padding:0 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font:inherit;font-size:15px}
+.bill-return-form>div,.bill-return-form .bill-error{grid-column:1/-1}.bill-return-form>div{display:flex;flex-wrap:wrap;gap:8px}
+.bill-error{margin:0;color:#b42318;font-size:13px}
+.bill-link-button{margin-top:6px;padding:0;border:0;background:none;color:#79516c;font:inherit;font-size:13px;font-weight:600;text-decoration:underline;cursor:pointer}
+@media(max-width:560px){.bill-track{padding:14px}.bill-steps li{font-size:10px}.bill-return-form{grid-template-columns:1fr}}
+@media print{.bill-track{display:none!important}}

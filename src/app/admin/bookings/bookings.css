@@ -235,3 +235,13 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-timeline ul span{display:inline-block;min-width:84px;margin-right:6px;color:#667085}
 .bookings-timeline-load{margin-top:6px}
 @media(max-width:560px){.bookings-inline-form{grid-template-columns:1fr}}
+.bookings-stage-steps{display:grid;grid-template-columns:repeat(5,1fr);margin:10px 0 4px}
+.bookings-stage-steps>div{position:relative;display:grid;justify-items:center;gap:4px;color:#9aa7b9;font-size:10px;line-height:1.3;text-align:center}
+.bookings-stage-steps>div:not(:last-child):after{position:absolute;top:10px;left:calc(50% + 11px);width:calc(100% - 22px);height:1px;background:#d8e0ea;content:""}
+.bookings-stage-steps>div span{display:grid;place-items:center;width:22px;height:22px;border:1px solid #ccd5e0;border-radius:50%;background:#fff;color:#8190a5;font-size:10px;font-weight:650}
+.bookings-stage-steps>div.is-current span{border-color:#79516c;background:#79516c;color:#fff}.bookings-stage-steps>div.is-current small{color:#79516c;font-weight:600}
+.bookings-fulfillment-units,.bookings-fulfillment-meta{margin:8px 0 0;color:#475467;font-size:12px;line-height:1.6}
+.bookings-fulfillment-done.is-customer{color:#1d5bbf}
+.bookings-unit-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.bookings-unit-warning{color:#b54708;font-size:11px}
+.bookings-row-status{display:grid;justify-items:end;gap:3px}.bookings-row-status small{color:#79516c;font-size:10px;font-weight:600;text-align:right}

@@ -13,3 +13,11 @@ body:has(.rental-pricing-page),body:has(.rental-pricing-page) .chrome-shell,body
 .rental-pricing-card td small{margin-left:4px;color:#98a2b3;font-size:11px;font-weight:400}
 .rental-pricing-actions{display:flex;justify-content:flex-end;margin-top:14px;padding-top:14px;border-top:1px solid #eef0f3}
 @media(max-width:820px){.rental-pricing-layout{grid-template-columns:1fr}.chrome-shell .rental-pricing-page{padding:22px 14px}}
+.delivery-form{display:grid;gap:12px}.delivery-form h2{margin-bottom:0}
+.delivery-form label{display:grid;gap:5px;color:#475467;font-size:13px}
+.delivery-form input:not([type=checkbox]),.delivery-form textarea{min-height:38px;padding:8px 10px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;color:#202938;font:inherit;font-size:13px}
+.delivery-form label.delivery-check{display:flex;align-items:flex-start;gap:8px;color:#344054}.delivery-check input{margin-top:3px;accent-color:#79516c}
+.delivery-inline{display:flex;gap:8px}.delivery-inline input{flex:1;min-width:0}
+.delivery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.delivery-help{margin:-4px 0 0;color:#667085;font-size:12px;line-height:1.6}.delivery-help a{color:#79516c;font-weight:600}
+@media(max-width:560px){.delivery-grid{grid-template-columns:1fr}.delivery-inline{flex-direction:column}}

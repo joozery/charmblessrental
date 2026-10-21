@@ -7,7 +7,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Dialog } from "radix-ui";
-import { categoryLabels, unitStatusLabels, unitsOf, type Product, type ProductUnit, type UnitStatus } from "@/lib/products";
+import { categoryLabels, prepStatuses, unitStatusLabels, unitsOf, type Product, type ProductUnit, type UnitStatus } from "@/lib/products";
 import PriceTiersEditor, { pricingFrom, rowsFrom, type TierRow } from "@/components/price-tiers-editor";
 import { startingTier } from "@/lib/pricing";
 
@@ -33,6 +33,7 @@ async function post(url: string, body: unknown) {
   return result as { products: Product[] };
 }
 
+const ready = (p: Product) => unitsOf(p).filter(unit => unit.status === "available").length;
 export default function AdminProducts({ initialProducts }: { initialProducts: Product[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initialProducts);
@@ -51,7 +52,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
   const products = items;
   const categories = Array.from(new Set(products.map(p => p.category))).sort((a, b) => a.localeCompare(b, "th"));
   const pieces = products.flatMap(p => unitsOf(p));
-  const shown = products.filter(p => `${p.name} ${p.sku || ""} ${unitsOf(p).map(unit => unit.sku).join(" ")} ${p.category} ${p.notes || p.description}`.toLowerCase().includes(query.trim().toLowerCase()) && (category === "all" || p.category === category) && (stockFilter === "all" || (stockFilter === "in" ? (p.stock ?? 0) > 0 : (p.stock ?? 0) === 0)));
+  const shown = products.filter(p => `${p.name} ${p.sku || ""} ${unitsOf(p).map(unit => unit.sku).join(" ")} ${p.category} ${p.notes || p.description}`.toLowerCase().includes(query.trim().toLowerCase()) && (category === "all" || p.category === category) && (stockFilter === "all" || (stockFilter === "in" ? ready(p) > 0 : ready(p) === 0)));
   const pageCount = Math.max(1, Math.ceil(shown.length / 30));
   const currentPage = Math.min(page, pageCount - 1);
   const paginated = shown.slice(currentPage * 30, (currentPage + 1) * 30);
@@ -119,7 +120,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       <div className="admin-page-title"><div><h1>ข้อมูลสินค้า</h1><p>สินค้าแต่ละรายการมีได้หลายชิ้น รหัสสินค้าและรหัสชิ้นสร้างอัตโนมัติ กด “เติมสต๊อก” เมื่อได้ชุดเดิมมาเพิ่ม</p></div><Button variant="primary" onClick={() => edit()}><Icon name="plus" />เพิ่มสินค้าใหม่</Button></div>
       <section className="admin-stats grid gap-4 md:grid-cols-3" aria-label="ภาพรวมข้อมูลสินค้า">
         <article><span>สินค้าทั้งหมด</span><strong>{products.length.toLocaleString("th-TH")}<small>รายการ</small></strong><p>รวมชุดเดียวกันไว้เป็นรายการเดียว</p></article>
-        <article><span>สต๊อกทั้งหมด</span><strong>{pieces.filter(unit => unit.status !== "retired").length.toLocaleString("th-TH")}<small>ชิ้น</small></strong><p>พร้อมเช่า {pieces.filter(unit => unit.status === "available").length.toLocaleString("th-TH")} ชิ้น · ไม่พร้อมเช่า {pieces.filter(unit => unit.status === "unavailable").length.toLocaleString("th-TH")} ชิ้น</p></article>
+        <article><span>สต๊อกทั้งหมด</span><strong>{pieces.filter(unit => unit.status !== "retired").length.toLocaleString("th-TH")}<small>ชิ้น</small></strong><p>พร้อมเช่า {pieces.filter(unit => unit.status === "available").length.toLocaleString("th-TH")} ชิ้น · กำลังเตรียม {pieces.filter(unit => prepStatuses.includes(unit.status)).length.toLocaleString("th-TH")} ชิ้น · ไม่พร้อมเช่า {pieces.filter(unit => unit.status === "unavailable").length.toLocaleString("th-TH")} ชิ้น</p></article>
         <article><span>ต้นทุนรวม (บาท)</span><strong>{money(pieces.reduce((sum, unit) => sum + (unit.cost ?? 0), 0))}</strong><p>รวมต้นทุนของทุกชิ้น</p></article>
       </section>
       {notice && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
@@ -136,7 +137,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
           <tbody>{paginated.map(p => { const units = unitsOf(p).filter(unit => unit.status !== "retired"); return <tr key={p.id}>
             <td><Button variant="ghost" className="inventory-thumbnail" onClick={() => setPreview(p)} aria-label={`ดูรูป ${p.sku || p.name}`}><Image unoptimized src={p.images[0]} alt={p.name} width={48} height={64} /><span aria-hidden="true"><Icon name="expand" /></span></Button></td>
             <td className="inventory-sku">{p.sku || "—"}</td><td className="inventory-name"><strong>{p.name}</strong><small className="inventory-unit-codes">{units.map(unit => unit.sku).join(", ")}</small></td><td>{categoryLabels[p.category] || p.category}</td>
-            <td><span className="inventory-stock"><strong>{units.length} ชิ้น</strong><small>พร้อมเช่า {p.stock ?? 0}</small></span></td>
+            <td><span className="inventory-stock"><strong>{units.length} ชิ้น</strong><small>พร้อมเช่า {ready(p)}</small></span></td>
             <td className="inventory-money">{p.customPricing?.tiers.length || p.dailyRate != null ? <span className="inventory-price"><strong>{p.customPricing?.tiers.length ? `${startingTier(p.customPricing)!.days} วัน ${money(startingTier(p.customPricing)!.price)}` : `วันละ ${money(p.dailyRate)}`}</strong><small>ราคาเฉพาะ</small></span> : <span className="inventory-price"><small>ตามตารางร้าน</small></span>}</td><td><span className={`inventory-status ${p.active === false ? "is-hidden" : ""}`}>{p.active === false ? "ซ่อน" : "แสดง"}</span></td>
             <td className="inventory-money">{money(p.cost)}</td><td className="inventory-money">{money(p.legacyRevenue)}</td><td className={`inventory-money ${(p.legacyProfit ?? 0) < 0 ? "inventory-loss" : "inventory-profit"}`}>{money(p.legacyProfit)}</td>
             <td className="inventory-notes">{p.notes || p.description || "—"}</td>
@@ -166,7 +167,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       <label className="admin-form-full flex flex-row items-center gap-2"><Input type="checkbox" checked={draft.active} onChange={e => setDraft({ ...draft, active: e.target.checked })} />แสดงสินค้านี้บนหน้าร้าน</label>
       <label className="admin-form-full">หมายเหตุ<Textarea rows={3} maxLength={3000} value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>
       <div className="admin-form-full inventory-gallery"><span>รูปสินค้า (รูปแรกเป็นรูปหลัก)</span><div>{draft.images.map((url, index) => <figure key={url}><Image unoptimized src={url} alt={`รูปที่ ${index + 1}`} width={84} height={108} />{index > 0 && <button type="button" aria-label="ตั้งเป็นรูปหลัก" title="ตั้งเป็นรูปหลัก" onClick={() => setDraft({ ...draft, images: [url, ...draft.images.filter(item => item !== url)] })}><Icon name="spark" /></button>}<button type="button" aria-label={`ลบรูปที่ ${index + 1}`} title="ลบรูป" disabled={draft.images.length === 1} onClick={() => setDraft({ ...draft, images: draft.images.filter(item => item !== url) })}><Icon name="close" /></button></figure>)}</div><Input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy || draft.images.length >= 12} onChange={e => { void upload(e.target.files?.[0]); e.target.value = ""; }} /><small>อัปโหลด PNG, JPG หรือ WebP ไม่เกิน 5 MB สูงสุด 12 รูป</small></div>
-      {original && <div className="admin-form-full inventory-units"><div className="inventory-units-head"><span>ชิ้นสินค้า ({unitsOf(original).length} ชิ้น · พร้อมเช่า {original.stock ?? 0})</span><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { setDraft(null); setRestock({ product: original, count: 1, cost: null, note: "" }); }}><Icon name="plus" />เติมสต๊อก</Button></div>
+      {original && <div className="admin-form-full inventory-units"><div className="inventory-units-head"><span>ชิ้นสินค้า ({unitsOf(original).length} ชิ้น · พร้อมเช่า {ready(original)})</span><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { setDraft(null); setRestock({ product: original, count: 1, cost: null, note: "" }); }}><Icon name="plus" />เติมสต๊อก</Button></div>
         <table><thead><tr><th>รหัสชิ้น</th><th>ต้นทุน</th><th>สถานะ</th><th>หมายเหตุ</th><th><span className="admin-sr-only">บันทึก</span></th></tr></thead><tbody>{unitsOf(original).map(saved => { const unit = unitEdits[saved.sku] || saved; const dirty = !!unitEdits[saved.sku]; const change = (patch: Partial<ProductUnit>) => setUnitEdits(current => ({ ...current, [saved.sku]: { ...unit, ...patch } })); return <tr key={saved.sku} className={unit.status === "retired" ? "is-retired" : undefined}>
           <td className="inventory-sku">{saved.sku}</td>
           <td><input type="number" min="0" step="0.01" aria-label={`ต้นทุน ${saved.sku}`} value={unit.cost ?? ""} onChange={e => change({ cost: numeric(e.target) })} /></td>

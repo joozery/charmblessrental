@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import type { Db } from "mongodb";
 import { database } from "./mongodb";
-import { unitsOf, type Product, type ProductUnit, type UnitStatus } from "./products";
+import { inService, unitsOf, type Product, type ProductUnit, type UnitStatus } from "./products";
 export async function getProducts(): Promise<Product[]> {
   await connection();
   return readProducts();
@@ -17,9 +17,9 @@ export type ProductFields = Pick<Product, "name" | "thai" | "category" | "tag" |
 const products = (db: Db) => db.collection<Product>("products");
 const round = (value: number) => Math.round(value * 100) / 100;
 const total = (values: (number | null | undefined)[]) => values.some(value => typeof value === "number") ? round(values.reduce<number>((sum, value) => sum + (value || 0), 0)) : null;
-// Stock counts only pieces that can be rented; cost and legacy totals cover every piece the shop has owned.
+// Stock counts pieces still in service (ready, out on rent or being prepared); cost and legacy totals cover every piece the shop has owned.
 export const derived = (units: ProductUnit[]) => ({
-  stock: units.filter(unit => unit.status === "available").length,
+  stock: units.filter(unit => inService(unit.status)).length,
   cost: total(units.map(unit => unit.cost)),
   legacyRevenue: total(units.map(unit => unit.legacyRevenue)),
   legacyProfit: total(units.map(unit => unit.legacyProfit)),
@@ -88,6 +88,23 @@ export async function updateUnit(id: number, sku: string, patch: { cost: number 
   const next = units.map(unit => unit.sku === sku ? after : unit);
   await products(db).updateOne({ id }, { $set: { units: next, ...derived(next) } });
   return { before, after, units: next };
+}
+
+// Moves pieces (by piece code, across products) to a new status; returns each piece's status before the change.
+export async function setUnitStatuses(db: Db, changes: { sku: string; status: UnitStatus; note?: string }[]) {
+  const before = new Map<string, { productId: number; name: string; status: UnitStatus; note: string }>();
+  if (!changes.length) return before;
+  const bySku = new Map(changes.map(change => [change.sku, change]));
+  for (const product of await products(db).find({ "units.sku": { $in: [...bySku.keys()] } }).toArray()) {
+    const units = unitsOf(product).map(unit => {
+      const change = bySku.get(unit.sku);
+      if (!change) return unit;
+      before.set(unit.sku, { productId: product.id, name: product.name, status: unit.status, note: unit.note });
+      return { ...unit, status: change.status, note: change.note ?? unit.note };
+    });
+    await products(db).updateOne({ id: product.id }, { $set: { units, ...derived(units) } });
+  }
+  return before;
 }
 
 // Old rental history points at the pre-merge product's legacyId, which now lives on one of a product's pieces.

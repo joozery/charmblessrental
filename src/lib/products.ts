@@ -10,12 +10,16 @@ export type Product = {
   customPricing?: RentalPricing | null; pricing?: RentalPricing | null;
 };
 // One physical piece of a product. `sku` is the piece code (A0002-03); the product's `sku` is the code shared by its pieces (A0002).
-export type UnitStatus = "available" | "unavailable" | "retired";
+// After a rental a piece goes inspection → washing (or repair) → available; only "available" may be sent to the next customer.
+export type UnitStatus = "available" | "rented" | "inspection" | "washing" | "repair" | "unavailable" | "retired";
 export type ProductUnit = {
   sku: string; cost: number | null; status: UnitStatus; note: string; addedAt: Date | string | null;
   legacyProductId?: number; legacyId?: string; legacyRevenue?: number | null; legacyProfit?: number | null; image?: string;
 };
-export const unitStatusLabels: Record<UnitStatus, string> = { available: "พร้อมเช่า", unavailable: "ไม่พร้อมเช่า", retired: "เลิกใช้แล้ว" };
+export const unitStatusLabels: Record<UnitStatus, string> = { available: "พร้อมเช่า", rented: "อยู่กับลูกค้า", inspection: "รอตรวจสภาพ", washing: "รอซัก", repair: "รอซ่อม / ชำรุด", unavailable: "ไม่พร้อมเช่า", retired: "เลิกใช้แล้ว" };
+export const prepStatuses: UnitStatus[] = ["inspection", "washing", "repair"];
+// Pieces the shop still rents out, even while one is with a customer or being cleaned; the storefront lists a product while it has any.
+export const inService = (status: UnitStatus) => status !== "unavailable" && status !== "retired";
 // Products saved before pieces existed count as a single piece.
 export function unitsOf(p: Product): ProductUnit[] {
   return p.units?.length ? p.units : [{ sku: p.sku || "", cost: p.cost ?? null, status: p.active === false ? "unavailable" : "available", note: "", addedAt: null, legacyProductId: p.id, legacyId: p.legacyId, legacyRevenue: p.legacyRevenue ?? null, legacyProfit: p.legacyProfit ?? null }];

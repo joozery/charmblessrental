@@ -29,18 +29,20 @@ export default function AdminChrome({ user, counts, children }: {
     { href: "/admin", title: "ภาพรวม", description: "แดชบอร์ดร้าน", icon: "home" as const, count: null as number | null },
     { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
     { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, permission: "bookings" as Permission },
+    { href: "/admin/preparation", title: "เตรียมสินค้า", description: "ตรวจสภาพ ซัก ซ่อม และยืนยันพร้อมให้เช่า", icon: "box" as const, count: null as number | null, permission: "shipping" as Permission },
     { href: "/admin/finance", title: "สรุปการเงิน", description: "ยอดเช่า ยอดชำระ และเงินประกัน", icon: "payment" as const, count: null as number | null, permission: "finance" as Permission },
     { href: "/admin/store-settings", title: "ตั้งค่าหน้าร้าน", description: "ข้อความและช่องทางติดต่อหน้าร้าน", icon: "sliders" as const, count: null as number | null, permission: "settings" as Permission },
     { href: "/admin/rental-document-settings", title: "ตั้งค่าใบรายละเอียดการเช่า", description: "บัญชีชำระเงินและข้อมูลส่งคืน", icon: "payment" as const, count: null as number | null, permission: "settings" as Permission },
     { href: "/admin/products", title: "จัดการสินค้า", description: "คอลเลกชันและสินค้าให้เช่า", icon: "grid" as const, count: counts.products, permission: "products" as Permission },
     { href: "/admin/rental-pricing", title: "ราคาเช่า", description: "ราคาตามจำนวนวัน 1 / 3 / 5 / 7 วัน", icon: "payment" as const, count: null as number | null, permission: "products" as Permission },
+    { href: "/admin/delivery-settings", title: "ค่าจัดส่ง", description: "ค่าส่งแมสตามระยะทางจากร้าน", icon: "delivery" as const, count: null as number | null, permission: "settings" as Permission },
     { href: "/admin/availability", title: "จัดการคิวว่าง", description: "จำนวนชุดว่างรายวัน", icon: "calendar" as const, count: null as number | null, permission: "products" as Permission },
     { href: "/admin/activity", title: "ประวัติการทำรายการ", description: "ใครทำอะไร เมื่อใด และการเข้าสู่ระบบ", icon: "history" as const, count: null as number | null, permission: "activity" as Permission },
     ...(user.role === "owner" ? [{ href: "/admin/admins", title: "จัดการแอดมิน", description: "ทีมงานและสิทธิ์ใช้งาน", icon: "users" as const, count: counts.admins }] : []),
   ].filter(item => allowed(item.permission));
   const navigationGroups = [
-    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings"].includes(item.href)) },
-    { label: "จัดการร้าน", items: navigation.filter(item => ["/admin/finance", "/admin/store-settings", "/admin/products", "/admin/rental-pricing", "/admin/availability"].includes(item.href)) },
+    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings", "/admin/preparation"].includes(item.href)) },
+    { label: "จัดการร้าน", items: navigation.filter(item => ["/admin/finance", "/admin/store-settings", "/admin/products", "/admin/rental-pricing", "/admin/delivery-settings", "/admin/availability"].includes(item.href)) },
     { label: "เอกสารการเช่า", items: navigation.filter(item => item.href === "/admin/rental-document-settings") },
     { label: "ทีมงาน", items: navigation.filter(item => ["/admin/admins", "/admin/activity"].includes(item.href)) },
   ].filter(group => group.items.length);

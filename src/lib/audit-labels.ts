@@ -10,6 +10,8 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "booking.payment_reverted": { label: "ยกเลิกสถานะชำระ", group: "finance" },
   "booking.shipped": { label: "บันทึกเลขพัสดุ / ส่งมอบ", group: "bookings" },
   "booking.returned": { label: "รับคืนสินค้า", group: "bookings" },
+  "booking.customer_return": { label: "ลูกค้าแจ้งส่งคืน", group: "bookings" },
+  "booking.return_reminder": { label: "เตือนกำหนดส่งคืน", group: "bookings" },
   "deposit.refund": { label: "คืนเงินประกัน", group: "finance" },
   "finance.create": { label: "บันทึกรายรับ–รายจ่าย", group: "finance" },
   "finance.void": { label: "ยกเลิกรายการเงิน", group: "finance" },
@@ -20,6 +22,7 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "product.unit": { label: "แก้ไขชิ้นสินค้า", group: "products" },
   "availability.update": { label: "ปรับคิวว่าง", group: "products" },
   "settings.store": { label: "ตั้งค่าหน้าร้าน", group: "settings" },
+  "settings.delivery": { label: "ตั้งค่าส่งแมส", group: "settings" },
   "settings.rental_pricing": { label: "ตั้งราคาเช่ามาตรฐาน", group: "settings" },
   "settings.rental_document": { label: "ตั้งค่าใบรายละเอียดการเช่า", group: "settings" },
   "admin.create": { label: "เพิ่มบัญชีแอดมิน", group: "admins" },
@@ -32,13 +35,13 @@ export const actionGroups = [
 export const fieldLabels: Record<string, string> = {
   status: "สถานะ", payment: "การชำระเงิน", paidOn: "วันที่ชำระ", rental: "ค่าเช่า", deposit: "เงินประกัน", shipping: "ค่าจัดส่ง",
   bank: "ธนาคาร", accountName: "ชื่อบัญชี", accountNumber: "เลขบัญชี", qrImage: "รูป QR", returnAddress: "ที่อยู่ส่งคืน", returnPhone: "เบอร์ร้าน", returnMethod: "วิธีส่งคืน",
-  carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", condition: "สภาพสินค้า", note: "หมายเหตุ",
+  carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", condition: "สภาพสินค้า", note: "หมายเหตุ", units: "ชิ้นสินค้า",
   depositStatus: "สถานะเงินประกัน", refundAmount: "ยอดคืน", deducted: "ยอดหัก", amount: "จำนวนเงิน", category: "หมวดหมู่", date: "วันที่", voided: "เหตุผลที่ยกเลิก",
   name: "ชื่อ", sku: "รหัสสินค้า", color: "สี", size: "ไซซ์", dailyRate: "ราคาเช่า", cost: "ต้นทุน", stock: "จำนวน", active: "แสดงหน้าร้าน", description: "รายละเอียด", images: "รูปสินค้า",
-  email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS", rentalPricing: "ตารางราคาเช่า", customPricing: "ราคาเฉพาะสินค้า",
+  email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS", rentalPricing: "ตารางราคาเช่า", customPricing: "ราคาเฉพาะสินค้า", enabled: "เปิดใช้", origin: "ตำแหน่งร้าน", originLabel: "ชื่อจุดรับส่ง", baseFee: "ค่าเริ่มต้น", includedKm: "รวมระยะแรก (กม.)", perKm: "กม.ละ", maxKm: "ส่งไกลสุด (กม.)", inBill: "รวมในบิล",
 };
 export const valueLabels: Record<string, string> = {
   new: "ใหม่", contacted: "ติดต่อแล้ว", confirmed: "ยืนยันแล้ว", cancelled: "ยกเลิก", paid: "ชำระแล้ว", unpaid: "รอชำระ",
-  available: "พร้อมเช่า", unavailable: "ไม่พร้อมเช่า", retired: "เลิกใช้แล้ว", held: "ถือไว้", refunded: "คืนเต็มจำนวน", partial: "คืนบางส่วน", forfeited: "ยึดทั้งหมด", good: "สภาพปกติ", damaged: "ชำรุด", missing: "สูญหาย/ไม่ครบ", true: "ใช่", false: "ไม่ใช่",
+  available: "พร้อมเช่า", rented: "อยู่กับลูกค้า", inspection: "รอตรวจสภาพ", washing: "รอซัก", repair: "รอซ่อม / ชำรุด", unavailable: "ไม่พร้อมเช่า", retired: "เลิกใช้แล้ว", held: "ถือไว้", refunded: "คืนเต็มจำนวน", partial: "คืนบางส่วน", forfeited: "ยึดทั้งหมด", good: "สภาพปกติ", damaged: "ชำรุด", missing: "สูญหาย/ไม่ครบ", true: "ใช่", false: "ไม่ใช่",
 };
 export const showValue = (value: unknown) => value === null || value === undefined || value === "" ? "—" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : valueLabels[String(value)] || String(value);

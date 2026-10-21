@@ -6,11 +6,19 @@ import { getEffectiveAvailability } from "@/lib/availability-store";
 import { audit, diff } from "@/lib/audit";
 import { deposits, recordBookingPayment, thaiDay, validDay, voidBookingPayment } from "@/lib/finance";
 import type { Permission } from "@/lib/permissions";
+import { setUnitStatuses } from "@/lib/product-store";
+import { unitStatusLabels, type UnitStatus } from "@/lib/products";
+import { assignUnits, validUnitPicks } from "@/lib/rental-units";
 const statuses = ["new", "contacted", "confirmed", "cancelled"];
 const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
-type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string }[]; shipment?: Shipment; returned?: Returned };
+type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
+type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn };
+// A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
+const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
+const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
+const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 type QuoteInput = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string };
 const validQuote = (quote: unknown): quote is QuoteInput => { if (!quote || typeof quote !== "object") return false; const value = quote as Record<string, unknown>; return ["rental", "deposit", "shipping"].every(key => typeof value[key] === "number" && Number.isFinite(value[key]) && (value[key] as number) >= 0) && ["bank", "accountName", "accountNumber", "returnAddress", "returnPhone", "returnMethod"].every(key => typeof value[key] === "string" && (value[key] as string).length <= 500) && typeof value.qrImage === "string" && value.qrImage.length <= 2000; };
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim().length <= max;
@@ -79,17 +87,43 @@ export async function POST(request: Request) {
   if (body.action === "ship") {
     if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
     if (booking.method !== "pickup" && !body.trackingNumber.trim()) return Response.json({ error: "กรุณากรอกเลขพัสดุ" }, { status: 400 });
-    const shipment: Shipment = { carrier: body.carrier.trim(), trackingNumber: body.trackingNumber.trim(), shippedAt: new Date(), by, byName: admin.name };
-    await bookings.updateOne({ _id: body.id }, { $set: { shipment, updatedAt: new Date(), updatedBy: by } });
-    await log("booking.shipped", booking.method === "pickup" ? "ส่งมอบสินค้าให้ลูกค้าที่ร้าน" : `บันทึกเลขพัสดุ ${shipment.carrier} ${shipment.trackingNumber}`.trim(), diff(booking.shipment, shipment, ["carrier", "trackingNumber"]));
-    return Response.json({ ok: true, shipment: { ...shipment, shippedAt: shipment.shippedAt.toISOString() } });
+    if (booking.returned) return Response.json({ error: "รับคืนสินค้ารายการนี้แล้ว" }, { status: 409 });
+    const picks = body.units === undefined ? booking.items.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
+    if (!picks) return Response.json({ error: "ชิ้นสินค้าที่เลือกไม่ถูกต้อง กรุณาโหลดหน้าใหม่" }, { status: 400 });
+    const items = booking.items.map((item, index) => withUnit(item, picks[index]));
+    const released = booking.items.map(item => item.unitSku).filter((sku): sku is string => !!sku && !picks.includes(sku));
+    const shipment: Shipment = { carrier: body.carrier.trim(), trackingNumber: body.trackingNumber.trim(), shippedAt: booking.shipment?.shippedAt || new Date(), by, byName: admin.name };
+    await bookings.updateOne({ _id: body.id }, { $set: { shipment, items, updatedAt: new Date(), updatedBy: by } });
+    const before = await setUnitStatuses(db, [...released.map(sku => ({ sku, status: "available" as const })), ...picks.filter(Boolean).map(sku => ({ sku, status: "rented" as const }))]);
+    const changes = [...diff(booking.shipment, shipment, ["carrier", "trackingNumber"]), ...diff({ units: booking.items.map(item => item.unitSku || "") }, { units: picks })];
+    await log("booking.shipped", `${booking.method === "pickup" ? "ส่งมอบสินค้าให้ลูกค้าที่ร้าน" : `บันทึกเลขพัสดุ ${shipment.carrier} ${shipment.trackingNumber}`.trim()}${picks.some(Boolean) ? ` · ชิ้น ${picks.filter(Boolean).join(", ")}` : ""}`, changes);
+    for (const [sku, previous] of before) if (previous.status !== (released.includes(sku) ? "available" : "rented")) await audit(request, admin, { action: "product.unit", targetType: "product", targetId: String(previous.productId), summary: `${sku} ${released.includes(sku) ? "ถูกเปลี่ยนออกจาก" : "ส่งให้ลูกค้า"} คำขอ ${booking._id}`, changes: [{ field: "status", before: previous.status, after: released.includes(sku) ? "available" : "rented" }] });
+    // Tell the customer on first dispatch, or when the tracking number changes.
+    let lineNotified = false;
+    if (booking.lineUserId && lineConfigured() && (!booking.shipment || booking.shipment.trackingNumber !== shipment.trackingNumber || booking.shipment.carrier !== shipment.carrier)) {
+      const billToken = booking.billToken || randomBytes(18).toString("base64url");
+      if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken } });
+      const billUrl = `${new URL(request.url).origin}/bill/${billToken}`;
+      const text = booking.method === "pickup"
+        ? `ส่งมอบสินค้าคำขอ ${booking._id} เรียบร้อยแล้วค่ะ\nกำหนดส่งคืน ${dayLabel(booking.end)}\nเมื่อส่งคืนแล้ว แจ้งเลขพัสดุได้ที่ ${billUrl}`
+        : `จัดส่งสินค้าคำขอ ${booking._id} แล้วค่ะ 📦\n${shipment.carrier} ${shipment.trackingNumber}\nกำหนดส่งคืน ${dayLabel(booking.end)}\nติดตามสถานะและแจ้งเลขพัสดุตอนส่งคืนได้ที่ ${billUrl}`;
+      try { await pushLine(booking.lineUserId, [{ type: "text", text }]); lineNotified = true; } catch (error) { console.error("LINE shipping notice failed:", error); }
+    }
+    return Response.json({ ok: true, lineNotified, items, shipment: { ...shipment, shippedAt: shipment.shippedAt.toISOString() } });
   }
   if (body.action === "receiveReturn") {
     if (!booking.shipment) return Response.json({ error: "กรุณาบันทึกการจัดส่งก่อนรับคืนสินค้า" }, { status: 409 });
+    if (booking.returned) return Response.json({ error: "รับคืนสินค้ารายการนี้แล้ว" }, { status: 409 });
+    const picks = body.units === undefined ? booking.items.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
+    if (!picks || picks.some((sku, index) => booking.items[index].unitSku && sku !== booking.items[index].unitSku)) return Response.json({ error: "ชิ้นสินค้าที่เลือกไม่ถูกต้อง กรุณาโหลดหน้าใหม่" }, { status: 400 });
+    const items = booking.items.map((item, index) => withUnit(item, picks[index]));
     const returned: Returned = { at: new Date(), condition: body.condition, note: body.note.trim(), by, byName: admin.name };
-    await bookings.updateOne({ _id: body.id }, { $set: { returned, updatedAt: new Date(), updatedBy: by } });
-    await log("booking.returned", `รับคืนสินค้า · ${body.condition === "good" ? "สภาพปกติ" : body.condition === "damaged" ? "ชำรุด" : "สูญหาย/ไม่ครบ"}`, diff(booking.returned, returned, ["condition", "note"]));
-    return Response.json({ ok: true, returned: { ...returned, at: returned.at.toISOString() } });
+    const status = afterReturn[body.condition];
+    await bookings.updateOne({ _id: body.id }, { $set: { returned, items, updatedAt: new Date(), updatedBy: by } });
+    const before = await setUnitStatuses(db, picks.filter(Boolean).map(sku => ({ sku, status, ...(body.note.trim() ? { note: `คืนจาก ${booking._id}: ${body.note.trim()}`.slice(0, 500) } : {}) })));
+    await log("booking.returned", `รับคืนสินค้า · ${body.condition === "good" ? "สภาพปกติ" : body.condition === "damaged" ? "ชำรุด" : "สูญหาย/ไม่ครบ"}${before.size ? ` · ${[...before.keys()].join(", ")} → ${unitStatusLabels[status]}` : ""}`, diff(booking.returned, returned, ["condition", "note"]));
+    for (const [sku, previous] of before) await audit(request, admin, { action: "product.unit", targetType: "product", targetId: String(previous.productId), summary: `${sku} รับคืนจากคำขอ ${booking._id}`, changes: [{ field: "status", before: previous.status, after: status }] });
+    return Response.json({ ok: true, items, returned: { ...returned, at: returned.at.toISOString() } });
   }
   if (body.status === "confirmed" && booking.status !== "confirmed") {
     const days = (Date.parse(`${booking.end}T00:00:00Z`) - Date.parse(`${booking.start}T00:00:00Z`)) / 86400000;
@@ -98,7 +132,9 @@ export async function POST(request: Request) {
       if (available.length < days || available.some(day => day.remaining < 1)) return Response.json({ error: `คิวของ ${item.name || "สินค้าบางรายการ"} ไม่พอหรือยังไม่ได้ตั้งจำนวนว่างครบทุกวัน` }, { status: 409 });
     }
   }
-  await bookings.updateOne({ _id: body.id }, { $set: { status: body.status, updatedAt: new Date(), updatedBy: by } });
+  // Confirming reserves a piece per item, so the customer can follow its preparation.
+  const items = body.status === "confirmed" ? await assignUnits(db, booking) : booking.items;
+  await bookings.updateOne({ _id: body.id }, { $set: { status: body.status, items, updatedAt: new Date(), updatedBy: by } });
   if (body.status !== booking.status) await log("booking.status", "เปลี่ยนสถานะคำขอ", [{ field: "status", before: booking.status, after: body.status }]);
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, items });
 }

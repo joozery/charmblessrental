@@ -3,7 +3,7 @@ export const permissionList = [
   { key: "bookings", label: "คำขอจอง", description: "ดูคำขอ เปลี่ยนสถานะ และส่งบิล" },
   { key: "pricing", label: "แก้ไขราคาในใบสรุป", description: "ค่าเช่า เงินประกัน และค่าจัดส่ง" },
   { key: "payments", label: "ยืนยันการชำระเงิน", description: "บันทึกรับเงินค่าเช่าและเงินประกัน" },
-  { key: "shipping", label: "จัดส่งและรับคืน", description: "บันทึกเลขพัสดุและรับคืนสินค้า" },
+  { key: "shipping", label: "จัดส่ง รับคืน และเตรียมสินค้า", description: "บันทึกเลขพัสดุ รับคืน ตรวจสภาพ ซัก และยืนยันพร้อมให้เช่า" },
   { key: "deposits", label: "คืนเงินประกัน", description: "คืนเงิน หักเงิน และแนบหลักฐาน" },
   { key: "finance", label: "การเงิน", description: "ดูสรุปและบันทึกรายรับ–รายจ่าย" },
   { key: "rentals", label: "ประวัติการเช่า", description: "ค้นหารายการเช่าเดิม" },

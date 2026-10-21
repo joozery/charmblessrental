@@ -16,7 +16,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "ตรวจสอบข้อมูลที่กรอกและความยาวข้อความอีกครั้ง" }, { status: 400 });
   }
   const storefrontSettings = { ...body };
-  delete storefrontSettings.rentalDocument;
+  // Edited on their own pages; a stale copy from this form must not overwrite them.
+  delete storefrontSettings.rentalDocument; delete storefrontSettings.rentalPricing; delete storefrontSettings.messenger;
   const before = await getStoreSettings();
   await (await database()).collection<StoreSettings & { _id?: string }>("storeSettings").updateOne({ _id: "main" }, { $set: storefrontSettings, $setOnInsert: { _id: "main" } }, { upsert: true });
   revalidateTag("catalog", { expire: 0 });

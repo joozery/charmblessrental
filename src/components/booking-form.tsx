@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Dialog } from "radix-ui";
 import { useStoreSettings } from "@/components/store-settings-provider";
 import { priceFor, type RentalPricing } from "@/lib/pricing";
+import { mapsLink } from "@/lib/delivery";
 
 export type BookingItem = { id: number; name: string; image?: string; pricing?: RentalPricing | null; unavailable?: boolean };
 
@@ -42,14 +43,36 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const [requestId, setRequestId] = useState("");
   const [copiedId, setCopiedId] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [quote, setQuote] = useState<{ km: number; fee: number; inBill: boolean; for: string } | null>(null);
+  const [quoteState, setQuoteState] = useState<{ busy: boolean; error: string }>({ busy: false, error: "" });
   const settings = useStoreSettings();
+  const messenger = settings.messenger;
+  const autoFee = messenger.enabled && !!messenger.origin;
+  const spot = `${pin.trim()}|${address.trim()}`;
+  const fresh = quote && quote.for === spot ? quote : null;
+  async function priceDelivery(nextPin = pin) {
+    const key = `${nextPin.trim()}|${address.trim()}`;
+    if (!autoFee || method !== "messenger" || (!nextPin.trim() && address.trim().length < 10) || (quote?.for === key)) return;
+    setQuoteState({ busy: true, error: "" });
+    try {
+      const response = await fetch("/api/delivery-quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: nextPin.trim(), address: address.trim() }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "คำนวณค่าส่งไม่สำเร็จ");
+      setQuote({ km: data.km, fee: data.fee, inBill: data.inBill, for: key }); setQuoteState({ busy: false, error: "" });
+    } catch (cause) { setQuote(null); setQuoteState({ busy: false, error: cause instanceof Error ? cause.message : "คำนวณค่าส่งไม่สำเร็จ" }); }
+  }
+  function useMyLocation() {
+    if (!navigator.geolocation) { setQuoteState({ busy: false, error: "เบราว์เซอร์นี้ไม่รองรับการหาตำแหน่ง กรุณาวางลิงก์หมุดแทน" }); return; }
+    setQuoteState({ busy: true, error: "" });
+    navigator.geolocation.getCurrentPosition(position => { const link = mapsLink({ lat: Number(position.coords.latitude.toFixed(6)), lng: Number(position.coords.longitude.toFixed(6)) }); setPin(link); void priceDelivery(link); }, () => setQuoteState({ busy: false, error: "ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง กรุณาวางลิงก์หมุดจาก Google Maps แทน" }), { enableHighAccuracy: true, timeout: 10000 });
+  }
   const days = rentalDays(start,end);
   // Before dates are picked the estimate uses each item's shortest package.
   const quoted = items.map(item => priceFor(item.pricing, Math.max(days, 1)));
   const hasRates = items.length > 0 && quoted.every(price => price !== null);
   const rentalTotal = quoted.reduce<number>((sum, price) => sum + (price ?? 0), 0);
   const blocked = items.some(item => item.unavailable);
-  const delivery = method === "ems" ? settings.emsFee : 0;
+  const delivery = method === "ems" ? settings.emsFee : method === "messenger" && fresh?.inBill ? fresh.fee : 0;
   async function sendRequest() {
     setSubmitting(true); setError("");
     try {
@@ -66,12 +89,18 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
     <p className="booking-price">{days > 0 ? `ค่าเช่า ${days} วัน (ประมาณ)` : "ค่าเช่าเริ่มต้น (ประมาณ)"} {hasRates ? `฿${rentalTotal.toLocaleString("th-TH")}` : "รอร้านแจ้งราคา"}<small>ยังไม่รวมมัดจำ/ค่าส่ง · ร้านยืนยันราคาจริงอีกที</small></p>
 {review ? reviewContent : <form className="booking-form" noValidate onSubmit={e => {e.preventDefault();setError("");if(!items.length){setError("กรุณาเพิ่มสินค้าก่อนขอจอง");return;}if(!start||!end){setError("กรุณาเลือกวันรับชุดและวันคืนชุด");return;}if(!days){setError("วันคืนชุดต้องอยู่หลังวันรับชุดอย่างน้อย 1 วัน");return;}if(!name.trim()){setError("กรุณากรอกชื่อ");return;}if(!validPhone(phone)){setError("กรอกเบอร์มือถือไทย 10 หลัก หรือเบอร์ต่างประเทศที่ขึ้นต้นด้วย +");return;}if(method !== "pickup" && !address.trim()){setError("กรุณากรอกที่อยู่จัดส่ง");return;}if(blocked){setError("มีรายการที่ช่วงนี้เต็ม กรุณาติดต่อร้านหรือเลือกชุดอื่น");return;}if(!acceptRules){setError("กรุณาอ่านและยอมรับกฎการเช่า");return;}if(!acceptPrivacy){setError("กรุณายินยอมให้ร้านบันทึกข้อมูลติดต่อ");return;}setReview(true);}}>
       <div className="booking-date-grid"><label>วันรับชุด *<input type="date" value={start} onChange={e => {setStart(e.target.value);if(end && end <= e.target.value)setEnd("");}} /></label><label>วันคืนชุด *<input type="date" min={start ? new Date(Date.parse(`${start}T00:00:00Z`)+86400000).toISOString().slice(0,10) : undefined} value={end} onChange={e => setEnd(e.target.value)} /></label></div>
-      {days > 0 && <p className="booking-date-summary">รับ {shortDate(start)} – คืน {shortDate(end)} · คิดเป็นเช่า {days} วัน{hasRates && <strong> ค่าเช่าประมาณ ฿{(rentalTotal+delivery).toLocaleString("th-TH")}{delivery > 0 && ` (รวมค่าส่ง EMS ฿${settings.emsFee.toLocaleString("th-TH")})`}</strong>}</p>}
+      {days > 0 && <p className="booking-date-summary">รับ {shortDate(start)} – คืน {shortDate(end)} · คิดเป็นเช่า {days} วัน{hasRates && <strong> ค่าเช่าประมาณ ฿{(rentalTotal+delivery).toLocaleString("th-TH")}{delivery > 0 && ` (รวมค่าส่ง${method === "ems" ? " EMS" : "แมส"} ฿${delivery.toLocaleString("th-TH")})`}</strong>}</p>}
       <label>ชื่อ *<input autoComplete="name" value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อผู้ติดต่อ" /></label>
       <label>เบอร์โทร *<input type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="08xxxxxxxx หรือ +668xxxxxxxx" /></label><p className="booking-help">เบอร์มือถือไทย หรือเบอร์ต่างประเทศที่ขึ้นต้นด้วย +<br />Outside Thailand? Start with + and your country code</p>
       <details className="booking-privacy"><summary>ข้อมูลติดต่อใช้ทำอะไร · อ่านเพิ่ม</summary><p>ร้านจะบันทึกชื่อ เบอร์โทร ที่อยู่จัดส่ง (ถ้ามี) และรายละเอียดคำขอ เพื่อประสานงานการเช่าและติดต่อกลับ คำขอจะยังไม่ยืนยันจนกว่าร้านตรวจสอบและแจ้งกลับ</p></details>
-      <fieldset><legend>อยากรับชุดยังไง</legend>{[["pickup","รับเองที่ร้าน","ฟรี","ไม่มีค่าส่ง"],["ems","ส่งไปรษณีย์ / EMS",`+฿${settings.emsFee.toLocaleString("th-TH")}`,"ร้านส่งให้ บวกค่าส่งในบิล"],["messenger","แมสเซนเจอร์ (Grab / LINE MAN)","ตามระยะทาง","ค่าส่งตามระยะทาง · ลูกค้าจ่ายปลายทาง"]].map(([value,title,price,description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{price}</b></label>)}</fieldset>
-      {method !== "pickup" && <><label>ที่อยู่จัดส่ง *<textarea autoComplete="street-address" value={address} onChange={e => setAddress(e.target.value)} placeholder="บ้านเลขที่ อาคาร ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด และรหัสไปรษณีย์" /></label><label>หมุดตำแหน่ง (ไม่บังคับ)<input type="url" value={pin} onChange={e => setPin(e.target.value)} placeholder="วางลิงก์หมุดจาก Google Maps" /></label><a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="booking-map-link">เปิดแผนที่เพื่อเลือกหมุด <Icon name="arrow" /></a><p className="booking-help">เลือกจุดในแผนที่ แล้วคัดลอกลิงก์มาใส่ · {pin ? "แนบลิงก์หมุดแล้ว" : "ยังไม่ได้แนบหมุด"}</p></>}
+      <fieldset><legend>อยากรับชุดยังไง</legend>{[["pickup","รับเองที่ร้าน","ฟรี","ไม่มีค่าส่ง"],["ems","ส่งไปรษณีย์ / EMS",`+฿${settings.emsFee.toLocaleString("th-TH")}`,"ร้านส่งให้ บวกค่าส่งในบิล"],["messenger","แมสเซนเจอร์ (Grab / LINE MAN)",fresh ? `฿${fresh.fee.toLocaleString("th-TH")}` : "ตามระยะทาง",autoFee ? `คิดตามระยะทางจากร้าน · ${messenger.inBill ? "รวมในบิล" : "จ่ายแมสปลายทาง"}` : "ค่าส่งตามระยะทาง · ลูกค้าจ่ายปลายทาง"]].map(([value,title,price,description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{price}</b></label>)}</fieldset>
+      {method !== "pickup" && <><label>ที่อยู่จัดส่ง *<textarea autoComplete="street-address" value={address} onChange={e => setAddress(e.target.value)} onBlur={() => void priceDelivery()} placeholder="บ้านเลขที่ อาคาร ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด และรหัสไปรษณีย์" /></label><label>หมุดตำแหน่ง (ไม่บังคับ)<input type="url" value={pin} onChange={e => setPin(e.target.value)} onBlur={() => void priceDelivery()} placeholder="วางลิงก์หมุดจาก Google Maps" /></label><a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="booking-map-link">เปิดแผนที่เพื่อเลือกหมุด <Icon name="arrow" /></a><p className="booking-help">เลือกจุดในแผนที่ แล้วคัดลอกลิงก์มาใส่ · {pin ? "แนบลิงก์หมุดแล้ว" : "ยังไม่ได้แนบหมุด"}</p>
+        {method === "messenger" && <div className="booking-delivery">{messenger.description && <p>{messenger.description}</p>}{autoFee && <>
+          <div className="booking-delivery-actions"><button type="button" onClick={useMyLocation} disabled={quoteState.busy}><Icon name="map" />ใช้ตำแหน่งปัจจุบัน</button><button type="button" onClick={() => void priceDelivery()} disabled={quoteState.busy || (!pin.trim() && address.trim().length < 10)}>{quoteState.busy ? "กำลังคำนวณ…" : "คำนวณค่าส่ง"}</button></div>
+          {fresh ? <p className="booking-delivery-result" role="status">ระยะทางประมาณ <b>{fresh.km.toLocaleString("th-TH")} กม.</b> · ค่าส่ง <b>฿{fresh.fee.toLocaleString("th-TH")}</b> {fresh.inBill ? "(รวมในบิล)" : "(จ่ายแมสปลายทาง)"}<small>ค่าประมาณจากระยะทางจริง ร้านจะยืนยันยอดในบิลอีกครั้ง</small></p>
+            : quoteState.error ? <p className="booking-delivery-error" role="alert">{quoteState.error}</p>
+            : <p className="booking-help">แนบหมุดหรือกรอกที่อยู่ให้ครบ ระบบจะคำนวณค่าส่งจากระยะทางให้อัตโนมัติ</p>}
+        </>}</div>}</>}
       <label>โน้ตถึงร้าน (ไม่บังคับ)<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder="เช่น งานรับปริญญา / สอบถามเพิ่มเติม…" /></label><p className="booking-help">ไม่ต้องใส่ข้อมูลสุขภาพหรือเลขบัตรประชาชน</p>
       <details className="booking-rules"><summary>กติกาของร้าน (อ่านก่อนส่งคำขอ)</summary><RentalRules rules={settings.rentalRules} /></details><label className="booking-acknowledgment"><input type="checkbox" checked={acceptRules} onChange={event => setAcceptRules(event.target.checked)} />อ่านและยอมรับกฎการเช่า *</label><label className="booking-acknowledgment"><input type="checkbox" checked={acceptPrivacy} onChange={event => setAcceptPrivacy(event.target.checked)} />ยินยอมให้ร้านบันทึกข้อมูลติดต่อเพื่อจัดการคำขอเช่านี้ *</label>
       {error && <p className="booking-error" role="alert">{error}</p>}<p className="booking-notice">ส่งคำขอให้ร้านตรวจสอบได้ที่นี่ ร้านจะติดต่อกลับเพื่อยืนยันคิวและราคาก่อน</p><button type="submit" disabled={items.length === 0} className="pill pill-pink w-full disabled:opacity-40 disabled:cursor-not-allowed">ตรวจสอบคำขอจอง</button>
