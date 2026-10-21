@@ -10,7 +10,7 @@ export const metadata = { title: "ค่าจัดส่ง | Charm Bless", ro
 async function Content() {
   await pageAdmin("settings");
   const settings = await getStoreSettings();
-  return <DeliverySettings initial={settings.messenger} emsFee={settings.emsFee} mapsReady={mapsConfigured()} />;
+  return <DeliverySettings initial={settings.messenger} shipping={{ options: settings.shippingOptions, free: settings.freeShipping, schedule: settings.schedule }} mapsReady={mapsConfigured()} />;
 }
 
 export default function Page() {

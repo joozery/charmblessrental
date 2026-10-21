@@ -18,11 +18,22 @@ export function priceFor(pricing: RentalPricing | null | undefined, days: number
 export const startingTier = (pricing: RentalPricing | null | undefined) => pricing?.tiers.length ? sorted(pricing)[0] : null;
 export const tiersOf = (pricing: RentalPricing | null | undefined) => pricing ? sorted(pricing) : [];
 
+// Days beyond the longest package: a product's own rate wins, else its category's (cameras 100), else the shop's (50).
+export type ExtraDayRates = { perDay: number | null; byCategory: Record<string, number> };
+export const defaultExtraDayRates: ExtraDayRates = { perDay: null, byCategory: {} };
+type Priced = { customPricing?: RentalPricing | null; dailyRate?: number | null; category?: string };
+const extraFor = (product: Priced, shop: RentalPricing | null | undefined, extras?: ExtraDayRates) => (product.category && extras?.byCategory[product.category] !== undefined ? extras.byCategory[product.category] : extras?.perDay ?? shop?.extraPerDay ?? null);
 // Product's own table first, then a legacy per-day rate, then the shop-wide table.
-export function effectivePricing(product: { customPricing?: RentalPricing | null; dailyRate?: number | null }, shop: RentalPricing | null | undefined): RentalPricing | null {
-  if (product.customPricing?.tiers.length) return product.customPricing;
+export function effectivePricing(product: Priced, shop: RentalPricing | null | undefined, extras?: ExtraDayRates): RentalPricing | null {
+  if (product.customPricing?.tiers.length) return product.customPricing.extraPerDay == null ? { ...product.customPricing, extraPerDay: extraFor(product, shop, extras) } : product.customPricing;
   if (typeof product.dailyRate === "number") return { tiers: [{ days: 1, price: product.dailyRate }], extraPerDay: product.dailyRate };
-  return shop?.tiers.length ? shop : null;
+  return shop?.tiers.length ? { ...shop, extraPerDay: extraFor(product, shop, extras) } : null;
+}
+export function validExtraRates(value: unknown): value is ExtraDayRates {
+  if (!value || typeof value !== "object") return false;
+  const { perDay, byCategory } = value as Record<string, unknown>;
+  const amount = (item: unknown) => typeof item === "number" && Number.isFinite(item) && item >= 0 && item <= 100000;
+  return (perDay === null || amount(perDay)) && !!byCategory && typeof byCategory === "object" && Object.keys(byCategory).length <= 50 && Object.entries(byCategory).every(([key, item]) => key.length > 0 && key.length <= 60 && amount(item));
 }
 
 export function validPricing(value: unknown): value is RentalPricing {

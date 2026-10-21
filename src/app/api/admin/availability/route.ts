@@ -19,8 +19,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url), month = url.searchParams.get("month"), productId = Number(url.searchParams.get("productId"));
   if (!validMonth(month) || !Number.isSafeInteger(productId) || productId < 1) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   const from = `${month}-01`, end = new Date(`${from}T12:00:00Z`); end.setUTCMonth(end.getUTCMonth() + 1);
-  const days = await getEffectiveAvailability(await database(), productId, from, end.toISOString().slice(0, 10));
-  return Response.json({ days });
+  const db = await database();
+  const [days, product] = await Promise.all([getEffectiveAvailability(db, productId, from, end.toISOString().slice(0, 10)), db.collection<{ id: number; stock?: number }>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1 } })]);
+  // Days left blank use the pieces in stock as their capacity.
+  return Response.json({ days, defaultCapacity: product?.stock ?? 0 });
 }
 
 export async function POST(request: Request) {

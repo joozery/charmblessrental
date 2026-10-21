@@ -21,3 +21,10 @@ body:has(.rental-pricing-page),body:has(.rental-pricing-page) .chrome-shell,body
 .delivery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .delivery-help{margin:-4px 0 0;color:#667085;font-size:12px;line-height:1.6}.delivery-help a{color:#79516c;font-weight:600}
 @media(max-width:560px){.delivery-grid{grid-template-columns:1fr}.delivery-inline{flex-direction:column}}
+.delivery-shipping{grid-template-columns:minmax(0,1fr);margin-bottom:16px}
+.shipping-rows{display:grid;gap:10px}
+.shipping-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(90px,1fr) auto;gap:8px 10px;align-items:end;padding:12px;border:1px solid #eef0f3;border-radius:9px;background:#fafbfc}
+.shipping-row .is-wide{grid-column:1/-1}
+.shipping-row .delivery-check{grid-column:span 1;font-size:12px}
+.shipping-remove{justify-self:end;padding:6px 10px;border:1px solid #f3c8c8;border-radius:7px;background:#fff;color:#b42318;font:inherit;font-size:12px;cursor:pointer}
+@media(max-width:560px){.shipping-row{grid-template-columns:1fr}}

@@ -5,18 +5,19 @@ import { permissionsOf } from "@/lib/permissions";
 import { database } from "@/lib/mongodb";
 import { getStoreSettings } from "@/lib/store-settings";
 import { assignUnits, unitChoices } from "@/lib/rental-units";
+import type { ScheduleRecord } from "@/lib/schedule";
 import BookingRequests from "./booking-requests";
 import "./bookings.css";
 
 export const metadata = { title: "คำขอจอง | Charm Bless", robots: { index: false, follow: false } };
-type BookingDoc = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; quote?: Partial<{ rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string }>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; unitSku?: string }[]; createdAt: Date; payment?: "unpaid" | "paid"; billToken?: string; lineUserId?: string; lineName?: string; lineSentAt?: Date; paidAt?: Date | null; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date; byName: string }; returned?: { at: Date; condition: string; note: string; byName: string }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returnReminderSentAt?: Date; delivery?: { km?: number; fee?: number; inBill?: boolean; address?: string; error?: string } };
+type BookingDoc = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; quote?: Partial<{ rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string }>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; unitSku?: string }[]; createdAt: Date; payment?: "unpaid" | "paid"; billToken?: string; lineUserId?: string; lineName?: string; lineSentAt?: Date; paidAt?: Date | null; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date; byName: string }; returned?: { at: Date; condition: string; note: string; byName: string }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returnReminderSentAt?: Date; schedule?: ScheduleRecord; shipping?: { label: string; base: number | null; discount: number }; delivery?: { km?: number; fee?: number; inBill?: boolean; address?: string; error?: string } };
 type Query = { id?: string | string[] };
 const iso = (value?: Date | null) => value ? new Date(value).toISOString() : "";
 async function Content({ searchParams }: { searchParams: Promise<Query> }) {
   const admin = await pageAdmin("bookings");
   const { id } = await searchParams;
   const db = await database();
-  const rows = await db.collection<BookingDoc>("bookingRequests").find({}, { projection: { _id: 1, status: 1, name: 1, phone: 1, address: 1, pin: 1, note: 1, method: 1, start: 1, end: 1, days: 1, deliveryFee: 1, estimatedTotal: 1, quote: 1, items: 1, createdAt: 1, payment: 1, billToken: 1, lineUserId: 1, lineName: 1, lineSentAt: 1, paidAt: 1, shipment: 1, returned: 1, customerReturn: 1, returnReminderSentAt: 1, delivery: 1 } }).sort({ createdAt: -1 }).limit(500).toArray();
+  const rows = await db.collection<BookingDoc>("bookingRequests").find({}, { projection: { _id: 1, status: 1, name: 1, phone: 1, address: 1, pin: 1, note: 1, method: 1, start: 1, end: 1, days: 1, deliveryFee: 1, estimatedTotal: 1, quote: 1, items: 1, createdAt: 1, payment: 1, billToken: 1, lineUserId: 1, lineName: 1, lineSentAt: 1, paidAt: 1, shipment: 1, returned: 1, customerReturn: 1, returnReminderSentAt: 1, delivery: 1, shipping: 1, schedule: 1 } }).sort({ createdAt: -1 }).limit(500).toArray();
   // Only open rentals need a piece picked; closed ones keep what was recorded.
   const open = rows.filter(row => row.status !== "cancelled" && !row.returned);
   // Bookings confirmed before pieces were tracked get a suggested piece per item; it is saved once the admin ships.

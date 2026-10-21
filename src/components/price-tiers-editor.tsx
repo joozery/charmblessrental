@@ -15,7 +15,7 @@ export function pricingFrom(rows: TierRow[], extra: string): RentalPricing | str
   return { tiers: tiers.sort((a, b) => a.days - b.days), extraPerDay: tiers.length ? extraPerDay : null };
 }
 
-export default function PriceTiersEditor({ rows, extra, onChange }: { rows: TierRow[]; extra: string; onChange: (rows: TierRow[], extra: string) => void }) {
+export default function PriceTiersEditor({ rows, extra, onChange, showExtra = true, extraHint = "เว้นว่าง = ให้ลูกค้าสอบถาม" }: { rows: TierRow[]; extra: string; onChange: (rows: TierRow[], extra: string) => void; showExtra?: boolean; extraHint?: string }) {
   const longest = Math.max(0, ...rows.filter(row => row.price.trim()).map(row => Number(row.days) || 0));
   return <div className="price-tiers">
     <div className="price-tiers-head" aria-hidden="true"><span>จำนวนวัน</span><span>ราคา (บาท)</span><span /></div>
@@ -25,7 +25,7 @@ export default function PriceTiersEditor({ rows, extra, onChange }: { rows: Tier
       <button type="button" aria-label={`ลบแถว ${row.days || index + 1} วัน`} onClick={() => onChange(rows.filter((_, i) => i !== index), extra)}>×</button>
     </div>)}
     {rows.length < 12 && <button type="button" className="price-tiers-add" onClick={() => onChange([...rows, { days: "", price: "" }], extra)}>+ เพิ่มจำนวนวัน</button>}
-    <label className="price-tiers-extra"><span>เกิน {longest || "แพ็กเกจสูงสุด"} วัน คิดเพิ่มวันละ (บาท)</span><input type="number" min="0" step="1" inputMode="decimal" value={extra} placeholder="เว้นว่าง = ให้ลูกค้าสอบถาม" onChange={event => onChange(rows, event.target.value)} /></label>
+    {showExtra && <label className="price-tiers-extra"><span>เกิน {longest || "แพ็กเกจสูงสุด"} วัน คิดเพิ่มวันละ (บาท)</span><input type="number" min="0" step="1" inputMode="decimal" value={extra} placeholder={extraHint} onChange={event => onChange(rows, event.target.value)} /></label>}
     <small>เช่าจำนวนวันที่ไม่มีในตาราง จะคิดราคาของแพ็กเกจถัดไป เช่น 4 วันคิดราคา 5 วัน</small>
   </div>;
 }

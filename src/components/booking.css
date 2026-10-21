@@ -90,3 +90,23 @@
 @media(max-width:400px) { .booking-footer { flex-direction: column; align-items: stretch; gap: 8px; } .booking-footer-actions .pill { flex: 1; } }
 /* Keep the sheet the same height between steps so the footer buttons do not jump. */
 @media(min-width:768px) { .dialog-panel.booking-panel { display: flex; flex-direction: column; min-height: min(640px,90dvh); } .booking-panel > .booking-form { flex: 1; } .booking-panel .booking-footer { margin-top: auto; } }
+.booking-free { margin: 0; padding: 9px 12px; border-radius: 8px; background: #faf5f8; color: #907181; font-size: 11px; }
+.booking-free:empty { display: none; }
+.booking-free.is-active { background: #ecf8f1; color: #277c51; font-weight: 500; }
+/* Rental timeline: same colours as the shop's gap chart */
+.rental-timeline { margin: 0; display: grid; gap: 8px; }
+.rental-timeline figcaption { color: #6f5d69; font-size: 11px; line-height: 1.7; }
+.rental-timeline-scroll { overflow-x: auto; border: 1px solid #f0d9e5; border-radius: 10px; -webkit-overflow-scrolling: touch; }
+.rental-timeline-grid { display: grid; grid-auto-rows: auto; min-width: max-content; }
+.rental-timeline-date { display: grid; justify-items: center; gap: 1px; padding: 6px 2px; border-right: 1px solid #f3e6ed; background: #fff7fb; color: #5b4b55; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.rental-timeline-date small { color: #9b8493; font-size: 10px; font-weight: 400; }
+.rental-timeline-date.is-return { background: #f1e9fb; } .rental-timeline-date.is-gap { background: #fff6d9; } .rental-timeline-date.is-ready { background: #e8f6ec; }
+.rental-timeline-cell { display: grid; align-content: center; justify-items: center; gap: 2px; min-height: 74px; padding: 8px 4px; border-top: 1px solid #f3e6ed; border-right: 1px solid #f3e6ed; color: #5b4b55; font-size: 11px; line-height: 1.35; text-align: center; }
+.rental-timeline-cell b { font-size: 20px; line-height: 1; }
+.rental-timeline-cell strong { font-size: 12px; }
+.rental-timeline-cell.is-ship { background: #fde3ee; } .rental-timeline-cell.is-transit { background: #f4f2f4; color: #a99aa4; }
+.rental-timeline-cell.is-use { background: #fbd6e6; color: #a52061; } .rental-timeline-cell.is-use strong { padding: 2px 10px; border-radius: 999px; background: #d01470; color: #fff; }
+.rental-timeline-cell.is-return { background: #eadcf8; } .rental-timeline-cell.is-gap { background: #fff3c4; color: #6b5300; } .rental-timeline-cell.is-ready { background: #dff3e6; color: #1f7a45; }
+.rental-timeline.is-compact .rental-timeline-cell { min-height: 60px; }
+.booking-return-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media(max-width:480px) { .booking-return-options { grid-template-columns: 1fr; } }

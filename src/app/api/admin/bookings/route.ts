@@ -2,7 +2,8 @@ import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
 import { randomBytes } from "node:crypto";
 import { database } from "@/lib/mongodb";
 import { lineConfigured, pushLine } from "@/lib/line";
-import { getEffectiveAvailability } from "@/lib/availability-store";
+import { getQueue } from "@/lib/availability-store";
+import { addDays, blockRange, returnDay, type ScheduleRecord } from "@/lib/schedule";
 import { audit, diff } from "@/lib/audit";
 import { deposits, recordBookingPayment, thaiDay, validDay, voidBookingPayment } from "@/lib/finance";
 import type { Permission } from "@/lib/permissions";
@@ -14,7 +15,7 @@ const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn };
+type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -105,8 +106,8 @@ export async function POST(request: Request) {
       if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken } });
       const billUrl = `${new URL(request.url).origin}/bill/${billToken}`;
       const text = booking.method === "pickup"
-        ? `ส่งมอบสินค้าคำขอ ${booking._id} เรียบร้อยแล้วค่ะ\nกำหนดส่งคืน ${dayLabel(booking.end)}\nเมื่อส่งคืนแล้ว แจ้งเลขพัสดุได้ที่ ${billUrl}`
-        : `จัดส่งสินค้าคำขอ ${booking._id} แล้วค่ะ 📦\n${shipment.carrier} ${shipment.trackingNumber}\nกำหนดส่งคืน ${dayLabel(booking.end)}\nติดตามสถานะและแจ้งเลขพัสดุตอนส่งคืนได้ที่ ${billUrl}`;
+        ? `ส่งมอบสินค้าคำขอ ${booking._id} เรียบร้อยแล้วค่ะ\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nเมื่อส่งคืนแล้ว แจ้งเลขพัสดุได้ที่ ${billUrl}`
+        : `จัดส่งสินค้าคำขอ ${booking._id} แล้วค่ะ 📦\n${shipment.carrier} ${shipment.trackingNumber}\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nติดตามสถานะและแจ้งเลขพัสดุตอนส่งคืนได้ที่ ${billUrl}`;
       try { await pushLine(booking.lineUserId, [{ type: "text", text }]); lineNotified = true; } catch (error) { console.error("LINE shipping notice failed:", error); }
     }
     return Response.json({ ok: true, lineNotified, items, shipment: { ...shipment, shippedAt: shipment.shippedAt.toISOString() } });
@@ -126,10 +127,11 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, items, returned: { ...returned, at: returned.at.toISOString() } });
   }
   if (body.status === "confirmed" && booking.status !== "confirmed") {
-    const days = (Date.parse(`${booking.end}T00:00:00Z`) - Date.parse(`${booking.start}T00:00:00Z`)) / 86400000;
+    // The piece is out from the shipping day to the end of the gap, not only on the days of use.
+    const range = blockRange(booking);
     for (const item of booking.items) {
-      const available = await getEffectiveAvailability(db, item.id, booking.start, booking.end);
-      if (available.length < days || available.some(day => day.remaining < 1)) return Response.json({ error: `คิวของ ${item.name || "สินค้าบางรายการ"} ไม่พอหรือยังไม่ได้ตั้งจำนวนว่างครบทุกวัน` }, { status: 409 });
+      const full = (await getQueue(db, item.id, range.from, range.to, booking._id)).find(day => day.remaining < 1);
+      if (full) return Response.json({ error: `คิวของ ${item.name || "สินค้าบางรายการ"} เต็มวันที่ ${dayLabel(full.date)} (ช่วงที่ต้องใช้ชุด ${dayLabel(range.from)} – ${dayLabel(addDays(range.to, -1))} รวมวันจัดส่งและ Gap)` }, { status: 409 });
     }
   }
   // Confirming reserves a piece per item, so the customer can follow its preparation.

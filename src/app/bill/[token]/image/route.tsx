@@ -1,3 +1,4 @@
+import { returnDay } from "@/lib/schedule";
 import { ImageResponse } from "next/og";
 import { connection } from "next/server";
 import { database } from "@/lib/mongodb";
@@ -13,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   await connection();
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) return new Response("Not found", { status: 404 });
-  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1 } });
+  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, schedule: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1 } });
   if (!row || !row.quote || row.status === "cancelled") return new Response("Not found", { status: 404 });
   const settings = await getStoreSettings();
   const doc: DocRow = { ...row, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
@@ -47,7 +48,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
       {card("สรุปยอดค่าเช่า", [sum("ค่าเช่ารวม", money(quote.rental)), sum("เงินประกัน", money(quote.deposit)), sum("ค่าจัดส่ง", money(quote.shipping)), sum("ยอดรวมสุทธิ", `${money(total)} บาท`, true)], 1)}
       {card("ช่องทางชำระเงิน", [qr && <img key="qr" src={qr} width={150} height={150} style={{ alignSelf: "center", objectFit: "contain" }} alt="" />, field("ธนาคาร", quote.bank || "-"), field("เลขที่บัญชี", quote.accountNumber || "-"), field("ชื่อบัญชี", quote.accountName || "-")], 1)}
     </div>
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "#fff7e8", border: "1px solid #f3d79b", fontSize: 20 }}><span style={{ fontWeight: 700 }}>ส่งคืนภายในวันที่ {dateLabel(doc.end)} ก่อน 18:00 น.</span><span style={{ fontSize: 17, color: "#7a6f78" }}>โอนตามยอดสุทธิ แล้วส่งสลิปในแชทนี้ได้เลยค่ะ</span></div>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "#fff7e8", border: "1px solid #f3d79b", fontSize: 20 }}><span style={{ fontWeight: 700 }}>ส่งคืนภายในวันที่ {dateLabel(returnDay(doc))} ก่อน 18:00 น.</span><span style={{ fontSize: 17, color: "#7a6f78" }}>โอนตามยอดสุทธิ แล้วส่งสลิปในแชทนี้ได้เลยค่ะ</span></div>
   </div>, { width: W, height, fonts: [
     { name: "Noto Sans Thai", data: font_400, weight: 400, style: "normal" }, { name: "Noto Sans Thai", data: font_700, weight: 700, style: "normal" },
     { name: "Noto Latin", data: font_latin_400, weight: 400, style: "normal" }, { name: "Noto Latin", data: font_latin_700, weight: 700, style: "normal" },

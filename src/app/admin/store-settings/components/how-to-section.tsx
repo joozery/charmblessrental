@@ -11,7 +11,7 @@ export function HowToSection({ settings, update }: SectionProps) {
     </SettingsGroup>
     <SettingsGroup title="การจัดส่ง">
       <label>ข้อความช่องทางจัดส่ง<Textarea rows={2} value={settings.shippingText} onChange={e => update({ shippingText: e.target.value })} /></label>
-      <label>ค่าจัดส่ง EMS (บาท)<Input type="number" min="0" step="1" value={settings.emsFee} onChange={e => update({ emsFee: Number(e.target.value) })} /></label>
+      <p className="text-xs leading-6 text-slate-500">ราคาขนส่งแต่ละแบบ โปรส่งฟรี และค่าส่งแมส ตั้งได้ที่เมนู <a className="font-semibold text-[#79516c] underline" href="/admin/delivery-settings">ค่าจัดส่ง</a> · ใส่ {"{{emsFee}}"} ในข้อความเพื่อแสดงราคา EMS ปัจจุบัน</p>
     </SettingsGroup>
   </SettingsCard>;
 }

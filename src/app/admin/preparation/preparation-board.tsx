@@ -51,7 +51,7 @@ export default function PreparationBoard({ initial, today }: { initial: PrepPiec
         <div className="prep-body">
           <div className="prep-title"><strong>{piece.sku}</strong><span className={`prep-badge is-${piece.status}`}>{unitStatusLabels[piece.status]}</span></div>
           <p className="prep-name">{piece.productName}</p>
-          {piece.next && <p className={`prep-next${wait !== null && wait <= 2 ? " is-urgent" : ""}`}><Icon name="calendar" />คิวถัดไป <Link href={`/admin/bookings?id=${encodeURIComponent(piece.next.bookingId)}`}>{piece.next.bookingId}</Link> · {piece.next.name} · เริ่ม {day(piece.next.start)}{wait !== null && (wait <= 0 ? " (วันนี้)" : ` (อีก ${wait} วัน)`)}</p>}
+          {piece.next && <p className={`prep-next${wait !== null && wait <= 2 ? " is-urgent" : ""}`}><Icon name="calendar" />คิวถัดไป <Link href={`/admin/bookings?id=${encodeURIComponent(piece.next.bookingId)}`}>{piece.next.bookingId}</Link> · {piece.next.name} · ต้องส่ง {day(piece.next.start)}{wait !== null && (wait <= 0 ? " (วันนี้)" : ` (อีก ${wait} วัน)`)}</p>}
           {piece.out && <p className="prep-meta">อยู่กับลูกค้า <Link href={`/admin/bookings?id=${encodeURIComponent(piece.out.bookingId)}`}>{piece.out.bookingId}</Link> · {piece.out.name} · กำหนดคืน {day(piece.out.end)}</p>}
           {piece.lastReturn && <p className="prep-meta">รับคืนจาก <Link href={`/admin/bookings?id=${encodeURIComponent(piece.lastReturn.bookingId)}`}>{piece.lastReturn.bookingId}</Link> · {day(piece.lastReturn.at)} · {conditionLabels[piece.lastReturn.condition] || piece.lastReturn.condition}{piece.lastReturn.note ? ` · ${piece.lastReturn.note}` : ""}</p>}
           {piece.note && <p className="prep-meta">หมายเหตุ: {piece.note}</p>}

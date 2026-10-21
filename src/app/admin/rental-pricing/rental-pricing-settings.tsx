@@ -4,17 +4,49 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import PriceTiersEditor, { pricingFrom, rowsFrom } from "@/components/price-tiers-editor";
-import { priceFor, type RentalPricing } from "@/lib/pricing";
+import { priceFor, type ExtraDayRates, type RentalPricing } from "@/lib/pricing";
 
 type History = { days: number; count: number; average: number };
-export default function RentalPricingSettings({ initial, history, customCount }: { initial: RentalPricing; history: History[]; customCount: number }) {
+// Days beyond a product's longest package: one shop-wide rate, with overrides per category.
+function ExtraRates({ initial, categories }: { initial: ExtraDayRates; categories: string[] }) {
+  const [perDay, setPerDay] = useState(initial.perDay == null ? "" : String(initial.perDay));
+  const [rows, setRows] = useState(Object.entries(initial.byCategory).map(([category, value]) => ({ category, perDay: String(value) })));
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(""); setNotice("");
+    const filled = rows.filter(row => row.category && row.perDay.trim() !== "");
+    const rates = { perDay: perDay.trim() === "" ? null : Number(perDay), byCategory: Object.fromEntries(filled.map(row => [row.category, Number(row.perDay)])) };
+    if ((rates.perDay !== null && !(rates.perDay >= 0)) || filled.some(row => !(Number(row.perDay) >= 0))) { setError("ค่าเช่าส่วนเกินต้องเป็นตัวเลขตั้งแต่ 0"); return; }
+    if (new Set(filled.map(row => row.category)).size !== filled.length) { setError("มีหมวดซ้ำกัน"); return; }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/rental-pricing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "extra", rates }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      setNotice("บันทึกแล้ว ใช้กับทุกสินค้าที่ไม่ได้ตั้งค่าส่วนเกินเอง");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); }
+  }
+  return <form className="rental-pricing-card delivery-form" onSubmit={save}>
+    <h2>ค่าเช่าส่วนเกิน</h2>
+    <p>เช่าเกินแพ็กเกจสูงสุดของสินค้า (เช่น เกิน 10 วัน) คิดเรทแพ็กเกจสูงสุด แล้วบวกเพิ่มตามจำนวนวันที่เกิน เช่น 14 วัน = เรท 10 วัน + 4 วัน</p>
+    <label>สินค้าทั่วไป วันละ (บาท)<input type="number" min="0" step="1" value={perDay} placeholder="เว้นว่าง = ให้ลูกค้าสอบถาม" onChange={event => setPerDay(event.target.value)} /></label>
+    {rows.map((row, index) => <div className="delivery-inline" key={index}><select aria-label="หมวดสินค้า" value={row.category} onChange={event => setRows(rows.map((item, at) => at === index ? { ...item, category: event.target.value } : item))}><option value="">เลือกหมวด</option>{[...new Set([...categories, row.category].filter(Boolean))].map(category => <option key={category} value={category}>{category}</option>)}</select><input type="number" min="0" step="1" aria-label="วันละ (บาท)" placeholder="วันละ" value={row.perDay} onChange={event => setRows(rows.map((item, at) => at === index ? { ...item, perDay: event.target.value } : item))} /><Button type="button" variant="outline" onClick={() => setRows(rows.filter((_, at) => at !== index))}>ลบ</Button></div>)}
+    <Button type="button" variant="outline" onClick={() => setRows([...rows, { category: "", perDay: "" }])}>+ ตั้งราคาเฉพาะหมวด (เช่น กล้อง)</Button>
+    <p className="delivery-help">สินค้าที่ตั้ง &ldquo;เกินวันละ&rdquo; ไว้ในราคาเฉพาะสินค้า จะใช้ค่าของสินค้านั้นก่อน</p>
+    {error && <p className="admin-error" role="alert">{error}</p>}
+    {notice && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
+    <div className="rental-pricing-actions"><Button type="submit" variant="primary" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกค่าส่วนเกิน"}</Button></div>
+  </form>;
+}
+
+export default function RentalPricingSettings({ initial, history, customCount, rates, categories }: { initial: RentalPricing; history: History[]; customCount: number; rates: ExtraDayRates; categories: string[] }) {
   const [rows, setRows] = useState(rowsFrom(initial));
   const [extra, setExtra] = useState(initial.extraPerDay == null ? "" : String(initial.extraPerDay));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const pricing = pricingFrom(rows, extra);
-  const preview = typeof pricing === "string" ? null : pricing;
+  const preview = typeof pricing === "string" ? null : { ...pricing, extraPerDay: rates.perDay ?? pricing.extraPerDay };
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setNotice("");
@@ -34,12 +66,13 @@ export default function RentalPricingSettings({ initial, history, customCount }:
     <div className="rental-pricing-layout">
       <form className="rental-pricing-card" onSubmit={save}>
         <h2>ราคาต่อชุด</h2>
-        <PriceTiersEditor rows={rows} extra={extra} onChange={(nextRows, nextExtra) => { setRows(nextRows); setExtra(nextExtra); }} />
+        <PriceTiersEditor showExtra={false} rows={rows} extra={extra} onChange={(nextRows, nextExtra) => { setRows(nextRows); setExtra(nextExtra); }} />
         {error && <p className="admin-error" role="alert">{error}</p>}
         {notice && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
         <div className="rental-pricing-actions"><Button type="submit" variant="primary" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกตารางราคา"}</Button></div>
       </form>
       <aside className="rental-pricing-side">
+        <ExtraRates initial={rates} categories={categories} />
         <section className="rental-pricing-card"><h2>ตัวอย่างราคาที่ลูกค้าเห็น</h2>{preview?.tiers.length ? <table><tbody>{[1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14].map(days => { const price = priceFor(preview, days); return <tr key={days}><td>เช่า {days} วัน</td><td>{price == null ? "สอบถามร้าน" : `฿${price.toLocaleString("th-TH")}`}</td></tr>; })}</tbody></table> : <p>ยังไม่ได้ตั้งราคา หน้าร้านจะแสดง “สอบถามราคา”</p>}</section>
         {!!history.length && <section className="rental-pricing-card"><h2>อ้างอิงจากประวัติเช่าเดิม</h2><p>ราคาเฉลี่ยต่อชุดที่ลูกค้าเคยจ่าย (ไม่ได้ตั้งค่าให้อัตโนมัติ)</p><table><tbody>{history.map(row => <tr key={row.days}><td>{row.days} วัน <small>{row.count.toLocaleString("th-TH")} ครั้ง</small></td><td>~฿{row.average.toLocaleString("th-TH")}</td></tr>)}</tbody></table></section>}
       </aside>

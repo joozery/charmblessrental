@@ -2,7 +2,7 @@ import { revalidateTag } from "next/cache";
 import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
 import { audit } from "@/lib/audit";
 import { database } from "@/lib/mongodb";
-import { cleanPricing, validPricing } from "@/lib/pricing";
+import { cleanPricing, validExtraRates, validPricing, type ExtraDayRates } from "@/lib/pricing";
 import { getStoreSettings, type StoreSettings } from "@/lib/store-settings";
 
 const label = (pricing: StoreSettings["rentalPricing"]) => pricing.tiers.map(tier => `${tier.days} วัน ${tier.price}`).join(", ") + (pricing.extraPerDay == null ? "" : ` · เกินวันละ ${pricing.extraPerDay}`) || "ไม่ได้ตั้ง";
@@ -11,6 +11,18 @@ export async function POST(request: Request) {
   const auth = await requireAdmin("products");
   if (auth.error) return auth.error;
   const body: unknown = await request.json().catch(() => null);
+  // Extra-day charges: shop-wide per day plus per-category overrides (cameras 100).
+  if (body && typeof body === "object" && (body as { action?: string }).action === "extra") {
+    const value = (body as { rates?: unknown }).rates;
+    if (!validExtraRates(value)) return Response.json({ error: "ตรวจสอบค่าเช่าส่วนเกินอีกครั้ง" }, { status: 400 });
+    const rates: ExtraDayRates = { perDay: value.perDay === null ? null : Math.round(value.perDay), byCategory: Object.fromEntries(Object.entries(value.byCategory).map(([category, perDay]) => [category.trim(), Math.round(perDay)])) };
+    const before = (await getStoreSettings()).extraDayRates;
+    const show = (item: ExtraDayRates) => [`ทั่วไปวันละ ${item.perDay ?? "—"}`, ...Object.entries(item.byCategory).map(([category, perDay]) => `${category} วันละ ${perDay}`)].join(" · ");
+    await (await database()).collection<{ _id: string }>("storeSettings").updateOne({ _id: "main" }, { $set: { extraDayRates: rates } }, { upsert: true });
+    revalidateTag("catalog", { expire: 0 });
+    if (show(before) !== show(rates)) await audit(request, auth.admin, { action: "settings.rental_pricing", targetType: "settings", targetId: "extraDayRates", summary: `แก้ไขค่าเช่าส่วนเกิน · ${show(rates)}`, changes: [{ field: "extraDayRates", before: show(before), after: show(rates) }] });
+    return Response.json({ rates });
+  }
   if (!validPricing(body)) return Response.json({ error: "ตรวจสอบจำนวนวันและราคาอีกครั้ง" }, { status: 400 });
   const pricing = cleanPricing(body);
   const before = (await getStoreSettings()).rentalPricing;

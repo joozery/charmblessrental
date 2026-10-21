@@ -22,7 +22,8 @@ async function Content() {
     ]).toArray(),
     db.collection("products").countDocuments({ "customPricing.tiers.0": { $exists: true } }),
   ]);
-  return <RentalPricingSettings initial={settings.rentalPricing} history={history.map(row => ({ days: row._id, count: row.count, average: Math.round(row.average) }))} customCount={custom} />;
+  const categories = (await db.collection("products").distinct("category", { active: { $ne: false } })).filter((value): value is string => typeof value === "string" && !!value).sort();
+  return <RentalPricingSettings initial={settings.rentalPricing} history={history.map(row => ({ days: row._id, count: row.count, average: Math.round(row.average) }))} customCount={custom} rates={settings.extraDayRates} categories={categories} />;
 }
 
 export default function Page() {

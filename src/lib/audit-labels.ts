@@ -38,7 +38,7 @@ export const fieldLabels: Record<string, string> = {
   carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", condition: "สภาพสินค้า", note: "หมายเหตุ", units: "ชิ้นสินค้า",
   depositStatus: "สถานะเงินประกัน", refundAmount: "ยอดคืน", deducted: "ยอดหัก", amount: "จำนวนเงิน", category: "หมวดหมู่", date: "วันที่", voided: "เหตุผลที่ยกเลิก",
   name: "ชื่อ", sku: "รหัสสินค้า", color: "สี", size: "ไซซ์", dailyRate: "ราคาเช่า", cost: "ต้นทุน", stock: "จำนวน", active: "แสดงหน้าร้าน", description: "รายละเอียด", images: "รูปสินค้า",
-  email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS", rentalPricing: "ตารางราคาเช่า", customPricing: "ราคาเฉพาะสินค้า", enabled: "เปิดใช้", origin: "ตำแหน่งร้าน", originLabel: "ชื่อจุดรับส่ง", baseFee: "ค่าเริ่มต้น", includedKm: "รวมระยะแรก (กม.)", perKm: "กม.ละ", maxKm: "ส่งไกลสุด (กม.)", inBill: "รวมในบิล",
+  email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS", rentalPricing: "ตารางราคาเช่า", extraDayRates: "ค่าเช่าส่วนเกิน", shippingOptions: "ขนส่ง", shippingFee: "ค่าส่งเฉพาะสินค้า", customPricing: "ราคาเฉพาะสินค้า", enabled: "เปิดใช้", origin: "ตำแหน่งร้าน", originLabel: "ชื่อจุดรับส่ง", baseFee: "ค่าเริ่มต้น", includedKm: "รวมระยะแรก (กม.)", perKm: "กม.ละ", maxKm: "ส่งไกลสุด (กม.)", inBill: "รวมในบิล",
 };
 export const valueLabels: Record<string, string> = {
   new: "ใหม่", contacted: "ติดต่อแล้ว", confirmed: "ยืนยันแล้ว", cancelled: "ยกเลิก", paid: "ชำระแล้ว", unpaid: "รอชำระ",

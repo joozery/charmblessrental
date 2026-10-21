@@ -16,13 +16,14 @@ export async function POST(request: Request) {
   const validAmount = (value: unknown) => value === null || typeof value === "number" && Number.isFinite(value) && value >= 0;
   const images = Array.isArray(body.images) ? body.images.filter((image: unknown) => typeof image === "string" && image) : [];
   if (!text("name") || !Object.hasOwn(categoryLabels, text("category")) || !validAmount(body.dailyRate) || !validAmount(body.deposit) || typeof body.active !== "boolean" || ["name", "color", "size", "description"].some(key => text(key).length > 3000) || !images.length || images.length > 12 || !images.every(isProductImage) || (body.id !== undefined && (!Number.isSafeInteger(body.id) || body.id < 1))) return Response.json({ error: "กรุณาตรวจสอบชื่อ ประเภท รูป และราคาอีกครั้ง" }, { status: 400 });
+  if (!(body.shippingFee === null || body.shippingFee === undefined || (Number.isSafeInteger(body.shippingFee) && body.shippingFee >= 0 && body.shippingFee <= 10000))) return Response.json({ error: "ค่าส่งเฉพาะสินค้าต้องเป็นจำนวนเต็มบาท" }, { status: 400 });
   if (body.customPricing !== null && !validPricing(body.customPricing)) return Response.json({ error: "ตรวจสอบตารางราคาเฉพาะสินค้าอีกครั้ง" }, { status: 400 });
   if (body.id === undefined && (!Number.isSafeInteger(body.pieces) || body.pieces < 1 || body.pieces > 50 || !validAmount(body.cost))) return Response.json({ error: "กรุณาระบุจำนวนชิ้นเริ่มต้น 1–50 ชิ้น และต้นทุนต่อชิ้น" }, { status: 400 });
   const fields: ProductFields = {
     name: text("name"), thai: text("name"), category: text("category"), tag: categoryLabels[text("category")],
     color: text("color"), size: text("size"), dailyRate: body.dailyRate, deposit: body.deposit,
     description: text("description"), notes: text("description"), images: [...new Set<string>(images)], active: body.active,
-    customPricing: body.customPricing?.tiers.length ? cleanPricing(body.customPricing) : null,
+    customPricing: body.customPricing?.tiers.length ? cleanPricing(body.customPricing) : null, shippingFee: body.shippingFee ?? null,
   };
   try {
     if (body.id === undefined) {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
       await audit(request, auth.admin, { action: "product.create", targetType: "product", targetId: String(created.id), summary: `เพิ่มสินค้า ${created.code} ${fields.name} (${created.units.length} ชิ้น)`, changes: diff(null, { ...fields, stock: created.units.length }, ["name", "category", "dailyRate", "deposit", "stock"]) });
     } else {
       const before = await updateProduct(body.id, fields);
-      const changes = diff(before, fields, ["name", "category", "color", "size", "dailyRate", "customPricing", "deposit", "active", "description", "images"]);
+      const changes = diff(before, fields, ["name", "category", "color", "size", "dailyRate", "customPricing", "deposit", "shippingFee", "active", "description", "images"]);
       if (changes.length) await audit(request, auth.admin, { action: changes.some(change => ["dailyRate", "customPricing", "deposit"].includes(change.field)) ? "product.price" : "product.update", targetType: "product", targetId: String(body.id), summary: `แก้ไขสินค้า ${before.sku || ""} ${fields.name}`.trim(), changes });
     }
     revalidateTag("catalog", { expire: 0 });

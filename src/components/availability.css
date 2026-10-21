@@ -5,3 +5,22 @@
 .calendar-grid button.selected { background: #d01470; color: white; border: 1px solid #d01470; text-decoration: none; }
 .availability-legend-available { color: #23764a; } .availability-legend-limited { color: #9c711d; } .availability-legend-full { color: #bc4760; }
 .detail-calendar .availability-summary { color: #8c476a; font-weight: 500; }
+/* Rental span on the product calendar (colours match the gap chart) */
+.product-calendar { display: grid; gap: 12px; margin-top: 12px; }
+.product-calendar-options { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px 10px; font-size: 11px; color: #8c6b7c; }
+.product-calendar-options > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.product-calendar-options button { padding: 6px 12px; border: 1px solid #ecd9e3; border-radius: 999px; background: #fff; color: #6f5d69; font-size: 11px; cursor: pointer; }
+.product-calendar-options button.is-active { border-color: #d01470; background: #fff2f8; color: #c02570; font-weight: 600; }
+.product-calendar-hint { margin: 0; color: #8c476a; font-size: 12px; font-weight: 500; }
+.product-calendar .calendar-grid { margin-top: 0; }
+.calendar-grid button.role-ship { background: #fde3ee; border-color: #f6b9d2; color: #a52061; text-decoration: none; }
+.calendar-grid button.role-transit { background: #f4f2f4; border-color: #e7e1e5; color: #8f8089; text-decoration: none; }
+.calendar-grid button.role-use { background: #fbd6e6; border-color: #f2a9c8; color: #a52061; font-weight: 600; text-decoration: none; }
+.calendar-grid button.role-return { background: #eadcf8; border-color: #d6c0f0; color: #6a3fa0; text-decoration: none; }
+.calendar-grid button.role-gap { background: #fff3c4; border-color: #f0dc8a; color: #6b5300; text-decoration: none; }
+.calendar-grid button.role-ready { background: #dff3e6; border-color: #a9dcbb; color: #1f7a45; text-decoration: none; }
+.calendar-grid button.selected { background: #d01470; border-color: #d01470; color: #fff; }
+.calendar-grid button.is-conflict { box-shadow: 0 0 0 2px #e5484d inset; text-decoration: line-through; }
+.legend-role-ship { color: #e889b2; } .legend-role-use { color: #d01470; } .legend-role-return { color: #9a6dd4; } .legend-role-gap { color: #d6aa12; } .legend-role-ready { color: #2e9a5c; }
+.product-calendar-alert { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff0f2; color: #b42340; font-size: 12px; line-height: 1.7; }
+.product-calendar-ok { margin: 0; padding: 10px 12px; border-radius: 8px; background: #ecf8f1; color: #277c51; font-size: 12px; }

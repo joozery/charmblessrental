@@ -1,9 +1,10 @@
 import Image from "next/image";
+import { returnDay, type ScheduleRecord } from "@/lib/schedule";
 import type { RentalDocumentDefaults } from "@/lib/store-settings";
 
 export type Quote = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string };
 export type StoreInfo = { logoImage: string; lineUrl: string; instagramUrl: string; rentalRules: string[]; rentalDocument: RentalDocumentDefaults };
-export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; deliveryFee: number; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null }[]; createdAt: string };
+export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; schedule?: ScheduleRecord | null; deliveryFee: number; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null }[]; createdAt: string };
 // Price for the whole rental: the package price saved with the booking, else the old per-day rate × days.
 export const itemPrice = (item: DocRow["items"][number], days: number) => item.rentalPrice ?? (item.dailyRate === null ? null : item.dailyRate * days);
 export const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
@@ -31,7 +32,7 @@ export function RentalDocument({ row, quote, store, printOnly = false }: { row: 
       <section className="rental-paper-section rental-paper-total"><h3>สรุปยอดค่าเช่า</h3><p><span>ค่าเช่ารวม</span><b>{money(quote.rental)}</b></p><p><span>เงินประกัน</span><b>{money(quote.deposit)}</b></p><p><span>ค่าจัดส่ง</span><b>{money(quote.shipping)}</b></p><strong><span>ยอดรวมสุทธิ</span><b>{money(quote.rental + quote.deposit + quote.shipping)} บาท</b></strong></section>
       <section className="rental-paper-section rental-paper-bank"><h3>ช่องทางชำระเงิน</h3><div><span className="rental-paper-qr">{quote.qrImage && safeUrl(quote.qrImage) ? <Image unoptimized src={safeUrl(quote.qrImage)} alt="QR ชำระเงิน" width={130} height={130} /> : <>QR<br />ชำระเงิน</>}</span><p><b>ข้อมูลบัญชีร้าน</b><span>ธนาคาร　:　{quote.bank || "กรอกชื่อธนาคาร"}</span><span>เลขที่บัญชี　:　{quote.accountNumber || "กรอกเลขบัญชี"}</span><span>ชื่อบัญชี　:　{quote.accountName || "กรอกชื่อบัญชี"}</span></p></div><small>ตรวจสอบยอดและบัญชีก่อนโอน</small></section>
     </div>
-    <div className="rental-paper-reminder"><strong>ส่งคืนภายในวันที่กำหนด {dateLabel(row.end)} ก่อน 18:00 น.</strong><span>แจ้งเลขพัสดุทาง Inbox ภายใน 20:00 น.</span></div>
+    <div className="rental-paper-reminder"><strong>ส่งคืนภายในวันที่กำหนด {dateLabel(returnDay(row))} ก่อน 18:00 น.</strong><span>แจ้งเลขพัสดุทาง Inbox ภายใน 20:00 น.</span></div>
     <section className="rental-paper-section rental-paper-rules"><h3>เงื่อนไขการเช่า</h3><ol>{store.rentalRules.slice(0, 5).map((rule, index) => <li key={`${index}-${rule}`}>{rule}</li>)}</ol></section>
     <section className="rental-paper-section rental-paper-return"><h3>ข้อมูลสำหรับส่งคืน</h3><div><strong>CHARM BLESS Rental</strong><span>ที่อยู่ส่งคืน　:　{quote.returnAddress || "ติดต่อร้านเพื่อขอที่อยู่ส่งคืน"}</span><span>เบอร์โทรศัพท์　:　{quote.returnPhone || "ติดต่อร้านทาง LINE"}</span><span>วิธีส่งคืน　:　{quote.returnMethod || "ไปรษณีย์ / Flash / KEX"}</span></div></section>
     <footer className="rental-paper-social">{store.instagramUrl && <span>◎ {store.instagramUrl.replace(/^https?:\/\/(www\.)?instagram\.com\//, "@").replace(/\/$/, "")}</span>}<small>โปรดตรวจสอบข้อมูลก่อนชำระเงิน</small></footer>

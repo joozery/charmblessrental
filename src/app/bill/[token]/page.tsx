@@ -6,6 +6,7 @@ import { getStoreSettings } from "@/lib/store-settings";
 import { RentalDocument, dateLabel, money, quoteForRow, type DocRow } from "@/components/rental-document";
 import { unitsOf, type Product, type UnitStatus } from "@/lib/products";
 import { rentalStage, stageLabel, stageSteps } from "@/lib/rental-stage";
+import { returnDay } from "@/lib/schedule";
 import PrintButton from "./print-button";
 import ReturnForm from "./return-form";
 import "@/app/admin/bookings/bookings.css";
@@ -25,7 +26,7 @@ async function Content({ params }: PageProps) {
   await connection();
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) notFound();
-  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
+  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
   if (!row) notFound();
   const stage = rentalStage(row), pickup = row.method === "pickup";
   const skus = row.items.map(item => item.unitSku).filter((sku): sku is string => !!sku);
@@ -47,7 +48,7 @@ async function Content({ params }: PageProps) {
           <h2>สถานะการเช่า</h2>
           <ol className="bill-steps">{stageSteps.map((step, index) => <li key={step} className={stageSteps.indexOf(stage) >= index ? "is-done" : ""}><span>{index + 1}</span>{stageLabel(step, row.method)}</li>)}</ol>
           {preparing && <div className="bill-track-box"><strong>การเตรียมสินค้า</strong><ul>{row.items.map((item, index) => { const status = item.unitSku ? unitStatus.get(item.unitSku) : undefined; return <li key={index}><span>{item.name}</span>{status === "available" ? <b className="is-ready">เตรียมสินค้าเรียบร้อย {pickup ? "พร้อมให้รับ" : "พร้อมจัดส่ง"}</b> : <b>{(status && prepText[status]) || "ร้านกำลังจัดเตรียมสินค้า"}</b>}</li>; })}</ul></div>}
-          {shipment && <div className="bill-track-box"><strong>{pickup ? "การรับสินค้า" : "การจัดส่ง"}</strong><p>{pickup ? `รับสินค้าที่ร้านแล้ว · ${when(shipment.shippedAt)}` : <>{shipment.carrier} <b className="bill-tracking">{shipment.trackingNumber}</b> · ส่งเมื่อ {when(shipment.shippedAt)}</>}</p><p>กำหนดส่งคืน <b>{dateLabel(doc.end)}</b>{!returned && !customerReturn && " · ร้านจะส่ง LINE เตือนก่อนถึงกำหนด 1 วัน"}</p></div>}
+          {shipment && <div className="bill-track-box"><strong>{pickup ? "การรับสินค้า" : "การจัดส่ง"}</strong><p>{pickup ? `รับสินค้าที่ร้านแล้ว · ${when(shipment.shippedAt)}` : <>{shipment.carrier} <b className="bill-tracking">{shipment.trackingNumber}</b> · ส่งเมื่อ {when(shipment.shippedAt)}</>}</p><p>กำหนดส่งคืน <b>{dateLabel(returnDay(doc))}</b>{!returned && !customerReturn && " · ร้านจะส่ง LINE เตือนก่อนถึงกำหนด 1 วัน"}</p></div>}
           {shipment && !returned && <div className="bill-track-box"><strong>แจ้งส่งคืนสินค้า</strong>{customerReturn ? <p className="bill-reported">แจ้งแล้ว: {`${customerReturn.carrier} ${customerReturn.trackingNumber}`.trim()} · {when(customerReturn.at)}<br />รอร้านรับสินค้า ร้านจะยืนยันเมื่อได้รับพัสดุจริง</p> : <p>เมื่อส่งสินค้าคืนแล้ว กรุณาแจ้งขนส่งและเลขพัสดุด้านล่าง{doc.quote?.returnAddress ? ` (ที่อยู่ส่งคืน: ${doc.quote.returnAddress}${doc.quote.returnPhone ? ` · ${doc.quote.returnPhone}` : ""})` : ""}</p>}<ReturnForm token={token} reported={customerReturn ? { carrier: customerReturn.carrier, trackingNumber: customerReturn.trackingNumber } : null} /></div>}
           {returned && <div className="bill-track-box"><strong>ร้านรับสินค้าคืนแล้ว</strong><p>{when(returned.at)} · ขอบคุณที่ใช้บริการค่ะ</p></div>}
         </section>

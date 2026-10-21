@@ -3,11 +3,12 @@ import { pageAdmin } from "@/lib/admin-auth";
 import { thaiDay } from "@/lib/finance";
 import { database } from "@/lib/mongodb";
 import { prepStatuses, unitsOf, type Product } from "@/lib/products";
+import { returnDay, type ScheduleRecord } from "@/lib/schedule";
 import PreparationBoard, { type PrepPiece } from "./preparation-board";
 import "./preparation.css";
 
 export const metadata = { title: "เตรียมสินค้า | Charm Bless", robots: { index: false, follow: false } };
-type BookingDoc = { _id: string; name: string; start: string; end: string; status: string; items: { id: number; unitSku?: string }[]; shipment?: object; returned?: { at: Date; condition: string; note: string } };
+type BookingDoc = { _id: string; name: string; start: string; end: string; schedule?: ScheduleRecord; status: string; items: { id: number; unitSku?: string }[]; shipment?: object; returned?: { at: Date; condition: string; note: string } };
 
 async function Content() {
   await pageAdmin("shipping");
@@ -15,7 +16,7 @@ async function Content() {
   const products = await db.collection<Product>("products").find({ "units.status": { $in: [...prepStatuses, "rented"] } }, { projection: { _id: 0, id: 1, name: 1, sku: 1, images: 1, units: 1, cost: 1, active: 1, legacyId: 1 } }).toArray();
   const pieces = products.flatMap(product => unitsOf(product).filter(unit => prepStatuses.includes(unit.status) || unit.status === "rented").map(unit => ({ product, unit })));
   const skus = pieces.map(piece => piece.unit.sku);
-  const bookings = await db.collection<BookingDoc>("bookingRequests").find({ "items.unitSku": { $in: skus }, status: { $ne: "cancelled" } }, { projection: { _id: 1, name: 1, start: 1, end: 1, status: 1, items: 1, shipment: 1, returned: 1 } }).toArray();
+  const bookings = await db.collection<BookingDoc>("bookingRequests").find({ "items.unitSku": { $in: skus }, status: { $ne: "cancelled" } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, status: 1, items: 1, shipment: 1, returned: 1 } }).toArray();
   const today = thaiDay();
   const rows: PrepPiece[] = pieces.map(({ product, unit }) => {
     const mine = bookings.filter(booking => booking.items.some(item => item.unitSku === unit.sku));
@@ -25,8 +26,8 @@ async function Content() {
     return {
       sku: unit.sku, status: unit.status, note: unit.note, productName: product.name, image: product.images?.[0] || "",
       lastReturn: last ? { bookingId: last._id, at: new Date(last.returned!.at).toISOString(), condition: last.returned!.condition, note: last.returned!.note } : null,
-      out: out ? { bookingId: out._id, name: out.name, end: out.end } : null,
-      next: next ? { bookingId: next._id, name: next.name, start: next.start } : null,
+      out: out ? { bookingId: out._id, name: out.name, end: returnDay(out) } : null,
+      next: next ? { bookingId: next._id, name: next.name, start: next.schedule?.ship ?? next.start } : null,
     };
   });
   return <PreparationBoard initial={rows} today={today} />;

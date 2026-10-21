@@ -1,8 +1,9 @@
 import type { Db } from "mongodb";
 import { inService, unitsOf, type Product, type UnitStatus } from "./products";
+import { blockRange, type ScheduleRecord } from "./schedule";
 
 type Item = { id: number; unitSku?: string };
-type BookingLike = { _id: string; start: string; end: string; items: Item[] };
+type BookingLike = { _id: string; start: string; end: string; items: Item[]; schedule?: ScheduleRecord | null };
 export type UnitChoice = { sku: string; status: UnitStatus };
 
 // Pieces each booked product can be fulfilled with, keyed by product id.
@@ -13,9 +14,10 @@ export async function unitChoices(db: Db, productIds: number[]) {
 
 // Pieces promised to other open bookings: those overlapping these dates cannot be used, the rest are only avoided.
 async function reservedUnits(db: Db, booking: BookingLike) {
-  const rows = await db.collection<BookingLike>("bookingRequests").find({ _id: { $ne: booking._id }, status: "confirmed", returned: { $exists: false }, "items.unitSku": { $exists: true } }, { projection: { start: 1, end: 1, items: 1 } }).toArray();
+  const rows = await db.collection<BookingLike>("bookingRequests").find({ _id: { $ne: booking._id }, status: "confirmed", returned: { $exists: false }, "items.unitSku": { $exists: true } }, { projection: { start: 1, end: 1, items: 1, schedule: 1 } }).toArray();
   const skus = (list: BookingLike[]) => new Set(list.flatMap(row => row.items.map(item => item.unitSku).filter((sku): sku is string => !!sku)));
-  return { busy: skus(rows.filter(row => row.start < booking.end && row.end > booking.start)), promised: skus(rows) };
+  const mine = blockRange(booking);
+  return { busy: skus(rows.filter(row => { const range = blockRange(row); return range.from < mine.to && range.to > mine.from; })), promised: skus(rows) };
 }
 
 // Reserves a piece for each item that has none yet, preferring pieces that are ready now.
