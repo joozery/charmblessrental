@@ -92,7 +92,6 @@
   .booking-method input, .booking-acknowledgment input { width: 18px; height: 18px; flex-shrink: 0; }
   .booking-method strong { font-size: 11px; }
   .booking-method b { font-size: 10px; }
-  .booking-price { font-size: 12px; }
   .booking-help { font-size: 10px; }
   .booking-remove { min-height: 32px; padding: 6px 2px; }
   .booking-form > button[type=submit] { min-height: 46px; }
