@@ -8,14 +8,17 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Dialog } from "radix-ui";
 import { categoryLabels, unitStatusLabels, unitsOf, type Product, type ProductUnit, type UnitStatus } from "@/lib/products";
+import PriceTiersEditor, { pricingFrom, rowsFrom, type TierRow } from "@/components/price-tiers-editor";
+import { startingTier } from "@/lib/pricing";
 
 type Draft = {
   id?: number; name: string; category: string; description: string; images: string[];
   color: string; size: string; dailyRate: number | null; deposit: number | null; active: boolean;
   pieces: number; cost: number | null;
+  custom: boolean; tierRows: TierRow[]; extra: string;
 };
 type Restock = { product: Product; count: number; cost: number | null; note: string };
-const empty: Draft = { name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, active: true, pieces: 1, cost: null };
+const empty: Draft = { name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, active: true, pieces: 1, cost: null, custom: false, tierRows: rowsFrom(null), extra: "" };
 const money = (value?: number | null) => value == null ? "—" : value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const numeric = (input: HTMLInputElement) => Number.isNaN(input.valueAsNumber) ? null : input.valueAsNumber;
 const nextCodes = (product: Product, count: number) => {
@@ -57,9 +60,14 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
   function done(result: { products: Product[] }, message: string) {
     setItems(result.products); setNotice(message); startTransition(() => router.refresh());
   }
+  // A legacy per-day rate becomes this product's own table: 1 day = rate, each extra day + rate.
+  function customFields(product: Product) {
+    const own = product.customPricing?.tiers.length ? product.customPricing : product.dailyRate != null ? { tiers: [{ days: 1, price: product.dailyRate }], extraPerDay: product.dailyRate } : null;
+    return { custom: !!own, tierRows: rowsFrom(own), extra: own?.extraPerDay == null ? "" : String(own.extraPerDay) };
+  }
   function edit(product?: Product) {
     setError(""); setNotice(""); setUnitEdits({});
-    setDraft(product ? { id: product.id, name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: product.dailyRate ?? null, deposit: product.deposit ?? null, active: product.active !== false, pieces: 0, cost: null } : { ...empty });
+    setDraft(product ? { id: product.id, name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: null, deposit: product.deposit ?? null, active: product.active !== false, pieces: 0, cost: null, ...customFields(product) } : { ...empty });
   }
   async function upload(file?: File) {
     if (!file || !draft) return;
@@ -77,7 +85,11 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
     event.preventDefault(); if (!draft) return;
     setBusy(true); setError("");
     try {
-      const { id, pieces: count, cost, ...fields } = draft;
+      const { id, pieces: count, cost, custom, tierRows, extra, ...rest } = draft;
+      const customPricing = custom ? pricingFrom(tierRows, extra) : null;
+      if (typeof customPricing === "string") throw new Error(customPricing);
+      if (custom && !customPricing?.tiers.length) throw new Error("กรอกราคาเฉพาะอย่างน้อย 1 แถว หรือยกเลิกการใช้ราคาเฉพาะ");
+      const fields = { ...rest, customPricing };
       const result = await post("/api/admin/products", id ? { id, ...fields } : { ...fields, pieces: count, cost });
       setDraft(null); done(result, id ? "บันทึกข้อมูลสินค้าเรียบร้อยแล้ว" : `เพิ่มสินค้าใหม่ ${count} ชิ้นแล้ว ระบบสร้างรหัสให้อัตโนมัติ`);
     } catch (e) { setError(e instanceof Error ? e.message : "เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่"); }
@@ -120,12 +132,12 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
           <Select label="สต๊อก" value={stockFilter} onValueChange={value => { setStockFilter(value); setPage(0); }} options={[{ value: "all", label: "ทุกสต๊อก" }, { value: "in", label: "มีชิ้นพร้อมเช่า" }, { value: "out", label: "ไม่มีชิ้นพร้อมเช่า" }]} />
         </div>
         <div className="admin-table-wrap inventory-table-scroll" tabIndex={0} role="region" aria-label="ตารางข้อมูลสินค้า เลื่อนซ้ายขวาเพื่อดูทุกคอลัมน์"><table className="admin-table inventory-table">
-          <thead><tr><th>รูปสินค้า</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>ประเภท</th><th>สต๊อก</th><th className="inventory-money">ราคาเช่า/วัน</th><th>หน้าร้าน</th><th className="inventory-money">ต้นทุนรวม</th><th className="inventory-money">รายได้</th><th className="inventory-money">กำไร</th><th>หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <thead><tr><th>รูปสินค้า</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>ประเภท</th><th>สต๊อก</th><th className="inventory-money">ราคาเช่า</th><th>หน้าร้าน</th><th className="inventory-money">ต้นทุนรวม</th><th className="inventory-money">รายได้</th><th className="inventory-money">กำไร</th><th>หมายเหตุ</th><th>จัดการ</th></tr></thead>
           <tbody>{paginated.map(p => { const units = unitsOf(p).filter(unit => unit.status !== "retired"); return <tr key={p.id}>
             <td><Button variant="ghost" className="inventory-thumbnail" onClick={() => setPreview(p)} aria-label={`ดูรูป ${p.sku || p.name}`}><Image unoptimized src={p.images[0]} alt={p.name} width={48} height={64} /><span aria-hidden="true"><Icon name="expand" /></span></Button></td>
             <td className="inventory-sku">{p.sku || "—"}</td><td className="inventory-name"><strong>{p.name}</strong><small className="inventory-unit-codes">{units.map(unit => unit.sku).join(", ")}</small></td><td>{categoryLabels[p.category] || p.category}</td>
             <td><span className="inventory-stock"><strong>{units.length} ชิ้น</strong><small>พร้อมเช่า {p.stock ?? 0}</small></span></td>
-            <td className="inventory-money">{p.dailyRate == null ? "สอบถาม" : money(p.dailyRate)}</td><td><span className={`inventory-status ${p.active === false ? "is-hidden" : ""}`}>{p.active === false ? "ซ่อน" : "แสดง"}</span></td>
+            <td className="inventory-money">{p.customPricing?.tiers.length || p.dailyRate != null ? <span className="inventory-price"><strong>{p.customPricing?.tiers.length ? `${startingTier(p.customPricing)!.days} วัน ${money(startingTier(p.customPricing)!.price)}` : `วันละ ${money(p.dailyRate)}`}</strong><small>ราคาเฉพาะ</small></span> : <span className="inventory-price"><small>ตามตารางร้าน</small></span>}</td><td><span className={`inventory-status ${p.active === false ? "is-hidden" : ""}`}>{p.active === false ? "ซ่อน" : "แสดง"}</span></td>
             <td className="inventory-money">{money(p.cost)}</td><td className="inventory-money">{money(p.legacyRevenue)}</td><td className={`inventory-money ${(p.legacyProfit ?? 0) < 0 ? "inventory-loss" : "inventory-profit"}`}>{money(p.legacyProfit)}</td>
             <td className="inventory-notes">{p.notes || p.description || "—"}</td>
             <td><span className="inventory-actions"><Button variant="outline" size="sm" aria-label={`เติมสต๊อก ${p.name}`} onClick={() => { setError(""); setNotice(""); setRestock({ product: p, count: 1, cost: null, note: "" }); }}><Icon name="plus" />เติมสต๊อก</Button><Button variant="outline" size="sm" aria-label={`แก้ไข ${p.name}`} onClick={() => edit(p)}>แก้ไข</Button></span></td>
@@ -147,8 +159,8 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       <label className="admin-form-full">ชื่อสินค้า<Input required maxLength={300} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
       {!draft.id && <><label>จำนวนชิ้นเริ่มต้น<Input type="number" min="1" max="50" step="1" required value={draft.pieces} onChange={e => setDraft({ ...draft, pieces: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })} /></label>
       <label>ต้นทุนต่อชิ้น (บาท)<Input type="number" min="0" step="0.01" value={draft.cost ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, cost: numeric(e.target) })} /></label></>}
-      <label>ราคาเช่าต่อวัน (บาท)<Input type="number" min="0" step="0.01" value={draft.dailyRate ?? ""} placeholder="เว้นว่าง = สอบถามราคา" onChange={e => setDraft({ ...draft, dailyRate: numeric(e.target) })} /></label>
       <label>เงินมัดจำ (บาท)<Input type="number" min="0" step="0.01" value={draft.deposit ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, deposit: numeric(e.target) })} /></label>
+      <div className="admin-form-full inventory-pricing"><label className="flex flex-row items-center gap-2"><Input type="checkbox" checked={draft.custom} onChange={e => setDraft({ ...draft, custom: e.target.checked })} />ตั้งราคาเฉพาะสินค้านี้ (ไม่ใช้ตารางราคาของร้าน)</label>{draft.custom ? <PriceTiersEditor rows={draft.tierRows} extra={draft.extra} onChange={(tierRows, extra) => setDraft({ ...draft, tierRows, extra })} /> : <small>ใช้ราคาตามตาราง <a href="/admin/rental-pricing" target="_blank" rel="noopener noreferrer">ราคาเช่ามาตรฐานของร้าน</a></small>}</div>
       <label>สี<Input maxLength={100} value={draft.color} onChange={e => setDraft({ ...draft, color: e.target.value })} /></label>
       <label>ไซซ์<Input maxLength={100} value={draft.size} onChange={e => setDraft({ ...draft, size: e.target.value })} /></label>
       <label className="admin-form-full flex flex-row items-center gap-2"><Input type="checkbox" checked={draft.active} onChange={e => setDraft({ ...draft, active: e.target.checked })} />แสดงสินค้านี้บนหน้าร้าน</label>

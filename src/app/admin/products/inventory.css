@@ -107,3 +107,5 @@ body:has(.inventory-page),body:has(.inventory-page) .chrome-shell,body:has(.inve
 .inventory-units tr.is-retired td{color:#98a2b3}.inventory-units small{color:#9e94a2;font-size:11px;line-height:1.6}
 .inventory-restock{width:min(520px,calc(100% - 32px))}
 @media(max-width:560px){.inventory-units table,.inventory-units tbody,.inventory-units tr,.inventory-units td{display:block}.inventory-units thead{display:none}.inventory-units tr{padding:8px 0;border-top:1px solid #f0f1f4}.inventory-units td{width:auto!important;border:0;padding:3px 0}}
+.inventory-price{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.4}.inventory-price strong{color:#111827;font-weight:600;white-space:nowrap}.inventory-price small{color:#667085;font-size:11px}
+.inventory-pricing{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid #eee7ee;border-radius:9px;background:#fcfbfc;font-size:12px}.inventory-pricing small a{color:#79516c}

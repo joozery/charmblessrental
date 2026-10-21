@@ -20,6 +20,7 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "product.unit": { label: "แก้ไขชิ้นสินค้า", group: "products" },
   "availability.update": { label: "ปรับคิวว่าง", group: "products" },
   "settings.store": { label: "ตั้งค่าหน้าร้าน", group: "settings" },
+  "settings.rental_pricing": { label: "ตั้งราคาเช่ามาตรฐาน", group: "settings" },
   "settings.rental_document": { label: "ตั้งค่าใบรายละเอียดการเช่า", group: "settings" },
   "admin.create": { label: "เพิ่มบัญชีแอดมิน", group: "admins" },
   "admin.update": { label: "แก้ไขบัญชีแอดมิน", group: "admins" },
@@ -34,7 +35,7 @@ export const fieldLabels: Record<string, string> = {
   carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", condition: "สภาพสินค้า", note: "หมายเหตุ",
   depositStatus: "สถานะเงินประกัน", refundAmount: "ยอดคืน", deducted: "ยอดหัก", amount: "จำนวนเงิน", category: "หมวดหมู่", date: "วันที่", voided: "เหตุผลที่ยกเลิก",
   name: "ชื่อ", sku: "รหัสสินค้า", color: "สี", size: "ไซซ์", dailyRate: "ราคาเช่า", cost: "ต้นทุน", stock: "จำนวน", active: "แสดงหน้าร้าน", description: "รายละเอียด", images: "รูปสินค้า",
-  email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS",
+  email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS", rentalPricing: "ตารางราคาเช่า", customPricing: "ราคาเฉพาะสินค้า",
 };
 export const valueLabels: Record<string, string> = {
   new: "ใหม่", contacted: "ติดต่อแล้ว", confirmed: "ยืนยันแล้ว", cancelled: "ยกเลิก", paid: "ชำระแล้ว", unpaid: "รอชำระ",

@@ -39,3 +39,4 @@
 .detail-booking-bar strong { display: block; font-size: 13px; }
 .detail-booking-bar span { display: block; font-size: 10px; color: #a08294; margin-top: 3px; }
 @media(max-width:700px) { .detail-header .shop-brand { font-size: 13px; gap: 9px; } .detail-header .text-link { font-size: 10px; } .detail-layout { grid-template-columns: 1fr; gap: 22px; } .detail-gallery { position: static; } .detail-gallery img { max-height: 480px; } .detail-info h1 { font-size: 28px; } .detail-related > div { grid-template-columns: repeat(2,1fr); } .calendar-grid { gap: 5px; } }
+.detail-packages article span small{color:#8a7f88;font-size:.85em;font-weight:400}

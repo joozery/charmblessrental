@@ -1,0 +1,15 @@
+body:has(.rental-pricing-page),body:has(.rental-pricing-page) .chrome-shell,body:has(.rental-pricing-page) .chrome-workspace{background:#f5f6f8}
+.chrome-shell .rental-pricing-page{max-width:1100px;padding:28px;color:#202938}
+.rental-pricing-eyebrow{display:block;color:#79516c;font-size:11px;font-weight:650;letter-spacing:1.1px}
+.rental-pricing-header h1{margin:5px 0 3px;color:#17202e;font-size:27px;font-weight:650;letter-spacing:-.4px}
+.rental-pricing-header p{max-width:680px;margin:0 0 18px;color:#667085;font-size:13px;line-height:1.7}
+.rental-pricing-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);align-items:start;gap:16px}
+.rental-pricing-side{display:grid;gap:16px}
+.rental-pricing-card{padding:18px 20px;border:1px solid #dfe3e8;border-radius:10px;background:#fff}
+.rental-pricing-card h2{margin:0 0 12px;color:#202938;font-size:15px;font-weight:600}
+.rental-pricing-card>p{margin:-6px 0 10px;color:#667085;font-size:12px;line-height:1.6}
+.rental-pricing-card table{width:100%;border-collapse:collapse;font-size:13px}
+.rental-pricing-card td{padding:7px 0;border-top:1px solid #eef0f3;color:#344054}.rental-pricing-card td:last-child{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.rental-pricing-card td small{margin-left:4px;color:#98a2b3;font-size:11px;font-weight:400}
+.rental-pricing-actions{display:flex;justify-content:flex-end;margin-top:14px;padding-top:14px;border-top:1px solid #eef0f3}
+@media(max-width:820px){.rental-pricing-layout{grid-template-columns:1fr}.chrome-shell .rental-pricing-page{padding:22px 14px}}

@@ -9,6 +9,6 @@ export async function getCatalog() {
   cacheTag("catalog");
   cacheLife({ stale: 60, revalidate: 300, expire: 3600 });
   const [storedProducts, settings] = await Promise.all([readProducts(), getStoreSettings()]);
-  const products = storedProducts.filter(p => p.active !== false && (p.stock ?? 1) > 0).map(publicProduct);
+  const products = storedProducts.filter(p => p.active !== false && (p.stock ?? 1) > 0).map(product => publicProduct(product, settings.rentalPricing));
   return { products, settings };
 }

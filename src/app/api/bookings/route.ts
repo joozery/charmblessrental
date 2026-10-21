@@ -3,11 +3,12 @@ import { database } from "@/lib/mongodb";
 import { sameOrigin } from "@/lib/admin-auth";
 import type { Product } from "@/lib/products";
 import { getStoreSettings } from "@/lib/store-settings";
+import { effectivePricing, priceFor } from "@/lib/pricing";
 
 const validDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 const thaiDay = (date = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 const methods = ["pickup", "ems", "messenger"];
-type BookingRecord = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; stock: number }[]; createdAt: Date; updatedAt: Date; billToken: string; payment: "unpaid" | "paid" };
+type BookingRecord = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice: number | null; stock: number }[]; createdAt: Date; updatedAt: Date; billToken: string; payment: "unpaid" | "paid" };
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   try {
@@ -16,18 +17,18 @@ export async function POST(request: Request) {
   const ids = [...new Set((body.items as { id: number }[]).map(item => item.id))];
   if (ids.length !== body.items.length) return Response.json({ error: "มีสินค้าเดิมซ้ำในรายการ กรุณาตรวจสอบตะกร้า" }, { status: 400 });
   const db = await database();
-  const products = await db.collection<Product>("products").find({ id: { $in: ids }, active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, name: 1, thai: 1, sku: 1, dailyRate: 1, images: 1, image: 1, stock: 1 } }).toArray();
+  const products = await db.collection<Product>("products").find({ id: { $in: ids }, active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, name: 1, thai: 1, sku: 1, dailyRate: 1, customPricing: 1, images: 1, image: 1, stock: 1 } }).toArray();
   if (products.length !== ids.length) return Response.json({ error: "มีสินค้าที่ไม่พร้อมให้เช่าแล้ว กรุณาโหลดหน้าร้านใหม่" }, { status: 409 });
   const days = (Date.parse(`${body.end}T00:00:00Z`) - Date.parse(`${body.start}T00:00:00Z`)) / 86400000;
   const settings = await getStoreSettings();
   const deliveryFee = body.method === "ems" ? settings.emsFee : 0;
-  const hasRate = products.every(product => typeof product.dailyRate === "number");
-  const estimatedTotal = hasRate ? products.reduce((sum, product) => sum + (product.dailyRate || 0), 0) * days + deliveryFee : null;
+  const prices = new Map(products.map(product => [product.id, priceFor(effectivePricing(product, settings.rentalPricing), days)]));
+  const estimatedTotal = [...prices.values()].every(price => price !== null) ? [...prices.values()].reduce<number>((sum, price) => sum + (price || 0), 0) + deliveryFee : null;
   const requestId = `BR-${body.start.replaceAll("-", "")}-${randomUUID().slice(0, 6).toUpperCase()}`;
   await db.collection<BookingRecord>("bookingRequests").insertOne({
     _id: requestId, status: "new", name: body.name.trim(), phone: body.phone.trim(), address: body.method === "pickup" ? "" : body.address.trim(), pin: body.pin?.trim() || "", note: body.note?.trim() || "",
     method: body.method, start: body.start, end: body.end, days, deliveryFee, estimatedTotal,
-    items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, stock: product.stock ?? 1 })),
+    items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, stock: product.stock ?? 1 })),
     createdAt: new Date(), updatedAt: new Date(), billToken: randomBytes(18).toString("base64url"), payment: "unpaid",
   });
   return Response.json({ requestId, estimatedTotal }, { status: 201 });

@@ -20,6 +20,7 @@ export const defaultStoreSettings: StoreSettings = {
   facebookUrl: "https://www.facebook.com/bamm.bii.16",
   shippingText: "จัดส่ง รับเองที่ร้าน ฟรี · ไปรษณีย์ / EMS +฿{{emsFee}} · แมสเซนเจอร์ (Grab / LINE MAN) ตามระยะทาง",
   emsFee: 50,
+  rentalPricing: { tiers: [], extraPerDay: null },
   rentalDocument: { deposit: 0, bank: "", accountName: "", accountNumber: "", qrImage: "", returnAddress: "", returnPhone: "", returnMethod: "ไปรษณีย์ / Flash / KEX" },
   rentalRules: [
     "ทางร้านจะจัดส่งล่วงหน้าให้ 3 วัน เช่น แจ้งเช่า 5–10/5 ทางร้านจะจัดส่งวันที่ 2/5 คืนวันที่ 11/5 ก่อน 14:00",
