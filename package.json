@@ -9,7 +9,9 @@
     "lint": "eslint",
     "rental-history:extract": "python3 scripts/extract-rental-history.py",
     "rental-history:dry-run": "node --env-file=.env.local scripts/import-rental-history.mjs",
-    "rental-history:import": "node --env-file=.env.local scripts/import-rental-history.mjs --commit"
+    "rental-history:import": "node --env-file=.env.local scripts/import-rental-history.mjs --commit",
+    "products:merge:dry-run": "node --env-file=.env.local scripts/merge-products.mjs",
+    "products:merge:commit": "node --env-file=.env.local scripts/merge-products.mjs --commit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
