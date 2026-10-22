@@ -10,6 +10,7 @@ import { priceFor, tiersOf, type RentalPricing } from "@/lib/pricing";
 import { mapsLink } from "@/lib/delivery";
 import { enabledOptions, freeEligible, shippingFor, standardFee } from "@/lib/shipping";
 import { addDays, planFor, returnMethods, countUseDays, type ReturnMethod } from "@/lib/schedule";
+import { useToday } from "@/lib/use-today";
 import RentalTimeline from "./rental-timeline";
 import { identityAllowed } from "@/lib/identity";
 
@@ -87,8 +88,8 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const billedAs = days > 0 && packageDays.length && !packageDays.includes(days) ? packageDays.find(count => count > days) : undefined;
   const blocked = items.some(item => item.unavailable);
   const plan = days > 0 ? planFor(settings, start, end, method, returnMethod) : null;
-  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const tooSoon = !!plan && plan.ship < todayKey;
+  const todayKey = useToday();
+  const tooSoon = !!plan && !!todayKey && plan.ship < todayKey;
   const canSkipDeposit = identityAllowed(settings.verification, rentalTotal, items.map(item => item.category || ""));
   const mode = canSkipDeposit ? depositMode : "deposit";
   const carriers = enabledOptions(settings);
