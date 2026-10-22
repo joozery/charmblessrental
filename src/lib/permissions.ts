@@ -6,6 +6,7 @@ export const permissionList = [
   { key: "shipping", label: "จัดส่ง รับคืน และเตรียมสินค้า", description: "บันทึกเลขพัสดุ รับคืน ตรวจสภาพ ซัก และยืนยันพร้อมให้เช่า" },
   { key: "deposits", label: "คืนเงินประกัน", description: "คืนเงิน หักเงิน และแนบหลักฐาน" },
   { key: "finance", label: "การเงิน", description: "ดูสรุปและบันทึกรายรับ–รายจ่าย" },
+  { key: "identity", label: "เอกสารยืนยันตัวตน", description: "ดูและตรวจบัตรประชาชนของลูกค้าที่ไม่วางเงินประกัน" },
   { key: "rentals", label: "ประวัติการเช่า", description: "ค้นหารายการเช่าเดิม" },
   { key: "products", label: "สินค้าและคิวว่าง", description: "แก้ไขสินค้า ราคา และจำนวนว่าง" },
   { key: "settings", label: "ตั้งค่าร้าน", description: "หน้าร้านและใบรายละเอียดการเช่า" },
@@ -16,7 +17,7 @@ export const allPermissions = permissionList.map(item => item.key) as Permission
 export const permissionPresets: { label: string; permissions: Permission[] }[] = [
   { label: "ฝ่ายสินค้า", permissions: ["products"] },
   { label: "ฝ่ายจองและจัดส่ง", permissions: ["bookings", "shipping", "rentals", "products"] },
-  { label: "ฝ่ายการเงิน", permissions: ["bookings", "pricing", "payments", "deposits", "finance", "rentals"] },
+  { label: "ฝ่ายการเงิน", permissions: ["bookings", "pricing", "payments", "deposits", "finance", "identity", "rentals"] },
   { label: "ผู้จัดการ (ทุกเมนู)", permissions: allPermissions },
 ];
 export const isPermission = (value: unknown): value is Permission => typeof value === "string" && (allPermissions as string[]).includes(value);

@@ -9,13 +9,15 @@ import { rentalStage, stageLabel, stageSteps } from "@/lib/rental-stage";
 import { returnDay } from "@/lib/schedule";
 import PrintButton from "./print-button";
 import ReturnForm from "./return-form";
+import IdentityForm from "./identity-form";
+import { verificationLabels, type BookingVerification } from "@/lib/identity";
 import "@/app/admin/bookings/bookings.css";
 import "./bill.css";
 
 export const metadata = { title: "ใบรายละเอียดการเช่า | Charm Bless", robots: { index: false, follow: false } };
 type BillDoc = Omit<DocRow, "createdAt" | "items"> & {
   status: string; payment?: "unpaid" | "paid"; billToken: string; createdAt: Date; method?: string; items: (DocRow["items"][number] & { unitSku?: string })[];
-  shipment?: { carrier: string; trackingNumber: string; shippedAt: Date }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returned?: { at: Date };
+  verification?: BookingVerification; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returned?: { at: Date };
 };
 // What the next customer sees while their reserved piece is still being prepared.
 const prepText: Partial<Record<UnitStatus, string>> = { rented: "รอรับสินค้าคืนจากลูกค้ารอบก่อน", inspection: "กำลังตรวจสภาพสินค้า", washing: "กำลังซักและทำความสะอาด", repair: "กำลังดูแลซ่อมแซม" };
@@ -26,7 +28,7 @@ async function Content({ params }: PageProps) {
   await connection();
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) notFound();
-  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
+  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, verification: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
   if (!row) notFound();
   const stage = rentalStage(row), pickup = row.method === "pickup";
   const skus = row.items.map(item => item.unitSku).filter((sku): sku is string => !!sku);
@@ -34,13 +36,18 @@ async function Content({ params }: PageProps) {
   const unitStatus = new Map<string, UnitStatus>();
   if (preparing && skus.length) for (const product of await (await database()).collection<Product>("products").find({ "units.sku": { $in: skus } }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, legacyId: 1, units: 1 } }).toArray()) for (const unit of unitsOf(product)) if (skus.includes(unit.sku)) unitStatus.set(unit.sku, unit.status);
   const settings = await getStoreSettings();
-  const { shipment, customerReturn, returned, ...rest } = row;
-  const doc: DocRow = { ...rest, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
+  const { shipment, customerReturn, returned, verification, ...rest } = row;
+  const doc: DocRow = { ...rest, verification: verification || null, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
   const store = { logoImage: settings.logoImage, lineUrl: settings.lineUrl, instagramUrl: settings.instagramUrl, rentalRules: settings.rentalRules, rentalDocument: settings.rentalDocument };
   const quote = quoteForRow(doc, settings.rentalDocument);
   const paid = row.payment === "paid";
   return <main className="bill-page">
     <header className="bill-head"><div><span>CHARM BLESS RENTAL</span><h1>ใบรายละเอียดการเช่า</h1><p>เลขที่คำขอ {doc._id}</p></div>{row.status !== "cancelled" && row.quote && <strong className={paid ? "bill-status is-paid" : "bill-status"}>{paid ? "ชำระเงินแล้ว" : "รอชำระเงิน"}</strong>}</header>
+    {row.status !== "cancelled" && verification && !returned && <div className={`bill-track bill-identity is-${verification.status}`}><strong>ยืนยันตัวตนแทนเงินประกัน · {verificationLabels[verification.status]}</strong>
+            {verification.status === "approved" ? <p>✅ เรียบร้อยแล้ว ไม่ต้องวางเงินประกัน{verification.reused ? " (ใช้ข้อมูลยืนยันตัวตนเดิม)" : ""}</p>
+              : verification.status === "submitted" ? <p>ร้านได้รับเอกสารแล้ว กำลังตรวจ จะแจ้งผลทาง LINE ค่ะ</p>
+              : <>{verification.status === "rejected" && verification.reason && <p className="bill-error">ร้านขอเอกสารใหม่: {verification.reason}</p>}<p>ส่งก่อนวันจัดส่ง{row.schedule ? ` (${dateLabel(row.schedule.ship)})` : ""} ไม่เช่นนั้นร้านจะจัดส่งไม่ได้</p><IdentityForm token={token} defaults={{ fullName: row.name || "", address: row.address || "" }} deleteAfterDays={settings.verification.deleteAfterDays} /></>}
+          </div>}
     {row.status === "cancelled" ? <p className="bill-notice">คำขอนี้ถูกยกเลิกแล้ว หากมีข้อสงสัยกรุณาติดต่อร้านทาง LINE</p>
       : !row.quote ? <p className="bill-notice">ร้านกำลังจัดทำบิลของคุณ กรุณารอสักครู่ หรือติดต่อร้านทาง LINE</p>
       : <>

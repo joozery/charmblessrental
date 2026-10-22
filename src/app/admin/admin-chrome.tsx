@@ -30,6 +30,7 @@ export default function AdminChrome({ user, counts, children }: {
     { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
     { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, permission: "bookings" as Permission },
     { href: "/admin/preparation", title: "เตรียมสินค้า", description: "ตรวจสภาพ ซัก ซ่อม และยืนยันพร้อมให้เช่า", icon: "box" as const, count: null as number | null, permission: "shipping" as Permission },
+    { href: "/admin/identity", title: "ยืนยันตัวตน", description: "ลูกค้าที่ไม่วางเงินประกัน", icon: "users" as const, count: null as number | null, permission: "identity" as Permission },
     { href: "/admin/finance", title: "สรุปการเงิน", description: "ยอดเช่า ยอดชำระ และเงินประกัน", icon: "payment" as const, count: null as number | null, permission: "finance" as Permission },
     { href: "/admin/store-settings", title: "ตั้งค่าหน้าร้าน", description: "ข้อความและช่องทางติดต่อหน้าร้าน", icon: "sliders" as const, count: null as number | null, permission: "settings" as Permission },
     { href: "/admin/rental-document-settings", title: "ตั้งค่าใบรายละเอียดการเช่า", description: "บัญชีชำระเงินและข้อมูลส่งคืน", icon: "payment" as const, count: null as number | null, permission: "settings" as Permission },
@@ -41,7 +42,7 @@ export default function AdminChrome({ user, counts, children }: {
     ...(user.role === "owner" ? [{ href: "/admin/admins", title: "จัดการแอดมิน", description: "ทีมงานและสิทธิ์ใช้งาน", icon: "users" as const, count: counts.admins }] : []),
   ].filter(item => allowed(item.permission));
   const navigationGroups = [
-    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings", "/admin/preparation"].includes(item.href)) },
+    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings", "/admin/identity", "/admin/preparation"].includes(item.href)) },
     { label: "จัดการร้าน", items: navigation.filter(item => ["/admin/finance", "/admin/store-settings", "/admin/products", "/admin/rental-pricing", "/admin/delivery-settings", "/admin/availability"].includes(item.href)) },
     { label: "เอกสารการเช่า", items: navigation.filter(item => item.href === "/admin/rental-document-settings") },
     { label: "ทีมงาน", items: navigation.filter(item => ["/admin/admins", "/admin/activity"].includes(item.href)) },

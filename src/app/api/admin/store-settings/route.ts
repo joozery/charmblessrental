@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   }
   const storefrontSettings = { ...body };
   // Edited on their own pages; a stale copy from this form must not overwrite them.
-  delete storefrontSettings.rentalDocument; delete storefrontSettings.rentalPricing; delete storefrontSettings.messenger; delete storefrontSettings.extraDayRates; delete storefrontSettings.shippingOptions; delete storefrontSettings.freeShipping; delete storefrontSettings.schedule; delete storefrontSettings.emsFee;
+  delete storefrontSettings.rentalDocument; delete storefrontSettings.rentalPricing; delete storefrontSettings.messenger; delete storefrontSettings.extraDayRates; delete storefrontSettings.shippingOptions; delete storefrontSettings.freeShipping; delete storefrontSettings.schedule; delete storefrontSettings.verification; delete storefrontSettings.emsFee;
   const before = await getStoreSettings();
   await (await database()).collection<StoreSettings & { _id?: string }>("storeSettings").updateOne({ _id: "main" }, { $set: storefrontSettings, $setOnInsert: { _id: "main" } }, { upsert: true });
   revalidateTag("catalog", { expire: 0 });

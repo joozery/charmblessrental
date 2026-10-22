@@ -4,6 +4,7 @@ import { database } from "@/lib/mongodb";
 import { lineConfigured, pushLine } from "@/lib/line";
 import { getQueue } from "@/lib/availability-store";
 import { addDays, blockRange, returnDay, type ScheduleRecord } from "@/lib/schedule";
+import type { BookingVerification } from "@/lib/identity";
 import { audit, diff } from "@/lib/audit";
 import { deposits, recordBookingPayment, thaiDay, validDay, voidBookingPayment } from "@/lib/finance";
 import type { Permission } from "@/lib/permissions";
@@ -15,7 +16,7 @@ const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord };
+type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken, payment: booking.payment || "unpaid" } });
     const origin = new URL(request.url).origin, billUrl = `${origin}/bill/${billToken}`;
     const imageUrl = `${billUrl}/image?v=${Date.now()}`;
-    const message = { type: "text" as const, text: `ใบรายละเอียดการเช่า (${booking._id}) ของคุณ${booking.name ? " " + booking.name : ""} พร้อมแล้วค่ะ\nดูบิลและบันทึกไฟล์: ${billUrl}\n\nกรุณาตรวจสอบยอด โอนเงินตามยอดสุทธิ และส่งสลิปในแชทนี้นะคะ 🙏` };
+    const message = { type: "text" as const, text: `ใบรายละเอียดการเช่า (${booking._id}) ของคุณ${booking.name ? " " + booking.name : ""} พร้อมแล้วค่ะ\nดูบิลและบันทึกไฟล์: ${billUrl}\n\nกรุณาตรวจสอบยอด โอนเงินตามยอดสุทธิ และส่งสลิปในแชทนี้นะคะ 🙏${booking.verification?.mode === "identity" && booking.verification.status !== "approved" ? `\n\nคำขอนี้ไม่วางเงินประกัน รบกวนยืนยันตัวตน (บัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่) ได้ที่ลิงก์เดียวกันนี้ก่อนวันจัดส่งค่ะ` : ""}` };
     try { await pushLine(booking.lineUserId, origin.startsWith("https://") ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }, message] : [message]); } catch (error) { console.error("LINE push failed:", error); return Response.json({ error: "ส่งข้อความไม่สำเร็จ ลูกค้าอาจบล็อกบัญชีร้านหรือ token ไม่ถูกต้อง" }, { status: 502 }); }
     await bookings.updateOne({ _id: body.id }, { $set: { lineSentAt: new Date() } });
     await log("booking.bill_sent", "ส่งบิลทาง LINE");
@@ -91,6 +92,8 @@ export async function POST(request: Request) {
     if (booking.returned) return Response.json({ error: "รับคืนสินค้ารายการนี้แล้ว" }, { status: 409 });
     const picks = body.units === undefined ? booking.items.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
     if (!picks) return Response.json({ error: "ชิ้นสินค้าที่เลือกไม่ถูกต้อง กรุณาโหลดหน้าใหม่" }, { status: 400 });
+    // No deposit was taken, so the piece only leaves once the customer's identity has been checked.
+    if (!booking.shipment && booking.verification?.mode === "identity" && booking.verification.status !== "approved") return Response.json({ error: "ลูกค้าเลือกไม่วางเงินประกัน ต้องตรวจเอกสารยืนยันตัวตนให้ผ่านก่อนจัดส่ง" }, { status: 409 });
     const items = booking.items.map((item, index) => withUnit(item, picks[index]));
     const released = booking.items.map(item => item.unitSku).filter((sku): sku is string => !!sku && !picks.includes(sku));
     const shipment: Shipment = { carrier: body.carrier.trim(), trackingNumber: body.trackingNumber.trim(), shippedAt: booking.shipment?.shippedAt || new Date(), by, byName: admin.name };

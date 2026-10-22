@@ -11,8 +11,9 @@ import { mapsLink } from "@/lib/delivery";
 import { enabledOptions, freeEligible, shippingFor, standardFee } from "@/lib/shipping";
 import { addDays, planFor, returnMethods, countUseDays, type ReturnMethod } from "@/lib/schedule";
 import RentalTimeline from "./rental-timeline";
+import { identityAllowed } from "@/lib/identity";
 
-export type BookingItem = { id: number; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; unavailable?: boolean };
+export type BookingItem = { id: number; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; category?: string; unavailable?: boolean };
 
 // Days of use, both ends counted: 19–28 Nov is 10 days.
 export const rentalDays = countUseDays;
@@ -48,6 +49,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState(false);
+  const [depositMode, setDepositMode] = useState<"deposit" | "identity">("deposit");
   const [remembered, setRemembered] = useState(false);
   const [requestId, setRequestId] = useState("");
   const [copiedId, setCopiedId] = useState(false);
@@ -87,6 +89,8 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const plan = days > 0 ? planFor(settings, start, end, method, returnMethod) : null;
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const tooSoon = !!plan && plan.ship < todayKey;
+  const canSkipDeposit = identityAllowed(settings.verification, rentalTotal, items.map(item => item.category || ""));
+  const mode = canSkipDeposit ? depositMode : "deposit";
   const carriers = enabledOptions(settings);
   const free = freeEligible(settings, items.length);
   const missing = settings.freeShipping.enabled ? settings.freeShipping.minItems - items.length : 0;
@@ -122,7 +126,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   async function sendRequest() {
     setSubmitting(true); setError("");
     try {
-      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id })), start, end, name, phone, method, returnMethod, address, pin, note, acceptPrivacy: accepted }) });
+      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id })), start, end, name, phone, method, returnMethod, depositMode: mode, address, pin, note, acceptPrivacy: accepted }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่");
       saveContact({ name: name.trim(), phone: phone.trim(), address: address.trim(), pin: pin.trim(), method, returnMethod });
@@ -131,12 +135,12 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
     finally { setSubmitting(false); }
   }
   function opened() {
-    setStart(initialStart); setEnd(initialEnd); setStep(0); if (initialReturn) setReturnMethod(initialReturn); if (initialMethod) setMethod(initialMethod); setError(""); setRequestId(""); setAccepted(false);
+    setDepositMode("deposit"); setStart(initialStart); setEnd(initialEnd); setStep(0); if (initialReturn) setReturnMethod(initialReturn); if (initialMethod) setMethod(initialMethod); setError(""); setRequestId(""); setAccepted(false);
     const saved = loadContact();
     if (saved && !name && !phone) { setName(saved.name); setPhone(saved.phone); setAddress(saved.address); setPin(saved.pin); if (!initialMethod && ["pickup", "messenger", ...carriers.map(option => option.id)].includes(saved.method)) setMethod(saved.method); if (!initialReturn && saved.returnMethod && returnMethods.some(item => item.key === saved.returnMethod)) setReturnMethod(saved.returnMethod); setRemembered(true); }
   }
 
-  const success = <div className="booking-review booking-success"><p className="booking-notice" role="status">ส่งคำขอเรียบร้อยแล้ว · ยังไม่ใช่การยืนยันจอง ร้านจะตรวจสอบคิวก่อน</p><div className="booking-request-code"><span>เลขที่คำขอของคุณ</span><strong>{requestId}</strong><button type="button" onClick={() => { void navigator.clipboard?.writeText(requestId).then(() => { setCopiedId(true); setTimeout(() => setCopiedId(false), 2000); }).catch(() => undefined); }}>{copiedId ? "คัดลอกแล้ว ✓" : "คัดลอก"}</button></div><ol className="booking-next-steps"><li><b>1</b><span><strong>แอด LINE ร้าน</strong><small>กดปุ่มด้านล่างเพื่อเปิด LINE</small></span></li><li><b>2</b><span><strong>แจ้งเบอร์โทรที่ใช้จอง ({phone})</strong><small>พร้อมส่งเลขที่คำขอทางแชทเพื่อให้ร้านตรวจสอบ</small></span></li><li><b>3</b><span><strong>รับใบรายละเอียดการเช่าและลิงก์ชำระเงิน</strong><small>ร้านจะส่งลิงก์บิลให้ทาง LINE ตรวจสอบยอดแล้วชำระเงินเพื่อยืนยันการจอง</small></span></li></ol><a href={settings.lineUrl} target="_blank" rel="noopener noreferrer" className="pill pill-pink w-full">แอด LINE และแจ้งเบอร์โทร</a></div>;
+  const success = <div className="booking-review booking-success"><p className="booking-notice" role="status">ส่งคำขอเรียบร้อยแล้ว · ยังไม่ใช่การยืนยันจอง ร้านจะตรวจสอบคิวก่อน</p><div className="booking-request-code"><span>เลขที่คำขอของคุณ</span><strong>{requestId}</strong><button type="button" onClick={() => { void navigator.clipboard?.writeText(requestId).then(() => { setCopiedId(true); setTimeout(() => setCopiedId(false), 2000); }).catch(() => undefined); }}>{copiedId ? "คัดลอกแล้ว ✓" : "คัดลอก"}</button></div><ol className="booking-next-steps"><li><b>1</b><span><strong>แอด LINE ร้าน</strong><small>กดปุ่มด้านล่างเพื่อเปิด LINE</small></span></li><li><b>2</b><span><strong>แจ้งเบอร์โทรที่ใช้จอง ({phone})</strong><small>พร้อมส่งเลขที่คำขอทางแชทเพื่อให้ร้านตรวจสอบ</small></span></li>{mode === "identity" && <li><b>✓</b><span><strong>ยืนยันตัวตนแทนเงินประกัน</strong><small>ร้านจะส่งลิงก์ให้ส่งรูปบัตรประชาชน เซลฟี่คู่บัตร และที่อยู่ ก่อนวันจัดส่ง</small></span></li>}<li><b>3</b><span><strong>รับใบรายละเอียดการเช่าและลิงก์ชำระเงิน</strong><small>ร้านจะส่งลิงก์บิลให้ทาง LINE ตรวจสอบยอดแล้วชำระเงินเพื่อยืนยันการจอง</small></span></li></ol><a href={settings.lineUrl} target="_blank" rel="noopener noreferrer" className="pill pill-pink w-full">แอด LINE และแจ้งเบอร์โทร</a></div>;
 
   const dates = <>
     <div className="booking-items">{items.length === 0 && <p className="booking-help" role="status">ตะกร้ายังว่าง กรุณาเลือกสินค้าและเพิ่มลงตะกร้าก่อนขอจอง</p>}{items.map(item => <div key={item.id}>{item.image && <Image className="booking-product-photo" src={item.image} alt={item.name} width={60} height={78} />}<div className="booking-product-text"><strong>{item.name}</strong>{onRemove && <button type="button" className="booking-remove" aria-label={`นำ ${item.name} ออก`} onClick={() => onRemove(item.id)}>นำออก</button>}<span>{item.unavailable ? "ช่วงนี้เต็ม" : "ร้านจะตรวจสอบคิวก่อนยืนยัน"}</span></div></div>)}</div>
@@ -169,6 +173,10 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
     {remembered && <p className="booking-remembered">กรอกข้อมูลจากครั้งก่อนให้แล้ว <button type="button" onClick={() => { forgetContact(); setRemembered(false); setName(""); setPhone(""); }}>ล้างข้อมูล</button></p>}
     <label>ชื่อ *<input autoComplete="name" value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อผู้ติดต่อ" /></label>
     <label>เบอร์โทร *<input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="08xxxxxxxx" /></label><p className="booking-help">มือถือไทย 10 หลัก · อยู่ต่างประเทศใส่ + และรหัสประเทศ</p>
+    {canSkipDeposit && <fieldset><legend>เงินประกัน</legend><div className="booking-deposit-options">
+      <label className={`booking-method ${mode === "deposit" ? "selected" : ""}`}><input type="radio" name="deposit" checked={mode === "deposit"} onChange={() => setDepositMode("deposit")} /><span><strong>วางเงินประกัน</strong><small>ร้านแจ้งยอดในบิล ได้คืนหลังคืนชุด</small></span></label>
+      <label className={`booking-method ${mode === "identity" ? "selected" : ""}`}><input type="radio" name="deposit" checked={mode === "identity"} onChange={() => setDepositMode("identity")} /><span><strong>ไม่วางเงินประกัน · ยืนยันตัวตนแทน</strong><small>{settings.verification.note}</small></span></label>
+    </div>{mode === "identity" && <p className="booking-help">หลังส่งคำขอ ร้านจะส่งลิงก์ให้ยืนยันตัวตนทาง LINE ต้องส่งเอกสารก่อนวันจัดส่ง ข้อมูลใช้เพื่อการเช่านี้เท่านั้น และลบอัตโนมัติหลังจบการเช่า {settings.verification.deleteAfterDays} วัน</p>}</fieldset>}
     <label>โน้ตถึงร้าน (ไม่บังคับ)<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder="เช่น งานรับปริญญา / สอบถามเพิ่มเติม…" /></label>
     <dl className="booking-summary">{[["วันใช้งาน", `${shortDate(start)} – ${shortDate(end)} · ${days} วัน`, 0], ["รับชุด", `${methodLabel}${plan ? ` · ร้าน${method === "pickup" ? "เตรียมไว้" : "ส่ง"} ${shortDate(plan.ship)}` : ""}`, 1], ["คืนชุด", `${returnMethods.find(item => item.key === returnMethod)?.label}${plan ? ` · ภายใน ${shortDate(plan.returnDate)}` : ""}`, 1], ...(method !== "pickup" ? [["ที่อยู่", address, 1]] : [])].map(([label, value, at]) => <div key={label as string}><dt>{label}</dt><dd>{value}</dd><button type="button" onClick={() => goTo(at as number)}>แก้ไข</button></div>)}</dl>
     <details className="booking-rules"><summary>กติกาของร้าน และการใช้ข้อมูลติดต่อ</summary><RentalRules rules={settings.rentalRules} /><p>ร้านบันทึกชื่อ เบอร์โทร ที่อยู่จัดส่ง (ถ้ามี) และรายละเอียดคำขอ เพื่อประสานงานการเช่าและติดต่อกลับเท่านั้น</p></details>

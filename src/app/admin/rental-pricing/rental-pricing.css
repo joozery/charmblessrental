@@ -28,3 +28,8 @@ body:has(.rental-pricing-page),body:has(.rental-pricing-page) .chrome-shell,body
 .shipping-row .delivery-check{grid-column:span 1;font-size:12px}
 .shipping-remove{justify-self:end;padding:6px 10px;border:1px solid #f3c8c8;border-radius:7px;background:#fff;color:#b42318;font:inherit;font-size:12px;cursor:pointer}
 @media(max-width:560px){.shipping-row{grid-template-columns:1fr}}
+.identity-categories{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px}
+.rental-pricing-card fieldset.delivery-form{border:0;margin:0;padding:0}
+.rental-pricing-card td small{color:#98a2b3}
+.rental-pricing-card .bookings-identity-status{display:inline-block;padding:2px 8px;border-radius:999px;background:#fff4df;color:#9a6918;font-size:11px;font-weight:600}
+.rental-pricing-card .bookings-identity-status.is-submitted{background:#eaf2ff;color:#1d5bbf}.rental-pricing-card .bookings-identity-status.is-approved{background:#e9f6ee;color:#277c51}.rental-pricing-card .bookings-identity-status.is-rejected{background:#fdecec;color:#b42318}

@@ -9,13 +9,14 @@ import { unitStatusLabels } from "@/lib/products";
 import { rentalStage, stageLabel, stageSteps } from "@/lib/rental-stage";
 import type { UnitChoice } from "@/lib/rental-units";
 import { returnDay, returnMethods, type ScheduleRecord } from "@/lib/schedule";
+import { verificationLabels, type BookingVerification } from "@/lib/identity";
 
 export type Shipment = { carrier: string; trackingNumber: string; shippedAt: string; byName: string };
 export type Returned = { at: string; condition: string; note: string; byName: string };
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string };
 export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
-export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; deposit?: Deposit };
+export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit };
 type Log = { _id: string; at: string; action: string; summary: string; actorName: string; actorEmail: string; changes: { field: string; before: unknown; after: unknown }[] };
 
 const conditions = [{ key: "good", label: "สภาพปกติ" }, { key: "damaged", label: "ชำรุด / มีคราบ" }, { key: "missing", label: "สูญหาย / ไม่ครบ" }];
@@ -31,8 +32,34 @@ async function send(url: string, body: Record<string, unknown>) {
   return data;
 }
 
+type IdentityData = { profile: { fullName: string; address: string; backupPhone: string; social: string; consentAt: string } | null; files: { _id: string; kind: string }[] };
+// Renting without a deposit: show what the customer sent (only to accounts with the "identity" permission) and approve it or ask again.
+function IdentityReview({ row, canReview, onChange }: { row: FulfillmentRow; canReview: boolean; onChange: (verification: BookingVerification) => void }) {
+  const verification = row.verification!;
+  const [data, setData] = useState<IdentityData | null>(null);
+  const [reason, setReason] = useState(""); const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  async function load() { setBusy(true); setError(""); try { const response = await fetch(`/api/admin/identity?bookingId=${encodeURIComponent(row._id)}`, { cache: "no-store" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "โหลดเอกสารไม่สำเร็จ"); setData(result); } catch (cause) { setError(cause instanceof Error ? cause.message : "โหลดเอกสารไม่สำเร็จ"); } finally { setBusy(false); } }
+  async function review(approve: boolean) { setBusy(true); setError(""); try { const result = await send("/api/admin/identity", { action: "review", bookingId: row._id, approve, reason }); onChange(result.verification); setAsking(false); setReason(""); setNotice(`${approve ? "ยืนยันตัวตนผ่านแล้ว" : "ขอเอกสารใหม่แล้ว"}${result.lineNotified ? " · แจ้งลูกค้าทาง LINE แล้ว" : ""}`); } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); } }
+  return <div className="bookings-detail-section bookings-identity"><Icon name="users" /><div>
+    <h3>ยืนยันตัวตนแทนเงินประกัน</h3>
+    <p className={`bookings-identity-status is-${verification.status}`}>{verificationLabels[verification.status]}{verification.reused ? " (ใช้ข้อมูลเดิม)" : ""}{verification.submittedAt ? ` · ส่งเมื่อ ${stamp(String(verification.submittedAt))}` : ""}{verification.reviewedByName && verification.reviewedAt ? ` · ตรวจโดย ${verification.reviewedByName} ${stamp(String(verification.reviewedAt))}` : ""}</p>
+    {verification.status === "rejected" && verification.reason && <p className="bookings-fulfillment-meta">เหตุผลที่ขอใหม่: {verification.reason}</p>}
+    {verification.status !== "approved" && <p className="bookings-fulfillment-meta">จัดส่งได้หลังยืนยันตัวตนผ่าน · ในใบสรุปตั้งเงินประกันเป็น 0 ให้อัตโนมัติ</p>}
+    {!canReview ? <p className="bookings-fulfillment-meta">บัญชีนี้ไม่มีสิทธิ์ดูเอกสารยืนยันตัวตน</p> : verification.status !== "pending" && <>
+      {!data ? <button type="button" className="bookings-timeline-load" disabled={busy} onClick={load}>{busy ? "กำลังโหลด…" : "ดูเอกสาร (การเปิดดูจะถูกบันทึก)"}</button> : <div className="bookings-identity-data">
+        {data.profile ? <dl><div><dt>ชื่อ-นามสกุล</dt><dd>{data.profile.fullName}</dd></div><div><dt>ที่อยู่</dt><dd>{data.profile.address}</dd></div><div><dt>เบอร์สำรอง</dt><dd>{data.profile.backupPhone}</dd></div>{data.profile.social && <div><dt>IG / FB</dt><dd>{data.profile.social}</dd></div>}</dl> : <p>ไม่พบข้อมูลลูกค้า</p>}
+        <div className="bookings-identity-files">{data.files.length ? data.files.map(file => <a key={file._id} href={`/api/admin/identity/file/${file._id}`} target="_blank" rel="noopener noreferrer"><img src={`/api/admin/identity/file/${file._id}`} alt={file.kind === "idCard" ? "บัตรประชาชน" : "เซลฟี่คู่บัตร"} /><span>{file.kind === "idCard" ? "บัตรประชาชน" : "เซลฟี่คู่บัตร"}</span></a>) : <p>ไม่มีไฟล์ (อาจถูกลบตามกำหนดแล้ว)</p>}</div>
+      </div>}
+      {verification.status === "submitted" && data && (asking ? <div className="bookings-inline-form"><label className="is-wide">บอกลูกค้าว่าต้องแก้อะไร<input value={reason} maxLength={300} onChange={event => setReason(event.target.value)} placeholder="เช่น รูปบัตรไม่ชัด / ชื่อไม่ตรงกับบัตร" /></label><div><button type="button" disabled={busy} onClick={() => setAsking(false)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || !reason.trim()} onClick={() => review(false)}>ส่งให้ลูกค้าแก้</button></div></div>
+        : <p className="bookings-fulfillment-wait"><button type="button" disabled={busy} onClick={() => review(true)}>✓ ผ่าน ยืนยันตัวตนแล้ว</button><button type="button" disabled={busy} onClick={() => setAsking(true)}>ขอเอกสารใหม่</button></p>)}
+    </>}
+    {error && <p className="admin-error" role="alert">{error}</p>}{notice && <p className="admin-success" role="status">{notice}</p>}
+  </div></div>;
+}
+
 export default function BookingFulfillment({ row, permissions, unitChoices, onChange }: { row: FulfillmentRow; permissions: Permission[]; unitChoices: Record<number, UnitChoice[]>; onChange: (patch: Partial<FulfillmentRow>) => void }) {
-  const canShip = permissions.includes("shipping"), canRefund = permissions.includes("deposits");
+  const canShip = permissions.includes("shipping"), canRefund = permissions.includes("deposits"), canReview = permissions.includes("identity");
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [shipForm, setShipForm] = useState<{ carrier: string; trackingNumber: string; units: string[] } | null>(null);
   const [returnForm, setReturnForm] = useState<{ condition: string; note: string; units: string[] } | null>(null);
@@ -71,6 +98,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, onCh
   const deducted = refundForm && row.deposit ? Math.max(0, row.deposit.amount - (Number(refundForm.refund) || 0)) : 0;
 
   return <>
+    {row.verification && row.status !== "cancelled" && <IdentityReview row={row} canReview={canReview} onChange={verification => onChange({ verification })} />}
     {row.status !== "cancelled" && <div className="bookings-detail-section bookings-fulfillment"><Icon name="delivery" /><div>
       <h3>{pickup ? "ส่งมอบและรับคืน" : "จัดส่งและรับคืน"}</h3>
       {row.schedule && <p className="bookings-fulfillment-meta">{pickup ? "เตรียมให้ลูกค้ารับ" : "ต้องส่งของ"} <b>{day(`${row.schedule.ship}T00:00:00Z`)}</b> · ใช้งาน {day(`${row.start}T00:00:00Z`)} – {day(`${row.end}T00:00:00Z`)} · คืน {day(`${row.schedule.returnDate}T00:00:00Z`)} ({returnMethods.find(item => item.key === row.schedule!.returnMethod)?.label}) · Gap {row.schedule.gap} วัน · รับคิวใหม่ได้ {day(`${row.schedule.ready}T00:00:00Z`)}</p>}

@@ -245,3 +245,10 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-unit-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
 .bookings-unit-warning{color:#b54708;font-size:11px}
 .bookings-row-status{display:grid;justify-items:end;gap:3px}.bookings-row-status small{color:#79516c;font-size:10px;font-weight:600;text-align:right}
+.bookings-identity-status{display:inline-block;margin:6px 0 0;padding:3px 10px;border-radius:999px;background:#fff4df;color:#9a6918;font-size:12px;font-weight:600}
+.bookings-identity-status.is-submitted{background:#eaf2ff;color:#1d5bbf}.bookings-identity-status.is-approved{background:#e9f6ee;color:#277c51}.bookings-identity-status.is-rejected{background:#fdecec;color:#b42318}
+.bookings-identity-data{display:grid;gap:10px;margin-top:10px}
+.bookings-identity-data dl{display:grid;gap:4px;margin:0;font-size:12px}.bookings-identity-data dl div{display:grid;grid-template-columns:90px 1fr;gap:8px}.bookings-identity-data dt{color:#98a2b3}.bookings-identity-data dd{margin:0;overflow-wrap:anywhere}
+.bookings-identity-files{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.bookings-identity-files a{display:grid;gap:4px;color:#475467;font-size:11px;text-align:center}.bookings-identity-files img{width:100%;height:140px;border:1px solid #e4e7ec;border-radius:8px;background:#f9fafb;object-fit:contain}
+.bookings-row-status small.is-identity{color:#9a6918}.bookings-row-status small.is-identity.is-approved{color:#277c51}.bookings-row-status small.is-identity.is-submitted{color:#1d5bbf}

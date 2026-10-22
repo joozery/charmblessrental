@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { RentalDocument, dateLabel, money, quoteForRow, safeUrl, type DocRow, type Quote, type StoreInfo } from "@/components/rental-document";
 import type { Permission } from "@/lib/permissions";
 import { rentalStage, stageLabel } from "@/lib/rental-stage";
+import { verificationLabels } from "@/lib/identity";
 import type { UnitChoice } from "@/lib/rental-units";
 import BookingFulfillment, { type FulfillmentRow } from "./booking-fulfillment";
 
@@ -82,7 +83,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
           <span className="bookings-row-product">{row.items[0]?.image && <Image unoptimized src={row.items[0].image} alt="" width={36} height={48} />}<span><strong>{row.items[0]?.sku || row.items[0]?.name || "สินค้า"}</strong><small>{row.items.length > 1 ? row.items.length + " รายการ" : row.items[0]?.name}</small></span></span>
           <span className="bookings-row-dates"><strong>{dateLabel(row.start)} – {dateLabel(row.end)}</strong><small>{row.days} วัน | {(row.shipping?.label || methodLabel(row.method))}</small></span>
           <span className="bookings-row-money"><strong>{row.estimatedTotal === null ? "สอบถามราคา" : money(row.estimatedTotal) + " บาท"}</strong><small>ค่าส่ง {money(row.deliveryFee)} บาท{row.shipping?.discount ? ` (ลด ${money(row.shipping.discount)})` : ""}</small></span>
-          <span className="bookings-row-status"><span className={"booking-request-status is-" + row.status}>{statusLabel(row.status)}</span>{row.status !== "cancelled" && rentalStage(row) !== "pending" && <small>{stageLabel(rentalStage(row), row.method)}</small>}</span>
+          <span className="bookings-row-status"><span className={"booking-request-status is-" + row.status}>{statusLabel(row.status)}</span>{row.status !== "cancelled" && rentalStage(row) !== "pending" && <small>{stageLabel(rentalStage(row), row.method)}</small>}{row.verification && row.status !== "cancelled" && <small className={`is-identity is-${row.verification.status}`}>ไม่วางมัดจำ · {verificationLabels[row.verification.status]}</small>}</span>
         </button>) : <div className="bookings-inbox-empty"><Icon name="search" /><strong>ไม่พบคำขอจอง</strong><span>ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ</span></div>}</div>
         <div className="bookings-inbox-list-footer"><span>{visible.length.toLocaleString("th-TH")} รายการ</span><span>แสดงคำขอทั้งหมดแล้ว</span></div>
       </section>

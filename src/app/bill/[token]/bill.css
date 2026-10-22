@@ -39,3 +39,13 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-link-button{margin-top:6px;padding:0;border:0;background:none;color:#79516c;font:inherit;font-size:13px;font-weight:600;text-decoration:underline;cursor:pointer}
 @media(max-width:560px){.bill-track{padding:14px}.bill-steps li{font-size:10px}.bill-return-form{grid-template-columns:1fr}}
 @media print{.bill-track{display:none!important}}
+.bill-identity strong{display:block;margin-bottom:4px}.bill-identity p{margin:0 0 6px;font-size:14px;line-height:1.7}.bill-identity.is-approved{background:#ecf8f1}.bill-identity.is-submitted{background:#eef4ff}
+.bill-identity-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.bill-identity-form label{display:flex;flex-direction:column;gap:4px;color:#475467;font-size:13px}
+.bill-identity-form input:not([type=checkbox]):not([type=file]),.bill-identity-form textarea{min-height:42px;padding:8px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font:inherit;font-size:15px}
+.bill-identity-form .is-wide{grid-column:1/-1}
+.bill-identity-file{padding:10px;border:1px dashed #d9b9ca;border-radius:10px;background:#fff}
+.bill-identity-file img{max-height:160px;border-radius:8px;object-fit:contain}
+.bill-identity-file span{color:#907181;font-size:12px}
+.bill-identity-consent{flex-direction:row!important;align-items:flex-start;gap:8px!important;line-height:1.6}.bill-identity-consent input{margin-top:4px}
+@media(max-width:560px){.bill-identity-form{grid-template-columns:1fr}}
