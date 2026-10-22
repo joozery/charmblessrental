@@ -25,7 +25,7 @@ async function send(body: Record<string, unknown>) {
 export default function ExtensionPanel({ row, permissions, onChange }: { row: FulfillmentRow; permissions: Permission[]; onChange: (patch: Partial<FulfillmentRow>) => void }) {
   const canExtend = permissions.includes("bookings"), canPay = permissions.includes("payments");
   const [calendar, setCalendar] = useState<{ id: number; label: string } | null>(null);
-  const [form, setForm] = useState<{ toEnd: string; amount: string; touched: boolean } | null>(null);
+  const [form, setForm] = useState<{ toEnd: string; amount: string; touched: boolean; note: string; allowClash: boolean } | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [paying, setPaying] = useState<{ id: string; day: string } | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
@@ -36,7 +36,7 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
   async function run(task: () => Promise<void>) { setBusy(true); setError(""); setNotice(""); try { await task(); } catch (cause) { setError(cause instanceof Error ? cause.message : "ทำรายการไม่สำเร็จ"); } finally { setBusy(false); } }
   const choose = (toEnd: string) => {
     if (!form) return;
-    setForm({ ...form, toEnd }); setPreview(null);
+    setForm({ ...form, toEnd, allowClash: false }); setPreview(null);
     if (toEnd) void run(async () => {
       const data: Preview = await send({ id: row._id, action: "preview", toEnd });
       setPreview(data);
@@ -45,7 +45,7 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
   };
   const create = () => run(async () => {
     if (!form || !preview) return;
-    const data = await send({ id: row._id, action: "create", toEnd: preview.toEnd, amount: Number(form.amount) || 0 });
+    const data = await send({ id: row._id, action: "create", toEnd: preview.toEnd, amount: Number(form.amount) || 0, note: form.note, allowClash: form.allowClash });
     onChange({ extensions: [...extensions, data.extension], schedule: data.schedule });
     setForm(null); setPreview(null);
     setNotice(`ขยายวันเช่าแล้ว${data.lineNotified ? " และส่ง LINE แจ้งลูกค้าแล้ว" : " · ไม่ได้ส่ง LINE (ลูกค้ายังไม่ได้เชื่อม LINE หรือส่งไม่สำเร็จ)"}`);
@@ -66,7 +66,7 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
     <h3>คิวและการเช่าต่อ</h3>
     <p className="bookings-queue-links">ดูคิว:{items.map(item => <button key={item.id} type="button" onClick={() => setCalendar({ id: item.id, label: item.sku || item.name })}><Icon name="calendar" />{item.sku || item.name}</button>)}</p>
     {extensions.length > 0 && <ul className="bookings-extension-list">{extensions.map(item => <li key={item.id} className={`is-${item.status}`}>
-      <span><strong>+{item.addedDays} วัน · ใช้งานถึง {day(item.toEnd)}</strong><small>ค่าเช่าต่อ {money(item.amount)} บาท · {item.createdByName}{item.paidOn ? ` · ชำระ ${day(item.paidOn)}` : ""}</small></span>
+      <span><strong>+{item.addedDays} วัน · ใช้งานถึง {day(item.toEnd)}</strong><small>ค่าเช่าต่อ {money(item.amount)} บาท · {item.createdByName}{item.paidOn ? ` · ชำระ ${day(item.paidOn)}` : ""}</small>{item.note && <small className="bookings-extension-note">หมายเหตุ: {item.note}</small>}{item.clashDates?.length ? <small className="bookings-clash-text">ขยายทับคิวคนอื่น {item.clashDates.map(day).join(", ")}</small> : null}</span>
       <b className={`bookings-extension-badge is-${item.status}`}>{extensionLabels[item.status]}</b>
       {item.status === "unpaid" && <span className="bookings-extension-actions">
         {canPay && (paying?.id === item.id ? <><input type="date" value={paying.day} max={today()} onChange={event => setPaying({ ...paying, day: event.target.value })} aria-label="วันที่ชำระ" /><button type="button" disabled={busy} onClick={() => setPaying(null)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || !paying.day} onClick={markPaid}>ยืนยันรับเงิน</button></>
@@ -74,16 +74,21 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
         {canExtend && latest?.id === item.id && !row.returned && paying?.id !== item.id && <button type="button" disabled={busy} onClick={() => cancel(item)}>ยกเลิกการเช่าต่อ</button>}
       </span>}
     </li>)}</ul>}
-    {canExtend && canStart && !form && <p className="bookings-fulfillment-wait">ใช้งานถึง {day(end)} · คืนภายใน {day(row.schedule!.returnDate)}<button type="button" disabled={busy} onClick={() => { setForm({ toEnd: "", amount: "", touched: false }); setPreview(null); setNotice(""); }}>ขยายวันเช่า</button></p>}
+    {canExtend && canStart && !form && <p className="bookings-fulfillment-wait">ใช้งานถึง {day(end)} · คืนภายใน {day(row.schedule!.returnDate)}<button type="button" disabled={busy} onClick={() => { setForm({ toEnd: "", amount: "", touched: false, note: "", allowClash: false }); setPreview(null); setNotice(""); }}>ขยายวันเช่า</button></p>}
     {form && <div className="bookings-inline-form">
       <label>ใช้งานถึงวันที่ (เดิม {day(end)})<input type="date" min={addDays(end, 1)} value={form.toEnd} onChange={event => choose(event.target.value)} /></label>
       <label>ค่าเช่าต่อ (บาท)<input type="number" min="0" step="1" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value, touched: true })} placeholder={preview?.suggested === null ? "ไม่มีราคาตั้งไว้ กรอกเอง" : ""} /></label>
       {preview && <div className="is-wide bookings-extension-preview">
         <p>+{preview.added} วัน · ลูกค้าคืนชุดภายใน <b>{day(preview.schedule.returnDate)}</b> · รับคิวใหม่ได้ {day(preview.schedule.ready)}{preview.suggested !== null && <> · ราคาแนะนำ {money(preview.suggested)} บาท</>}</p>
-        {preview.conflicts.length ? <p className="is-clash">คิวชน ขยายไม่ได้: {preview.conflicts.map(clash => <span key={`${clash.item}-${clash.date}`}>{day(clash.date)} ({clash.item}){clash.bookings.map(other => <Link key={other.id} href={`/admin/bookings?id=${encodeURIComponent(other.id)}`}> {other.name || other.id}</Link>)}</span>)}</p>
+        {preview.conflicts.length ? <div className="bookings-clash">
+          <strong>⚠️ คิวซ้อนกับลูกค้าคนอื่น</strong>
+          {preview.conflicts.map(clash => <p key={`${clash.item}-${clash.date}`}>{day(clash.date)} · {clash.item}{clash.bookings.map(other => <Link key={other.id} href={`/admin/bookings?id=${encodeURIComponent(other.id)}`}> {other.name || other.id} ({other.id})</Link>)}</p>)}
+          <label><input type="checkbox" checked={form.allowClash} onChange={event => setForm({ ...form, allowClash: event.target.checked })} />ยืนยันขยายวันแม้คิวซ้อน ร้านจะติดต่อจัดการคิวลูกค้าคนต่อไปเอง (สลับชุด / เลื่อนวัน)</label>
+        </div>
           : <p className="is-free"><Icon name="success" />คิวว่าง ขยายวันได้</p>}
       </div>}
-      <div><button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); }}>ยกเลิก</button>{items[0] && <button type="button" disabled={!preview} onClick={() => setCalendar({ id: items[0].id, label: items[0].sku || items[0].name })}>ดูในปฏิทิน</button>}<button type="button" className="is-primary" disabled={busy || !preview || preview.toEnd !== form.toEnd || preview.conflicts.length > 0 || form.amount.trim() === ""} onClick={create}>{busy ? "กำลังตรวจ…" : "ยืนยันขยายวันและแจ้งลูกค้า"}</button></div>
+      <label className="is-wide">หมายเหตุ{preview?.conflicts.length ? " (จำเป็นเมื่อคิวซ้อน)" : " (ไม่บังคับ)"}<input value={form.note} maxLength={500} onChange={event => setForm({ ...form, note: event.target.value })} placeholder="เช่น เครื่องบินดีเลย์ ลูกค้าคืนชุดวันที่ 23" /></label>
+      <div><button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); }}>ยกเลิก</button>{items[0] && <button type="button" disabled={!preview} onClick={() => setCalendar({ id: items[0].id, label: items[0].sku || items[0].name })}>ดูในปฏิทิน</button>}<button type="button" className="is-primary" disabled={busy || !preview || preview.toEnd !== form.toEnd || (preview.conflicts.length > 0 && (!form.allowClash || !form.note.trim())) || form.amount.trim() === ""} onClick={create}>{busy ? "กำลังตรวจ…" : "ยืนยันขยายวันและแจ้งลูกค้า"}</button></div>
     </div>}
     {error && <p className="admin-error" role="alert">{error}</p>}
     {notice && !error && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}

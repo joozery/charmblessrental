@@ -6,6 +6,8 @@ export type ExtensionStatus = "unpaid" | "paid" | "cancelled";
 export type Extension = {
   id: string; fromEnd: string; toEnd: string; addedDays: number; amount: number; status: ExtensionStatus;
   createdAt: string | Date; createdByName: string;
+  // The shop's note (e.g. a delayed flight), and the days it knowingly ran into another booking.
+  note?: string; clashDates?: string[];
   paidOn?: string; paidByName?: string; cancelledAt?: string | Date; cancelledByName?: string;
 };
 export const extensionLabels: Record<ExtensionStatus, string> = { unpaid: "รอชำระค่าเช่าต่อ", paid: "ชำระค่าเช่าต่อแล้ว", cancelled: "ยกเลิกแล้ว" };

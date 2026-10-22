@@ -37,7 +37,7 @@ export default function AdminChrome({ user, counts, children }: {
     { href: "/admin/products", title: "จัดการสินค้า", description: "คอลเลกชันและสินค้าให้เช่า", icon: "grid" as const, count: counts.products, permission: "products" as Permission },
     { href: "/admin/rental-pricing", title: "ราคาเช่า", description: "ราคาตามจำนวนวัน 1 / 3 / 5 / 7 วัน", icon: "payment" as const, count: null as number | null, permission: "products" as Permission },
     { href: "/admin/delivery-settings", title: "ค่าจัดส่ง", description: "ค่าส่งแมสตามระยะทางจากร้าน", icon: "delivery" as const, count: null as number | null, permission: "settings" as Permission },
-    { href: "/admin/availability", title: "จัดการคิวว่าง", description: "จำนวนชุดว่างรายวัน", icon: "calendar" as const, count: null as number | null, permission: "products" as Permission },
+    { href: "/admin/availability", title: "คิวชุดและวันปิดรับ", description: "ดูคิวชุดแต่ละตัว ปิดรับรายวัน", icon: "calendar" as const, count: null as number | null, permission: "products" as Permission },
     { href: "/admin/activity", title: "ประวัติการทำรายการ", description: "ใครทำอะไร เมื่อใด และการเข้าสู่ระบบ", icon: "history" as const, count: null as number | null, permission: "activity" as Permission },
     ...(user.role === "owner" ? [{ href: "/admin/admins", title: "จัดการแอดมิน", description: "ทีมงานและสิทธิ์ใช้งาน", icon: "users" as const, count: counts.admins }] : []),
   ].filter(item => allowed(item.permission));

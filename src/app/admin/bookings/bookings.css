@@ -272,3 +272,8 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .queue-day-head{display:flex;justify-content:space-between;align-items:baseline;gap:4px}.queue-day-head b{font-size:12px}.queue-day-head small{color:#277c51;font-size:10px;white-space:nowrap}.queue-day.is-full .queue-day-head small{color:#b42318;font-weight:600}
 .queue-chip{display:block;padding:2px 5px;border-radius:5px;background:var(--chip);color:#3b313e;font-size:10px;line-height:1.4;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-chip.is-hold{background:repeating-linear-gradient(45deg,var(--chip) 0 4px,#fff 4px 8px)}.queue-chip.is-self{outline:2px solid #8b5d7b;outline-offset:-1px;font-weight:600}
 @media(max-width:620px){.queue-day{min-height:58px;padding:3px}.queue-chip{font-size:9px;padding:1px 3px}.queue-day-head small{display:none}}
+.bookings-clash{display:grid;gap:4px;margin:8px 0;padding:10px 12px;border:1px solid #f4b7b0;border-radius:9px;background:#fef3f2;color:#b42318;font-size:12px}.bookings-clash strong{font-size:13px}.bookings-clash p{margin:0}.bookings-clash a{color:inherit;font-weight:600;text-decoration:underline}.bookings-clash small{color:#912018}.bookings-clash label{display:flex;align-items:flex-start;gap:6px;margin-top:4px;color:#7a271a;font-weight:600;cursor:pointer}.bookings-clash label input{margin-top:2px}
+.bookings-clash-banner{margin:0 0 12px}
+.bookings-row-status small.is-clash,.bookings-clash-text{color:#b42318;font-weight:700}
+.bookings-extension-note{color:#475467!important;font-style:italic}
+.queue-day.is-clash{background:#fef3f2;border:2px solid #d92d20}.queue-day.is-clash .queue-day-head small{display:block;color:#b42318;font-weight:700}

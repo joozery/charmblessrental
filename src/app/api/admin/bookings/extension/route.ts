@@ -68,15 +68,18 @@ export async function POST(request: Request) {
     const result = await plan(db, booking, body.toEnd);
     if ("error" in result) return Response.json({ error: result.error }, { status: 400 });
     if (body.action === "preview") return Response.json(result);
-    if (result.conflicts.length) return Response.json({ error: `คิวชนวันที่ ${result.conflicts.map(row => `${day(row.date)} (${row.item})`).join(", ")} จึงขยายวันไม่ได้` }, { status: 409 });
+    // A late return can still be extended over the next rental, but only knowingly and with a note.
+    const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
+    if (result.conflicts.length && body.allowClash !== true) return Response.json({ error: `คิวซ้อนวันที่ ${result.conflicts.map(row => `${day(row.date)} (${row.item})`).join(", ")} ติ๊กยืนยันคิวซ้อนก่อนบันทึก` }, { status: 409 });
+    if (result.conflicts.length && !note) return Response.json({ error: "คิวซ้อนกับลูกค้าคนอื่น กรุณาใส่หมายเหตุ" }, { status: 400 });
     if (activeExtensions(booking.extensions).some(item => item.status === "unpaid")) return Response.json({ error: "มีค่าเช่าต่อที่ยังไม่ชำระ กรุณายืนยันรับเงินหรือยกเลิกรายการเดิมก่อน" }, { status: 409 });
     if (typeof body.amount !== "number" || !Number.isFinite(body.amount) || body.amount < 0 || body.amount > 1000000) return Response.json({ error: "กรุณากรอกค่าเช่าต่อ" }, { status: 400 });
     const amount = Math.round(body.amount * 100) / 100, now = new Date();
-    const extension: Extension = { id: randomUUID(), fromEnd: result.fromEnd, toEnd: result.toEnd, addedDays: result.added, amount, status: amount > 0 ? "unpaid" : "paid", createdAt: now, createdByName: admin.name, ...(amount > 0 ? {} : { paidOn: thaiDay(), paidByName: admin.name }) };
+    const extension: Extension = { id: randomUUID(), fromEnd: result.fromEnd, toEnd: result.toEnd, addedDays: result.added, amount, status: amount > 0 ? "unpaid" : "paid", createdAt: now, createdByName: admin.name, ...(note ? { note } : {}), ...(result.conflicts.length ? { clashDates: [...new Set(result.conflicts.map(row => row.date))] } : {}), ...(amount > 0 ? {} : { paidOn: thaiDay(), paidByName: admin.name }) };
     // Guard on the current ready day so two admins extending at once cannot both shift it.
     const updated = await bookings.updateOne({ _id: booking._id, "schedule.ready": booking.schedule!.ready }, { $set: { schedule: result.schedule, updatedAt: now }, $push: { extensions: extension }, $unset: { returnReminderSentAt: "" } });
     if (!updated.modifiedCount) return Response.json({ error: "คำขอนี้เพิ่งถูกแก้ไข กรุณาโหลดใหม่แล้วลองอีกครั้ง" }, { status: 409 });
-    await log("booking.extended", `ขยายวันเช่า +${result.added} วัน ถึง ${result.toEnd} · ค่าเช่าต่อ ${money(amount)} บาท`, [{ field: "end", before: result.fromEnd, after: result.toEnd }, { field: "returnDate", before: booking.schedule!.returnDate, after: result.schedule.returnDate }]);
+    await log("booking.extended", `ขยายวันเช่า +${result.added} วัน ถึง ${result.toEnd} · ค่าเช่าต่อ ${money(amount)} บาท${result.conflicts.length ? ` · คิวซ้อน ${result.conflicts.map(row => `${day(row.date)} ${row.bookings.map(other => other.id).join("/")}`).join(", ")}` : ""}${note ? ` · ${note}` : ""}`, [{ field: "end", before: result.fromEnd, after: result.toEnd }, { field: "returnDate", before: booking.schedule!.returnDate, after: result.schedule.returnDate }]);
     const lineNotified = await notify(request, db, booking, link => `📅 ขยายวันเช่าคำขอ ${booking._id} เรียบร้อยค่ะ\nใช้งานได้ถึง ${day(result.toEnd)} (+${result.added} วัน)\nส่งคืนชุดภายใน ${day(result.schedule.returnDate)}${amount > 0 ? `\nค่าเช่าต่อ ${money(amount)} บาท\n\nโอนและดูบัญชีร้านได้ที่ลิงก์บิลเดิม 👉 ${link}\nแล้วส่งสลิปในแชทนี้นะคะ 🙏` : ""}`);
     return Response.json({ extension, schedule: result.schedule, lineNotified });
   }

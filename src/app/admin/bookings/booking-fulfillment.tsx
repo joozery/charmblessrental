@@ -13,13 +13,14 @@ import { identityFileLabel, verificationLabels, type BookingVerification } from 
 import type { RefundAccount } from "@/lib/refund-account";
 import { lastUseDay, type Extension } from "@/lib/extension";
 import ExtensionPanel from "./extension-panel";
+import type { QueueClash } from "@/lib/queue";
 
 export type Shipment = { carrier: string; trackingNumber: string; shippedAt: string; byName: string };
 export type Returned = { at: string; condition: string; note: string; byName: string };
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string; via?: "line" | "bill" };
 export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
-export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[] };
+export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; clashes?: QueueClash[] };
 // Returned to the shop while its deposit is still held: the refund is the step left to do.
 export const awaitingRefund = (row: FulfillmentRow) => row.status !== "cancelled" && !!row.returned && row.deposit?.status === "held";
 type Log = { _id: string; at: string; action: string; summary: string; actorName: string; actorEmail: string; changes: { field: string; before: unknown; after: unknown }[] };
@@ -103,6 +104,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, onCh
   const deducted = refundForm && row.deposit ? Math.max(0, row.deposit.amount - (Number(refundForm.refund) || 0)) : 0;
 
   return <>
+    {!!row.clashes?.length && <div className="bookings-clash bookings-clash-banner" role="alert"><strong>⚠️ คิวซ้อน: ชุดมีคนจองทับกันเกินจำนวนที่มี</strong>{row.clashes.map(clash => <p key={`${clash.item}-${clash.date}`}>{day(`${clash.date}T00:00:00Z`)} · {clash.item} · ชนกับ{clash.with.length ? clash.with.map(other => <a key={other.id} href={`/admin/bookings?id=${encodeURIComponent(other.id)}`}> {other.name || other.id} ({other.id})</a>) : " คำขอที่ไม่อยู่ในรายการนี้"}</p>)}<small>ติดต่อลูกค้าเพื่อสลับชุด เลื่อนวัน หรือยกเลิกคิวใดคิวหนึ่ง ป้ายนี้จะหายเมื่อคิวไม่ซ้อนแล้ว</small></div>}
     {row.verification && row.status !== "cancelled" && <IdentityReview row={row} canReview={canReview} onChange={verification => onChange({ verification })} />}
     {row.status !== "cancelled" && <div className="bookings-detail-section bookings-fulfillment"><Icon name="delivery" /><div>
       <h3>{pickup ? "ส่งมอบและรับคืน" : "จัดส่งและรับคืน"}</h3>
