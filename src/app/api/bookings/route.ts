@@ -9,7 +9,8 @@ import { quoteDelivery } from "@/lib/delivery-quote";
 import type { LatLng } from "@/lib/delivery";
 import { shippingFor } from "@/lib/shipping";
 import { identityAllowed, normalizePhone, type BookingVerification } from "@/lib/identity";
-import { addDays, isReturnMethod, planFor, scheduleRecord, type ReturnMethod, type ScheduleRecord } from "@/lib/schedule";
+import { addDays, blockRange, isReturnMethod, planFor, scheduleRecord, type ReturnMethod, type ScheduleRecord } from "@/lib/schedule";
+import { getQueue } from "@/lib/availability-store";
 
 const validDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 const thaiDay = (date = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
@@ -41,11 +42,18 @@ export async function POST(request: Request) {
   const estimatedTotal = [...prices.values()].every(price => price !== null) ? [...prices.values()].reduce<number>((sum, price) => sum + (price || 0), 0) + deliveryFee : null;
   // Renting without a deposit: the shop's rules decide, and the customer then sends ID documents from the bill link.
   if (body.depositMode === "identity" && !identityAllowed(settings.verification, estimatedTotal === null ? null : estimatedTotal - deliveryFee, products.map(product => product.category))) return Response.json({ error: "รายการนี้ต้องวางเงินมัดจำ กรุณาเลือกแบบวางเงินมัดจำ" }, { status: 400 });
+  // Requests now hold the queue for a while, so two customers can no longer ask for the same piece on the same days.
+  const schedule = scheduleRecord(plan, returnMethod);
+  const range = blockRange({ start: body.start, end: body.end, schedule });
+  for (const product of products) {
+    const full = (await getQueue(db, product.id, range.from, range.to)).find(day => day.remaining < 1);
+    if (full) return Response.json({ error: `${product.thai || product.name} ไม่ว่างวันที่ ${new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${full.date}T00:00:00Z`))} (มีคนจองไว้แล้ว รวมวันจัดส่งและวันพักชุด) กรุณาเลือกวันอื่น` }, { status: 409 });
+  }
   const verification: BookingVerification | undefined = body.depositMode === "identity" ? { mode: "identity", status: "pending", profileId: normalizePhone(body.phone) } : undefined;
   const requestId = `BR-${body.start.replaceAll("-", "")}-${randomUUID().slice(0, 6).toUpperCase()}`;
   await db.collection<BookingRecord>("bookingRequests").insertOne({
     _id: requestId, status: "new", name: body.name.trim(), phone: body.phone.trim(), address: body.method === "pickup" ? "" : body.address.trim(), pin: body.pin?.trim() || "", note: body.note?.trim() || "",
-    method: body.method, start: body.start, end: body.end, days, schedule: scheduleRecord(plan, returnMethod), ...(verification ? { verification } : {}), deliveryFee, estimatedTotal, shipping: { label: shipping.label, base: shipping.base, discount: shipping.discount }, ...(delivery ? { delivery } : {}),
+    method: body.method, start: body.start, end: body.end, days, schedule, ...(verification ? { verification } : {}), deliveryFee, estimatedTotal, shipping: { label: shipping.label, base: shipping.base, discount: shipping.discount }, ...(delivery ? { delivery } : {}),
     items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, stock: product.stock ?? 1 })),
     createdAt: new Date(), updatedAt: new Date(), billToken: randomBytes(18).toString("base64url"), payment: "unpaid",
   });

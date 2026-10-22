@@ -2,13 +2,18 @@ import type { Db } from "mongodb";
 import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 
 type Capacity = { productId: number; date: string; capacity: number };
-type ConfirmedBooking = { _id: string; start: string; end: string; items: { id: number }[]; schedule?: ScheduleRecord };
+type BlockingBooking = { _id: string; start: string; end: string; items: { id: number }[]; schedule?: ScheduleRecord };
 
-// A confirmed booking holds its piece from the day the shop ships it until its gap ends (see schedule.ts).
-export const blockingFilter = (from: string, to: string) => ({ status: "confirmed", $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] });
+// A request not yet confirmed (waiting for ID documents, payment or the shop) keeps its queue for this long after it was sent.
+export const holdHours = 24;
+// A confirmed booking, or a request still inside its hold, holds its piece from the day the shop ships it until its gap ends (see schedule.ts).
+export const blockingFilter = (from: string, to: string) => ({ $and: [
+  { $or: [{ status: "confirmed" }, { status: { $in: ["new", "contacted"] }, createdAt: { $gt: new Date(Date.now() - holdHours * 3600000) } }] },
+  { $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] },
+] });
 
 export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string) {
-  const bookings = await db.collection<ConfirmedBooking>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray();
+  const bookings = await db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray();
   const result = new Map<string, number>();
   for (const booking of bookings) {
     const count = booking.items.filter(item => item.id === productId).length;
