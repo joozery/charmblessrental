@@ -4,11 +4,12 @@ import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 type Capacity = { productId: number; date: string; capacity: number };
 type BlockingBooking = { _id: string; start: string; end: string; items: { id: number }[]; schedule?: ScheduleRecord };
 
-// A request not yet confirmed (waiting for ID documents, payment or the shop) keeps its queue for this long after it was sent.
+// A request not yet confirmed (waiting for ID documents, payment or the shop) keeps its queue for this long after it was sent,
+// and for as long as its ID documents wait for the shop's review.
 export const holdHours = 24;
-// A confirmed booking, or a request still inside its hold, holds its piece from the day the shop ships it until its gap ends (see schedule.ts).
+// A confirmed booking, or a request still on hold, holds its piece from the day the shop ships it until its gap ends (see schedule.ts).
 export const blockingFilter = (from: string, to: string) => ({ $and: [
-  { $or: [{ status: "confirmed" }, { status: { $in: ["new", "contacted"] }, createdAt: { $gt: new Date(Date.now() - holdHours * 3600000) } }] },
+  { $or: [{ status: "confirmed" }, { status: { $in: ["new", "contacted"] }, $or: [{ createdAt: { $gt: new Date(Date.now() - holdHours * 3600000) } }, { "verification.status": "submitted" }] }] },
   { $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] },
 ] });
 
