@@ -9,7 +9,7 @@ import type { Permission } from "@/lib/permissions";
 
 export default function AdminChrome({ user, counts, children }: {
   user: { name: string; email?: string; username: string; role: "owner" | "admin"; permissions: Permission[] };
-  counts: { products: number; admins: number; bookings: number; refunds: number };
+  counts: { products: number; admins: number; bookings: number; refunds: number; late: number };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -28,7 +28,7 @@ export default function AdminChrome({ user, counts, children }: {
   const navigation = [
     { href: "/admin", title: "ภาพรวม", description: "แดชบอร์ดร้าน", icon: "home" as const, count: null as number | null },
     { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
-    { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, alert: counts.refunds, permission: "bookings" as Permission },
+    { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, alerts: [{ label: "เลยคืน", title: "เลยกำหนดคืน", count: counts.late, danger: true }, { label: "มัดจำ", title: "รอคืนมัดจำ", count: counts.refunds, danger: false }], permission: "bookings" as Permission },
     { href: "/admin/preparation", title: "เตรียมสินค้า", description: "ตรวจสภาพ ซัก ซ่อม และยืนยันพร้อมให้เช่า", icon: "box" as const, count: null as number | null, permission: "shipping" as Permission },
     { href: "/admin/identity", title: "ยืนยันตัวตน", description: "ลูกค้าที่ไม่วางเงินมัดจำ", icon: "users" as const, count: null as number | null, permission: "identity" as Permission },
     { href: "/admin/finance", title: "สรุปการเงิน", description: "ยอดเช่า ยอดชำระ และเงินมัดจำ", icon: "payment" as const, count: null as number | null, permission: "finance" as Permission },
@@ -72,7 +72,7 @@ export default function AdminChrome({ user, counts, children }: {
       <div className="chrome-brand-row"><Link href="/admin" className="chrome-brand" aria-label="Charm Bless หลังบ้าน" onClick={() => setMobileOpen(false)}><span className="chrome-brand-symbol"><Icon name="spark" /></span><span className="chrome-brand-copy">charm bless<span>RENTAL MANAGEMENT</span></span></Link>{mobile && <Dialog.Close className="chrome-mobile-close" aria-label="ปิดเมนู"><Icon className="chrome-icon" name="close" /></Dialog.Close>}</div>
       <nav className="chrome-navigation" aria-label={mobile ? "เมนูหลังบ้านมือถือ" : "เมนูหลังบ้าน"}>{navigationGroups.map(group => <div className="chrome-nav-group" key={group.label}><span className="chrome-group-label">{group.label}</span>{group.items.map(item => {
         const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-        return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active ? "chrome-nav-link is-active" : "chrome-nav-link"} aria-label={item.title} aria-current={active ? "page" : undefined} title={collapsed && !mobile ? item.title : undefined}><span className="chrome-nav-icon"><Icon className="chrome-icon" name={item.icon} /></span><span className="chrome-nav-copy"><strong>{item.title}</strong></span>{item.count !== null && <span className="chrome-nav-count">{item.count.toLocaleString("th-TH")}</span>}{"alert" in item && !!item.alert && <span className="chrome-nav-count is-alert" title={`รอคืนมัดจำ ${item.alert} รายการ`} aria-label={`รอคืนมัดจำ ${item.alert} รายการ`}>มัดจำ {item.alert.toLocaleString("th-TH")}</span>}{active && <span className="chrome-active-dot" />}</Link>;
+        return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active ? "chrome-nav-link is-active" : "chrome-nav-link"} aria-label={item.title} aria-current={active ? "page" : undefined} title={collapsed && !mobile ? item.title : undefined}><span className="chrome-nav-icon"><Icon className="chrome-icon" name={item.icon} /></span><span className="chrome-nav-copy"><strong>{item.title}</strong></span>{item.count !== null && <span className="chrome-nav-count">{item.count.toLocaleString("th-TH")}</span>}{"alerts" in item && item.alerts?.filter(alert => alert.count > 0).map(alert => <span key={alert.label} className={`chrome-nav-count is-alert${alert.danger ? " is-danger" : ""}`} title={`${alert.title} ${alert.count} รายการ`} aria-label={`${alert.title} ${alert.count} รายการ`}>{alert.label} {alert.count.toLocaleString("th-TH")}</span>)}{active && <span className="chrome-active-dot" />}</Link>;
       })}</div>)}</nav>
       <div className="chrome-sidebar-spacer" />
       <div className="chrome-sidebar-footer"><Link href="/" target="_blank" rel="noopener noreferrer" title={collapsed && !mobile ? "เปิดหน้าร้าน" : undefined}><Icon className="chrome-icon" name="store" /><span className="chrome-store-copy"><strong>เปิดหน้าร้าน</strong><small>ดูเว็บไซต์สำหรับลูกค้า</small></span><Icon className="chrome-icon" name="arrow" /></Link></div>

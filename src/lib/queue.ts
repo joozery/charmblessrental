@@ -2,6 +2,8 @@
 export type QueueBooking = { id: string; name: string; confirmed: boolean; ship: string; start: string; end: string; returnDate: string; ready: string };
 // A day where more bookings hold a piece than the shop owns, and the other bookings on it.
 export type QueueClash = { date: string; item: string; with: { id: string; name: string }[] };
+// A late (or about to be late) rental and the next booking waiting for the same piece; `swap` lists other pieces free for it.
+export type NextRisk = { item: string; unitSku: string; next: { id: string; name: string; ship: string }; swap: string[] };
 export type QueueRole = "ship" | "use" | "return" | "gap";
 export const queueRoleLabels: Record<QueueRole, string> = { ship: "จัดส่ง", use: "ใช้งาน", return: "คืน", gap: "พักชุด" };
 export const queueRole = (booking: QueueBooking, day: string): QueueRole | null => day < booking.ship || day >= booking.ready ? null : day < booking.start ? "ship" : day <= booking.end ? "use" : day === booking.returnDate ? "return" : "gap";

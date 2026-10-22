@@ -141,3 +141,4 @@ body:has(.chrome-shell){padding-bottom:0;background:#f5f6f8}
 .chrome-sidebar,.chrome-mobile-sidebar{scrollbar-width:none;-ms-overflow-style:none}
 .chrome-sidebar::-webkit-scrollbar,.chrome-mobile-sidebar::-webkit-scrollbar{display:none}
 .chrome-nav-count.is-alert,.chrome-nav-link.is-active .chrome-nav-count.is-alert{width:auto;margin-left:4px;background:#fff1e0;color:#a1520c;box-shadow:none;white-space:nowrap}
+.chrome-nav-count.is-alert.is-danger,.chrome-nav-link.is-active .chrome-nav-count.is-alert.is-danger{background:#fee4e2;color:#b42318}

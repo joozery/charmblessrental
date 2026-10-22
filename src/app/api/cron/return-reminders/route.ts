@@ -8,7 +8,7 @@ import type { BookingVerification } from "@/lib/identity";
 import { purgeIdentity } from "@/lib/identity-store";
 import { getStoreSettings } from "@/lib/store-settings";
 
-type BookingDoc = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; billToken?: string; lineUserId?: string; returnReminderSentAt?: Date; verification?: BookingVerification };
+type BookingDoc = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; billToken?: string; lineUserId?: string; returnReminderSentAt?: Date; lateNoticeSentAt?: Date; verification?: BookingVerification };
 const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 
 // Vercel Cron calls this once a day (vercel.json) with Authorization: Bearer $CRON_SECRET:
@@ -36,6 +36,19 @@ export async function GET(request: Request) {
       sent++;
     } catch (error) { console.error("Return reminder failed:", booking._id, error); failed++; }
   }
+  // The day after the return day: still not back and not reported on its way, so ask once (an extension resets this).
+  const late = await bookings.find({ status: "confirmed", $or: [{ "schedule.returnDate": { $lt: thaiDay() } }, { schedule: { $exists: false }, end: { $lt: thaiDay() } }], shipment: { $exists: true }, returned: { $exists: false }, customerReturn: { $exists: false }, lateNoticeSentAt: { $exists: false }, lineUserId: { $exists: true, $ne: "" } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, billToken: 1, lineUserId: 1 } }).toArray();
+  let lateSent = 0;
+  for (const booking of late) {
+    const billToken = booking.billToken || randomBytes(18).toString("base64url");
+    const text = `สวัสดีค่ะ คำขอ ${booking._id}${booking.name ? ` ของคุณ ${booking.name}` : ""} ครบกำหนดส่งคืนชุดเมื่อ ${dayLabel(returnDay(booking))} ร้านยังไม่ได้รับแจ้งการส่งคืนค่ะ 🙏\n\nถ้าส่งคืนแล้ว รบกวนแจ้งขนส่งและเลขพัสดุที่ ${origin}/bill/${billToken}\nถ้าจะคืนช้าหรืออยากเช่าต่อ ทักแชทนี้ได้เลยค่ะ (มีค่าเช่าเพิ่มตามจำนวนวัน)`;
+    try {
+      await pushLine(booking.lineUserId!, [{ type: "text", text }]);
+      await bookings.updateOne({ _id: booking._id }, { $set: { billToken, lateNoticeSentAt: new Date() } });
+      await audit(request, null, { action: "booking.late_notice", targetType: "booking", targetId: booking._id, summary: `ส่ง LINE ถามลูกค้า: เลยกำหนดคืน ${dayLabel(returnDay(booking))}`, actorEmail: "ระบบแจ้งเตือนอัตโนมัติ" });
+      lateSent++;
+    } catch (error) { console.error("Late return notice failed:", booking._id, error); failed++; }
+  }
   // Two days before the shop must ship, nudge customers who still owe their ID documents.
   const today = thaiDay(), soon = addDays(today, 2);
   const missing = await bookings.find({ status: { $ne: "cancelled" }, "verification.mode": "identity", "verification.status": { $in: ["pending", "rejected"] }, "verification.remindedAt": { $exists: false }, "schedule.ship": { $gte: today, $lte: soon }, shipment: { $exists: false }, lineUserId: { $exists: true, $ne: "" } }, { projection: { _id: 1, billToken: 1, lineUserId: 1, schedule: 1, verification: 1 } }).toArray();
@@ -48,5 +61,5 @@ export async function GET(request: Request) {
       identitySent++;
     } catch (error) { console.error("Identity reminder failed:", booking._id, error); failed++; }
   }
-  return Response.json({ ok: true, due: tomorrow, sent, identitySent, purged: purged.removed, failed });
+  return Response.json({ ok: true, due: tomorrow, sent, lateSent, identitySent, purged: purged.removed, failed });
 }
