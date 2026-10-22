@@ -11,13 +11,15 @@ import type { UnitChoice } from "@/lib/rental-units";
 import { returnDay, returnMethods, type ScheduleRecord } from "@/lib/schedule";
 import { identityFileLabel, verificationLabels, type BookingVerification } from "@/lib/identity";
 import type { RefundAccount } from "@/lib/refund-account";
+import { lastUseDay, type Extension } from "@/lib/extension";
+import ExtensionPanel from "./extension-panel";
 
 export type Shipment = { carrier: string; trackingNumber: string; shippedAt: string; byName: string };
 export type Returned = { at: string; condition: string; note: string; byName: string };
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string; via?: "line" | "bill" };
 export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
-export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount };
+export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[] };
 // Returned to the shop while its deposit is still held: the refund is the step left to do.
 export const awaitingRefund = (row: FulfillmentRow) => row.status !== "cancelled" && !!row.returned && row.deposit?.status === "held";
 type Log = { _id: string; at: string; action: string; summary: string; actorName: string; actorEmail: string; changes: { field: string; before: unknown; after: unknown }[] };
@@ -104,7 +106,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, onCh
     {row.verification && row.status !== "cancelled" && <IdentityReview row={row} canReview={canReview} onChange={verification => onChange({ verification })} />}
     {row.status !== "cancelled" && <div className="bookings-detail-section bookings-fulfillment"><Icon name="delivery" /><div>
       <h3>{pickup ? "ส่งมอบและรับคืน" : "จัดส่งและรับคืน"}</h3>
-      {row.schedule && <p className="bookings-fulfillment-meta">{pickup ? "เตรียมให้ลูกค้ารับ" : "ต้องส่งของ"} <b>{day(`${row.schedule.ship}T00:00:00Z`)}</b> · ใช้งาน {day(`${row.start}T00:00:00Z`)} – {day(`${row.end}T00:00:00Z`)} · คืน {day(`${row.schedule.returnDate}T00:00:00Z`)} ({returnMethods.find(item => item.key === row.schedule!.returnMethod)?.label}) · Gap {row.schedule.gap} วัน · รับคิวใหม่ได้ {day(`${row.schedule.ready}T00:00:00Z`)}</p>}
+      {row.schedule && <p className="bookings-fulfillment-meta">{pickup ? "เตรียมให้ลูกค้ารับ" : "ต้องส่งของ"} <b>{day(`${row.schedule.ship}T00:00:00Z`)}</b> · ใช้งาน {day(`${row.start}T00:00:00Z`)} – {day(`${lastUseDay(row)}T00:00:00Z`)} · คืน {day(`${row.schedule.returnDate}T00:00:00Z`)} ({returnMethods.find(item => item.key === row.schedule!.returnMethod)?.label}) · Gap {row.schedule.gap} วัน · รับคิวใหม่ได้ {day(`${row.schedule.ready}T00:00:00Z`)}</p>}
       <div className="bookings-stage-steps" aria-label="ขั้นตอนการเช่า">{stageSteps.map((step, index) => <div key={step} className={stageSteps.indexOf(stage) >= index ? "is-current" : ""}><span>{index + 1}</span><small>{stageLabel(step, row.method)}</small></div>)}</div>
       {assigned.some(Boolean) && <p className="bookings-fulfillment-units">ชิ้นที่ใช้: {row.items.map((item, index) => assigned[index] ? `${assigned[index]}${!row.shipment && statusOf(item, assigned[index]) ? ` (${unitStatusLabels[statusOf(item, assigned[index])!]})` : ""}` : `${item.sku || item.name} (ยังไม่ระบุชิ้น)`).join(" · ")}</p>}
       {row.shipment && !shipForm ? <p className="bookings-fulfillment-done"><Icon name="success" />{pickup ? "ส่งมอบที่ร้านแล้ว" : `${row.shipment.carrier} ${row.shipment.trackingNumber}`.trim()}<small>{stamp(row.shipment.shippedAt)} · {row.shipment.byName}</small>{canShip && !row.returned && <button type="button" onClick={() => setShipForm({ carrier: row.shipment!.carrier, trackingNumber: row.shipment!.trackingNumber, units: defaults })}>แก้ไข</button>}</p>
@@ -116,6 +118,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, onCh
         : !returnForm ? <p className="bookings-fulfillment-wait">ยังไม่ได้รับคืนสินค้า{canShip && <button type="button" disabled={busy} onClick={() => setReturnForm({ condition: "good", note: "", units: defaults })}>ยืนยันรับสินค้าคืน</button>}</p>
         : <div className="bookings-inline-form">{unitPicker(returnForm.units, units => setReturnForm({ ...returnForm, units }), true)}<label>สภาพสินค้า<select value={returnForm.condition} onChange={event => setReturnForm({ ...returnForm, condition: event.target.value })}>{conditions.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><label>หมายเหตุ<input value={returnForm.note} maxLength={500} onChange={event => setReturnForm({ ...returnForm, note: event.target.value })} placeholder="เช่น มีคราบที่ชายกระโปรง" /></label><div><button type="button" disabled={busy} onClick={() => setReturnForm(null)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy} onClick={receive}>{busy ? "กำลังบันทึก…" : "ยืนยันรับคืน"}</button></div></div>)}
     </div></div>}
+    {row.status !== "cancelled" && <ExtensionPanel row={row} permissions={permissions} onChange={onChange} />}
     {row.deposit && row.deposit.status !== "void" && <div className="bookings-detail-section bookings-deposit"><Icon name="shield" /><div>
       <h3>เงินมัดจำ</h3>
       <p className="bookings-deposit-head"><strong>{money(row.deposit.amount)} บาท</strong><span className={`bookings-deposit-badge is-${row.deposit.status}`}>{depositStatus[row.deposit.status]}</span></p>

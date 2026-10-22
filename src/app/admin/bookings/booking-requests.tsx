@@ -10,6 +10,7 @@ import type { Permission } from "@/lib/permissions";
 import { rentalStage, stageLabel } from "@/lib/rental-stage";
 import { verificationLabels } from "@/lib/identity";
 import type { UnitChoice } from "@/lib/rental-units";
+import { extendedDays, lastUseDay } from "@/lib/extension";
 import BookingFulfillment, { awaitingRefund, type FulfillmentRow } from "./booking-fulfillment";
 
 type RequestRow = DocRow & { status: string; pin: string; note: string; method: string; estimatedTotal: number | null; payment?: "unpaid" | "paid"; billToken?: string; lineLinked?: boolean; lineName?: string; lineSentAt?: string; paidAt?: string; delivery?: { km?: number; fee?: number; inBill?: boolean; address?: string; error?: string }; shipping?: { label: string; base: number | null; discount: number } } & Omit<FulfillmentRow, "_id" | "method" | "status" | "payment" | "end" | "items">;
@@ -82,7 +83,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
           <span className="bookings-row-request"><strong>{row._id}</strong><small>{dateLabel(row.createdAt)}</small></span>
           <span className="bookings-row-customer"><strong>{row.name}</strong><small>☎ ••• ••• {row.phone.slice(-4)}</small></span>
           <span className="bookings-row-product">{row.items[0]?.image && <Image unoptimized src={row.items[0].image} alt="" width={36} height={48} />}<span><strong>{row.items[0]?.sku || row.items[0]?.name || "สินค้า"}</strong><small>{row.items.length > 1 ? row.items.length + " รายการ" : row.items[0]?.name}</small></span></span>
-          <span className="bookings-row-dates"><strong>{dateLabel(row.start)} – {dateLabel(row.end)}</strong><small>{row.days} วัน | {(row.shipping?.label || methodLabel(row.method))}</small></span>
+          <span className="bookings-row-dates"><strong>{dateLabel(row.start)} – {dateLabel(lastUseDay(row))}</strong><small>{row.days + extendedDays(row)} วัน{extendedDays(row) ? ` (ต่อ +${extendedDays(row)})` : ""} | {(row.shipping?.label || methodLabel(row.method))}</small></span>
           <span className="bookings-row-money"><strong>{row.estimatedTotal === null ? "สอบถามราคา" : money(row.estimatedTotal) + " บาท"}</strong><small>ค่าส่ง {money(row.deliveryFee)} บาท{row.shipping?.discount ? ` (ลด ${money(row.shipping.discount)})` : ""}</small></span>
           <span className="bookings-row-status"><span className={"booking-request-status is-" + row.status}>{statusLabel(row.status)}</span>{row.status !== "cancelled" && rentalStage(row) !== "pending" && <small>{stageLabel(rentalStage(row), row.method)}</small>}{row.verification && row.status !== "cancelled" && <small className={`is-identity is-${row.verification.status}`}>ไม่วางมัดจำ · {verificationLabels[row.verification.status]}</small>}{awaitingRefund(row) && <small className="is-refund">รอโอนเงินมัดจำคืน</small>}</span>
         </button>) : <div className="bookings-inbox-empty"><Icon name="search" /><strong>ไม่พบคำขอจอง</strong><span>ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ</span></div>}</div>
