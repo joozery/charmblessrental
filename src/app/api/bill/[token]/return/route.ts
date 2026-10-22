@@ -19,7 +19,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/bill/[token
   if (!booking) return Response.json({ error: "ไม่พบรายการเช่านี้" }, { status: 404 });
   if (booking.status === "cancelled" || !booking.shipment) return Response.json({ error: "รายการนี้ยังไม่ได้จัดส่ง จึงยังแจ้งส่งคืนไม่ได้" }, { status: 409 });
   if (booking.returned) return Response.json({ error: "ร้านได้รับสินค้าคืนแล้ว" }, { status: 409 });
-  const customerReturn = { carrier, trackingNumber, at: new Date() };
+  const customerReturn = { carrier, trackingNumber, at: new Date(), via: "bill" as const };
   await bookings.updateOne({ _id: booking._id }, { $set: { customerReturn, updatedAt: new Date() } });
   await audit(request, null, { action: "booking.customer_return", targetType: "booking", targetId: booking._id, summary: `ลูกค้าแจ้งส่งคืน · ${carrier} ${trackingNumber}`.trim(), actorEmail: `ลูกค้า${booking.name ? ` ${booking.name}` : ""}`, changes: [{ field: "carrier", before: booking.customerReturn?.carrier ?? null, after: carrier }, { field: "trackingNumber", before: booking.customerReturn?.trackingNumber ?? null, after: trackingNumber }] });
   return Response.json({ ok: true, customerReturn: { ...customerReturn, at: customerReturn.at.toISOString() } });
