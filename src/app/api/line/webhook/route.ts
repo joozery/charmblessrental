@@ -93,7 +93,7 @@ async function handle(request: Request, events: LineEvent[], origin: string) {
           await audit(request, null, { action: "identity.reused", targetType: "booking", targetId: full._id, actorEmail: "ระบบ", summary: `ใช้การยืนยันตัวตนเดิม (ผ่านเมื่อ ${reused.approvedAt!.toISOString().slice(0, 10)}${reused.approvedByName ? ` โดย ${reused.approvedByName}` : ""})` });
           extra = "\n\n✅ ใช้ข้อมูลยืนยันตัวตนเดิมของคุณแล้ว ไม่ต้องส่งเอกสารใหม่ค่ะ";
         } else {
-          extra = `\n\nคำขอนี้เลือกแบบไม่วางเงินมัดจำ รบกวนยืนยันตัวตน (รูปบัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่) ก่อนวันจัดส่ง ใช้เวลาประมาณ 2 นาที 👉 ${await billLink(bookings, full, origin)}`;
+          extra = `\n\nคำขอนี้เลือกแบบไม่วางเงินมัดจำ รบกวนยืนยันตัวตน (รูปบัตรประชาชน + แคปหน้า Instagram เต็มหน้าจอ + ที่อยู่) ก่อนวันจัดส่ง ใช้เวลาประมาณ 2 นาที 👉 ${await billLink(bookings, full, origin)}`;
         }
       }
       await replyLine(event.replyToken, [{ type: "text", text: stageReply(full) + extra }]);

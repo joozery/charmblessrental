@@ -44,8 +44,9 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-identity-form label{display:flex;flex-direction:column;gap:4px;color:#475467;font-size:13px}
 .bill-identity-form input:not([type=checkbox]):not([type=file]),.bill-identity-form textarea{min-height:42px;padding:8px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font:inherit;font-size:15px}
 .bill-identity-form .is-wide{grid-column:1/-1}
-.bill-identity-file{padding:10px;border:1px dashed #d9b9ca;border-radius:10px;background:#fff}
-.bill-identity-file img{max-height:160px;border-radius:8px;object-fit:contain}
+.bill-identity-file{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed #d9b9ca;border-radius:10px;background:#fff;color:#475467;font-size:13px}
+.bill-identity-file img{max-height:160px;max-width:100%;align-self:flex-start;border-radius:8px;object-fit:contain}
 .bill-identity-file span{color:#907181;font-size:12px}
+.bill-identity-example{display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:8px;background:#fdf5f9;color:#907181;text-decoration:none}.bill-identity-example small{font-size:11px}
 .bill-identity-consent{flex-direction:row!important;align-items:flex-start;gap:8px!important;line-height:1.6}.bill-identity-consent input{margin-top:4px}
 @media(max-width:560px){.bill-identity-form{grid-template-columns:1fr}}

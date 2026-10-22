@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
 import { audit, diff } from "@/lib/audit";
-import { validVerificationSettings, type BookingVerification, type VerificationSettings } from "@/lib/identity";
+import { identityFileKinds, validVerificationSettings, type BookingVerification, type VerificationSettings } from "@/lib/identity";
 import { identityFiles, identityProfiles } from "@/lib/identity-store";
 import { lineConfigured, pushLine } from "@/lib/line";
 import { database } from "@/lib/mongodb";
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     if (auth.error) return auth.error;
     if (!validVerificationSettings(body.settings)) return Response.json({ error: "ตรวจสอบการตั้งค่าอีกครั้ง" }, { status: 400 });
     const value = body.settings as VerificationSettings;
-    const verification: VerificationSettings = { enabled: value.enabled, maxRental: value.maxRental, excludedCategories: [...new Set(value.excludedCategories.map(item => item.trim()))], validMonths: value.validMonths, deleteAfterDays: value.deleteAfterDays, note: value.note.trim() };
+    const verification: VerificationSettings = { enabled: value.enabled, maxRental: value.maxRental, excludedCategories: [...new Set(value.excludedCategories.map(item => item.trim()))], validMonths: value.validMonths, deleteAfterDays: value.deleteAfterDays, note: value.note.trim(), examples: Object.fromEntries(identityFileKinds.map(kind => [kind.key, value.examples[kind.key]])) as VerificationSettings["examples"] };
     const before = (await getStoreSettings()).verification;
     await db.collection<{ _id: string }>("storeSettings").updateOne({ _id: "main" }, { $set: { verification } }, { upsert: true });
     revalidateTag("catalog", { expire: 0 });

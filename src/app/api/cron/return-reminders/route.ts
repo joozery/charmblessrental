@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   for (const booking of missing) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     try {
-      await pushLine(booking.lineUserId!, [{ type: "text", text: `อีกไม่กี่วันร้านจะจัดส่งคำขอ ${booking._id} (${dayLabel(booking.schedule!.ship)}) แต่ยังไม่ได้รับเอกสารยืนยันตัวตนค่ะ 🙏\nรบกวนส่งรูปบัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่ ได้ที่ ${origin}/bill/${billToken}\nหากไม่สะดวก เปลี่ยนเป็นวางเงินมัดจำได้ ทักร้านในแชทนี้ได้เลยค่ะ` }]);
+      await pushLine(booking.lineUserId!, [{ type: "text", text: `อีกไม่กี่วันร้านจะจัดส่งคำขอ ${booking._id} (${dayLabel(booking.schedule!.ship)}) แต่ยังไม่ได้รับเอกสารยืนยันตัวตนค่ะ 🙏\nรบกวนส่งรูปบัตรประชาชน + แคปหน้า Instagram เต็มหน้าจอ + ที่อยู่ ได้ที่ ${origin}/bill/${billToken}\nหากไม่สะดวก เปลี่ยนเป็นวางเงินมัดจำได้ ทักร้านในแชทนี้ได้เลยค่ะ` }]);
       await bookings.updateOne({ _id: booking._id }, { $set: { billToken, "verification.remindedAt": new Date() } });
       identitySent++;
     } catch (error) { console.error("Identity reminder failed:", booking._id, error); failed++; }

@@ -9,7 +9,7 @@ import { unitStatusLabels } from "@/lib/products";
 import { rentalStage, stageLabel, stageSteps } from "@/lib/rental-stage";
 import type { UnitChoice } from "@/lib/rental-units";
 import { returnDay, returnMethods, type ScheduleRecord } from "@/lib/schedule";
-import { verificationLabels, type BookingVerification } from "@/lib/identity";
+import { identityFileLabel, verificationLabels, type BookingVerification } from "@/lib/identity";
 
 export type Shipment = { carrier: string; trackingNumber: string; shippedAt: string; byName: string };
 export type Returned = { at: string; condition: string; note: string; byName: string };
@@ -49,7 +49,7 @@ function IdentityReview({ row, canReview, onChange }: { row: FulfillmentRow; can
     {!canReview ? <p className="bookings-fulfillment-meta">บัญชีนี้ไม่มีสิทธิ์ดูเอกสารยืนยันตัวตน</p> : verification.status !== "pending" && <>
       {!data ? <button type="button" className="bookings-timeline-load" disabled={busy} onClick={load}>{busy ? "กำลังโหลด…" : "ดูเอกสาร (การเปิดดูจะถูกบันทึก)"}</button> : <div className="bookings-identity-data">
         {data.profile ? <dl><div><dt>ชื่อ-นามสกุล</dt><dd>{data.profile.fullName}</dd></div><div><dt>ที่อยู่</dt><dd>{data.profile.address}</dd></div><div><dt>เบอร์สำรอง</dt><dd>{data.profile.backupPhone}</dd></div>{data.profile.social && <div><dt>IG / FB</dt><dd>{data.profile.social}</dd></div>}</dl> : <p>ไม่พบข้อมูลลูกค้า</p>}
-        <div className="bookings-identity-files">{data.files.length ? data.files.map(file => <a key={file._id} href={`/api/admin/identity/file/${file._id}`} target="_blank" rel="noopener noreferrer"><img src={`/api/admin/identity/file/${file._id}`} alt={file.kind === "idCard" ? "บัตรประชาชน" : "เซลฟี่คู่บัตร"} /><span>{file.kind === "idCard" ? "บัตรประชาชน" : "เซลฟี่คู่บัตร"}</span></a>) : <p>ไม่มีไฟล์ (อาจถูกลบตามกำหนดแล้ว)</p>}</div>
+        <div className="bookings-identity-files">{data.files.length ? data.files.map(file => <a key={file._id} href={`/api/admin/identity/file/${file._id}`} target="_blank" rel="noopener noreferrer"><img src={`/api/admin/identity/file/${file._id}`} alt={identityFileLabel(file.kind)} /><span>{identityFileLabel(file.kind)}</span></a>) : <p>ไม่มีไฟล์ (อาจถูกลบตามกำหนดแล้ว)</p>}</div>
       </div>}
       {verification.status === "submitted" && data && (asking ? <div className="bookings-inline-form"><label className="is-wide">บอกลูกค้าว่าต้องแก้อะไร<input value={reason} maxLength={300} onChange={event => setReason(event.target.value)} placeholder="เช่น รูปบัตรไม่ชัด / ชื่อไม่ตรงกับบัตร" /></label><div><button type="button" disabled={busy} onClick={() => setAsking(false)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || !reason.trim()} onClick={() => review(false)}>ส่งให้ลูกค้าแก้</button></div></div>
         : <p className="bookings-fulfillment-wait"><button type="button" disabled={busy} onClick={() => review(true)}>✓ ผ่าน ยืนยันตัวตนแล้ว</button><button type="button" disabled={busy} onClick={() => setAsking(true)}>ขอเอกสารใหม่</button></p>)}

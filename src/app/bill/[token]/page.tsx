@@ -46,7 +46,7 @@ async function Content({ params }: PageProps) {
     {row.status !== "cancelled" && verification && !returned && <div className={`bill-track bill-identity is-${verification.status}`}><strong>ยืนยันตัวตนแทนเงินมัดจำ · {verificationLabels[verification.status]}</strong>
             {verification.status === "approved" ? <p>✅ เรียบร้อยแล้ว ไม่ต้องวางเงินมัดจำ{verification.reused ? " (ใช้ข้อมูลยืนยันตัวตนเดิม)" : ""}</p>
               : verification.status === "submitted" ? <p>ร้านได้รับเอกสารแล้ว กำลังตรวจ จะแจ้งผลทาง LINE ค่ะ</p>
-              : <>{verification.status === "rejected" && verification.reason && <p className="bill-error">ร้านขอเอกสารใหม่: {verification.reason}</p>}<p>ส่งก่อนวันจัดส่ง{row.schedule ? ` (${dateLabel(row.schedule.ship)})` : ""} ไม่เช่นนั้นร้านจะจัดส่งไม่ได้</p><IdentityForm token={token} defaults={{ fullName: row.name || "", address: row.address || "" }} deleteAfterDays={settings.verification.deleteAfterDays} /></>}
+              : <>{verification.status === "rejected" && verification.reason && <p className="bill-error">ร้านขอเอกสารใหม่: {verification.reason}</p>}<p>ส่งก่อนวันจัดส่ง{row.schedule ? ` (${dateLabel(row.schedule.ship)})` : ""} ไม่เช่นนั้นร้านจะจัดส่งไม่ได้</p><IdentityForm token={token} defaults={{ fullName: row.name || "", address: row.address || "" }} deleteAfterDays={settings.verification.deleteAfterDays} examples={settings.verification.examples} /></>}
           </div>}
     {row.status === "cancelled" ? <p className="bill-notice">คำขอนี้ถูกยกเลิกแล้ว หากมีข้อสงสัยกรุณาติดต่อร้านทาง LINE</p>
       : !row.quote ? <p className="bill-notice">ร้านกำลังจัดทำบิลของคุณ กรุณารอสักครู่ หรือติดต่อร้านทาง LINE</p>
