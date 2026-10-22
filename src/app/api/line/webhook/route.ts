@@ -75,7 +75,12 @@ async function handle(request: Request, events: LineEvent[], origin: string) {
         await replyLine(event.replyToken, [{ type: "text", text: id || wanted.length === 10 ? "ยังไม่พบคำขอที่ตรงกับข้อมูลนี้ค่ะ กรุณาตรวจสอบเลขที่คำขอหรือเบอร์โทร แล้วส่งมาอีกครั้งนะคะ" : greeting }]);
         continue;
       }
-      await bookings.updateOne({ _id: target._id }, { $set: { lineUserId: userId, lineName: await lineProfileName(userId), lineLinkedAt: new Date() } });
+      const before = await bookings.findOne({ _id: target._id }, { projection: { lineUserId: 1, lineName: 1, name: 1 } });
+      const lineName = await lineProfileName(userId);
+      await bookings.updateOne({ _id: target._id }, { $set: { lineUserId: userId, lineName, lineLinkedAt: new Date() } });
+      // Only a new or different LINE account goes in the history; repeating the request number is not news.
+      if (before?.lineUserId !== userId) await audit(request, null, { action: "booking.line_linked", targetType: "booking", targetId: target._id, actorEmail: `ลูกค้า${before?.name ? ` ${before.name}` : ""}`,
+        summary: `${before?.lineUserId ? "เปลี่ยน LINE ที่ผูกกับคำขอ" : "ผูก LINE กับคำขอ"}${lineName ? ` · ${lineName}` : ""} (พิมพ์${id ? "เลขคำขอ" : "เบอร์โทร"})`, changes: [{ field: "lineName", before: before?.lineUserId ? before.lineName || "(ไม่ทราบชื่อ)" : null, after: lineName || "(ไม่ทราบชื่อ)" }] });
       const full = await bookings.findOne({ _id: target._id });
       if (!full) continue;
       let extra = "";
@@ -85,6 +90,7 @@ async function handle(request: Request, events: LineEvent[], origin: string) {
         const reused = await reusableProfile(db, full.verification.profileId, userId, settings.verification);
         if (reused) {
           await bookings.updateOne({ _id: full._id }, { $set: { verification: { ...full.verification, status: "approved", reused: true, reviewedAt: new Date(), reviewedByName: "ใช้การยืนยันตัวตนเดิม" } } });
+          await audit(request, null, { action: "identity.reused", targetType: "booking", targetId: full._id, actorEmail: "ระบบ", summary: `ใช้การยืนยันตัวตนเดิม (ผ่านเมื่อ ${reused.approvedAt!.toISOString().slice(0, 10)}${reused.approvedByName ? ` โดย ${reused.approvedByName}` : ""})` });
           extra = "\n\n✅ ใช้ข้อมูลยืนยันตัวตนเดิมของคุณแล้ว ไม่ต้องส่งเอกสารใหม่ค่ะ";
         } else {
           extra = `\n\nคำขอนี้เลือกแบบไม่วางเงินมัดจำ รบกวนยืนยันตัวตน (รูปบัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่) ก่อนวันจัดส่ง ใช้เวลาประมาณ 2 นาที 👉 ${await billLink(bookings, full, origin)}`;

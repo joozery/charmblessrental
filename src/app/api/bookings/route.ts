@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { database } from "@/lib/mongodb";
 import { sameOrigin } from "@/lib/admin-auth";
+import { audit } from "@/lib/audit";
 import type { Product } from "@/lib/products";
 import { getStoreSettings } from "@/lib/store-settings";
 import { effectivePricing, priceFor } from "@/lib/pricing";
@@ -48,6 +49,9 @@ export async function POST(request: Request) {
     items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, stock: product.stock ?? 1 })),
     createdAt: new Date(), updatedAt: new Date(), billToken: randomBytes(18).toString("base64url"), payment: "unpaid",
   });
+  // The first line of the request's history; later steps are logged by the admin, LINE and bill routes.
+  await audit(request, null, { action: "booking.created", targetType: "booking", targetId: requestId, actorEmail: `ลูกค้า ${body.name.trim()}`,
+    summary: `ลูกค้าส่งคำขอจอง · ${products.length} รายการ · ใช้งาน ${body.start} ถึง ${body.end} (${days} วัน) · ${shipping.label} · ${verification ? "ไม่วางเงินมัดจำ ยืนยันตัวตนแทน" : "วางเงินมัดจำ"}${estimatedTotal === null ? "" : ` · ประมาณ ${estimatedTotal} บาท`}` });
   return Response.json({ requestId, estimatedTotal }, { status: 201 });
   } catch (error) {
     console.error("Booking request failed:", error);
