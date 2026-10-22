@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   const prices = new Map(products.map(product => [product.id, priceFor(effectivePricing(product, settings.rentalPricing, settings.extraDayRates), days)]));
   const estimatedTotal = [...prices.values()].every(price => price !== null) ? [...prices.values()].reduce<number>((sum, price) => sum + (price || 0), 0) + deliveryFee : null;
   // Renting without a deposit: the shop's rules decide, and the customer then sends ID documents from the bill link.
-  if (body.depositMode === "identity" && !identityAllowed(settings.verification, estimatedTotal === null ? null : estimatedTotal - deliveryFee, products.map(product => product.category))) return Response.json({ error: "รายการนี้ต้องวางเงินประกัน กรุณาเลือกแบบวางเงินประกัน" }, { status: 400 });
+  if (body.depositMode === "identity" && !identityAllowed(settings.verification, estimatedTotal === null ? null : estimatedTotal - deliveryFee, products.map(product => product.category))) return Response.json({ error: "รายการนี้ต้องวางเงินมัดจำ กรุณาเลือกแบบวางเงินมัดจำ" }, { status: 400 });
   const verification: BookingVerification | undefined = body.depositMode === "identity" ? { mode: "identity", status: "pending", profileId: normalizePhone(body.phone) } : undefined;
   const requestId = `BR-${body.start.replaceAll("-", "")}-${randomUUID().slice(0, 6).toUpperCase()}`;
   await db.collection<BookingRecord>("bookingRequests").insertOne({

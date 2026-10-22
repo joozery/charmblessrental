@@ -31,7 +31,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/bill/[token
   const bookings = db.collection<BookingDoc>("bookingRequests");
   const booking = await bookings.findOne({ billToken: token }, { projection: { _id: 1, name: 1, phone: 1, status: 1, verification: 1 } });
   if (!booking) return Response.json({ error: "ไม่พบรายการเช่านี้" }, { status: 404 });
-  if (booking.verification?.mode !== "identity") return Response.json({ error: "รายการนี้เลือกแบบวางเงินประกัน ไม่ต้องส่งเอกสาร" }, { status: 409 });
+  if (booking.verification?.mode !== "identity") return Response.json({ error: "รายการนี้เลือกแบบวางเงินมัดจำ ไม่ต้องส่งเอกสาร" }, { status: 409 });
   if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
   if (booking.verification.status === "approved") return Response.json({ error: "ยืนยันตัวตนเรียบร้อยแล้ว ไม่ต้องส่งใหม่" }, { status: 409 });
   await saveSubmission(db, booking, booking.verification.profileId, { fullName, address, backupPhone, social }, files);

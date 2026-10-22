@@ -1,12 +1,12 @@
 // Client-safe: used by server guards and by the admin UI to hide what an account cannot do.
 export const permissionList = [
   { key: "bookings", label: "คำขอจอง", description: "ดูคำขอ เปลี่ยนสถานะ และส่งบิล" },
-  { key: "pricing", label: "แก้ไขราคาในใบสรุป", description: "ค่าเช่า เงินประกัน และค่าจัดส่ง" },
-  { key: "payments", label: "ยืนยันการชำระเงิน", description: "บันทึกรับเงินค่าเช่าและเงินประกัน" },
+  { key: "pricing", label: "แก้ไขราคาในใบสรุป", description: "ค่าเช่า เงินมัดจำ และค่าจัดส่ง" },
+  { key: "payments", label: "ยืนยันการชำระเงิน", description: "บันทึกรับเงินค่าเช่าและเงินมัดจำ" },
   { key: "shipping", label: "จัดส่ง รับคืน และเตรียมสินค้า", description: "บันทึกเลขพัสดุ รับคืน ตรวจสภาพ ซัก และยืนยันพร้อมให้เช่า" },
-  { key: "deposits", label: "คืนเงินประกัน", description: "คืนเงิน หักเงิน และแนบหลักฐาน" },
+  { key: "deposits", label: "คืนเงินมัดจำ", description: "คืนเงิน หักเงิน และแนบหลักฐาน" },
   { key: "finance", label: "การเงิน", description: "ดูสรุปและบันทึกรายรับ–รายจ่าย" },
-  { key: "identity", label: "เอกสารยืนยันตัวตน", description: "ดูและตรวจบัตรประชาชนของลูกค้าที่ไม่วางเงินประกัน" },
+  { key: "identity", label: "เอกสารยืนยันตัวตน", description: "ดูและตรวจบัตรประชาชนของลูกค้าที่ไม่วางเงินมัดจำ" },
   { key: "rentals", label: "ประวัติการเช่า", description: "ค้นหารายการเช่าเดิม" },
   { key: "products", label: "สินค้าและคิวว่าง", description: "แก้ไขสินค้า ราคา และจำนวนว่าง" },
   { key: "settings", label: "ตั้งค่าร้าน", description: "หน้าร้านและใบรายละเอียดการเช่า" },

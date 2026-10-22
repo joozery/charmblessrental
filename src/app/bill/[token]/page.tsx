@@ -43,8 +43,8 @@ async function Content({ params }: PageProps) {
   const paid = row.payment === "paid";
   return <main className="bill-page">
     <header className="bill-head"><div><span>CHARM BLESS RENTAL</span><h1>ใบรายละเอียดการเช่า</h1><p>เลขที่คำขอ {doc._id}</p></div>{row.status !== "cancelled" && row.quote && <strong className={paid ? "bill-status is-paid" : "bill-status"}>{paid ? "ชำระเงินแล้ว" : "รอชำระเงิน"}</strong>}</header>
-    {row.status !== "cancelled" && verification && !returned && <div className={`bill-track bill-identity is-${verification.status}`}><strong>ยืนยันตัวตนแทนเงินประกัน · {verificationLabels[verification.status]}</strong>
-            {verification.status === "approved" ? <p>✅ เรียบร้อยแล้ว ไม่ต้องวางเงินประกัน{verification.reused ? " (ใช้ข้อมูลยืนยันตัวตนเดิม)" : ""}</p>
+    {row.status !== "cancelled" && verification && !returned && <div className={`bill-track bill-identity is-${verification.status}`}><strong>ยืนยันตัวตนแทนเงินมัดจำ · {verificationLabels[verification.status]}</strong>
+            {verification.status === "approved" ? <p>✅ เรียบร้อยแล้ว ไม่ต้องวางเงินมัดจำ{verification.reused ? " (ใช้ข้อมูลยืนยันตัวตนเดิม)" : ""}</p>
               : verification.status === "submitted" ? <p>ร้านได้รับเอกสารแล้ว กำลังตรวจ จะแจ้งผลทาง LINE ค่ะ</p>
               : <>{verification.status === "rejected" && verification.reason && <p className="bill-error">ร้านขอเอกสารใหม่: {verification.reason}</p>}<p>ส่งก่อนวันจัดส่ง{row.schedule ? ` (${dateLabel(row.schedule.ship)})` : ""} ไม่เช่นนั้นร้านจะจัดส่งไม่ได้</p><IdentityForm token={token} defaults={{ fullName: row.name || "", address: row.address || "" }} deleteAfterDays={settings.verification.deleteAfterDays} /></>}
           </div>}

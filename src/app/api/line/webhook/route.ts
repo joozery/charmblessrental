@@ -41,7 +41,7 @@ async function handle(events: LineEvent[], origin: string) {
         } else {
           const billToken = full.billToken || randomBytes(18).toString("base64url");
           if (!full.billToken) await bookings.updateOne({ _id: full._id }, { $set: { billToken } });
-          extra = `\n\nคำขอนี้เลือกแบบไม่วางเงินประกัน รบกวนยืนยันตัวตน (รูปบัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่) ก่อนวันจัดส่ง ใช้เวลาประมาณ 2 นาที 👉 ${origin}/bill/${billToken}`;
+          extra = `\n\nคำขอนี้เลือกแบบไม่วางเงินมัดจำ รบกวนยืนยันตัวตน (รูปบัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่) ก่อนวันจัดส่ง ใช้เวลาประมาณ 2 นาที 👉 ${origin}/bill/${billToken}`;
         }
       }
       await replyLine(event.replyToken, [{ type: "text", text: `ได้รับข้อมูลคำขอ ${target._id} แล้วค่ะ ร้านกำลังตรวจสอบคิวและจัดทำใบรายละเอียดการเช่า จะส่งลิงก์ชำระเงินให้ที่นี่เร็วๆ นี้นะคะ 💗${extra}` }]);

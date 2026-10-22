@@ -45,7 +45,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
       <span style={{ fontSize: 21, fontWeight: 700 }}>{itemPrice(item, doc.days) === null ? "สอบถาม" : `${money(itemPrice(item, doc.days)!)} บาท`}</span>
     </div>))}
     <div style={{ display: "flex", gap: 14 }}>
-      {card("สรุปยอดค่าเช่า", [sum("ค่าเช่ารวม", money(quote.rental)), sum("เงินประกัน", money(quote.deposit)), sum("ค่าจัดส่ง", money(quote.shipping)), sum("ยอดรวมสุทธิ", `${money(total)} บาท`, true)], 1)}
+      {card("สรุปยอดค่าเช่า", [sum("ค่าเช่ารวม", money(quote.rental)), sum("เงินมัดจำ", money(quote.deposit)), sum("ค่าจัดส่ง", money(quote.shipping)), sum("ยอดรวมสุทธิ", `${money(total)} บาท`, true)], 1)}
       {card("ช่องทางชำระเงิน", [qr && <img key="qr" src={qr} width={150} height={150} style={{ alignSelf: "center", objectFit: "contain" }} alt="" />, field("ธนาคาร", quote.bank || "-"), field("เลขที่บัญชี", quote.accountNumber || "-"), field("ชื่อบัญชี", quote.accountName || "-")], 1)}
     </div>
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "#fff7e8", border: "1px solid #f3d79b", fontSize: 20 }}><span style={{ fontWeight: 700 }}>ส่งคืนภายในวันที่ {dateLabel(returnDay(doc))} ก่อน 18:00 น.</span><span style={{ fontSize: 17, color: "#7a6f78" }}>โอนตามยอดสุทธิ แล้วส่งสลิปในแชทนี้ได้เลยค่ะ</span></div>

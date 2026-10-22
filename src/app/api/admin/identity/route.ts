@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     await db.collection<{ _id: string }>("storeSettings").updateOne({ _id: "main" }, { $set: { verification } }, { upsert: true });
     revalidateTag("catalog", { expire: 0 });
     const changes = diff(before, verification);
-    if (changes.length) await audit(request, auth.admin, { action: "settings.identity", targetType: "settings", targetId: "verification", summary: "แก้ไขการตั้งค่ายืนยันตัวตนแทนเงินประกัน", changes });
+    if (changes.length) await audit(request, auth.admin, { action: "settings.identity", targetType: "settings", targetId: "verification", summary: "แก้ไขการตั้งค่ายืนยันตัวตนแทนเงินมัดจำ", changes });
     return Response.json({ verification });
   }
   const auth = await requireAdmin("identity");
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: booking._id }, { $set: { billToken } });
     const link = `${new URL(request.url).origin}/bill/${billToken}`;
-    const message = body.approve ? `✅ ยืนยันตัวตนคำขอ ${booking._id} เรียบร้อยแล้วค่ะ ไม่ต้องวางเงินประกัน ร้านจะดำเนินการตามกำหนดนะคะ 💗` : `รบกวนส่งเอกสารยืนยันตัวตนคำขอ ${booking._id} ใหม่อีกครั้งค่ะ 🙏\nเหตุผล: ${reason}\nส่งได้ที่ ${link}`;
+    const message = body.approve ? `✅ ยืนยันตัวตนคำขอ ${booking._id} เรียบร้อยแล้วค่ะ ไม่ต้องวางเงินมัดจำ ร้านจะดำเนินการตามกำหนดนะคะ 💗` : `รบกวนส่งเอกสารยืนยันตัวตนคำขอ ${booking._id} ใหม่อีกครั้งค่ะ 🙏\nเหตุผล: ${reason}\nส่งได้ที่ ${link}`;
     try { await pushLine(booking.lineUserId, [{ type: "text", text: message }]); lineNotified = true; } catch (error) { console.error("LINE identity notice failed:", error); }
   }
   return Response.json({ ok: true, verification: { ...verification, reviewedAt: now.toISOString() }, lineNotified });

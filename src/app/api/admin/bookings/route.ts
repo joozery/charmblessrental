@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken, payment: booking.payment || "unpaid" } });
     const origin = new URL(request.url).origin, billUrl = `${origin}/bill/${billToken}`;
     const imageUrl = `${billUrl}/image?v=${Date.now()}`;
-    const message = { type: "text" as const, text: `ใบรายละเอียดการเช่า (${booking._id}) ของคุณ${booking.name ? " " + booking.name : ""} พร้อมแล้วค่ะ\nดูบิลและบันทึกไฟล์: ${billUrl}\n\nกรุณาตรวจสอบยอด โอนเงินตามยอดสุทธิ และส่งสลิปในแชทนี้นะคะ 🙏${booking.verification?.mode === "identity" && booking.verification.status !== "approved" ? `\n\nคำขอนี้ไม่วางเงินประกัน รบกวนยืนยันตัวตน (บัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่) ได้ที่ลิงก์เดียวกันนี้ก่อนวันจัดส่งค่ะ` : ""}` };
+    const message = { type: "text" as const, text: `ใบรายละเอียดการเช่า (${booking._id}) ของคุณ${booking.name ? " " + booking.name : ""} พร้อมแล้วค่ะ\nดูบิลและบันทึกไฟล์: ${billUrl}\n\nกรุณาตรวจสอบยอด โอนเงินตามยอดสุทธิ และส่งสลิปในแชทนี้นะคะ 🙏${booking.verification?.mode === "identity" && booking.verification.status !== "approved" ? `\n\nคำขอนี้ไม่วางเงินมัดจำ รบกวนยืนยันตัวตน (บัตรประชาชน + เซลฟี่คู่บัตร + ที่อยู่) ได้ที่ลิงก์เดียวกันนี้ก่อนวันจัดส่งค่ะ` : ""}` };
     try { await pushLine(booking.lineUserId, origin.startsWith("https://") ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }, message] : [message]); } catch (error) { console.error("LINE push failed:", error); return Response.json({ error: "ส่งข้อความไม่สำเร็จ ลูกค้าอาจบล็อกบัญชีร้านหรือ token ไม่ถูกต้อง" }, { status: 502 }); }
     await bookings.updateOne({ _id: body.id }, { $set: { lineSentAt: new Date() } });
     await log("booking.bill_sent", "ส่งบิลทาง LINE");
@@ -64,14 +64,14 @@ export async function POST(request: Request) {
       if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
     } else {
       const deposit = await deposits(db).findOne({ _id: booking._id });
-      if (deposit && deposit.status !== "held" && deposit.status !== "void") return Response.json({ error: "คืนเงินประกันของรายการนี้แล้ว จึงยกเลิกสถานะชำระไม่ได้" }, { status: 409 });
+      if (deposit && deposit.status !== "held" && deposit.status !== "void") return Response.json({ error: "คืนเงินมัดจำของรายการนี้แล้ว จึงยกเลิกสถานะชำระไม่ได้" }, { status: 409 });
       if (!text(body.reason, 300) || !body.reason?.trim()) return Response.json({ error: "กรุณาระบุเหตุผลที่ยกเลิกสถานะชำระเงิน" }, { status: 400 });
     }
     const paidOn = body.paidOn || thaiDay();
     await bookings.updateOne({ _id: body.id }, { $set: { payment: body.paid ? "paid" : "unpaid", paidAt: body.paid ? new Date(`${paidOn}T12:00:00.000Z`) : null, updatedAt: new Date(), updatedBy: by } });
     if (body.paid) {
       const amounts = await recordBookingPayment(db, booking, admin, paidOn);
-      await log("booking.payment_confirmed", `ยืนยันชำระเงิน · ค่าเช่า ${amounts.rental} · ค่าส่ง ${amounts.shipping} · เงินประกัน ${amounts.deposit} บาท`, [{ field: "payment", before: "unpaid", after: "paid" }, { field: "paidOn", before: null, after: paidOn }]);
+      await log("booking.payment_confirmed", `ยืนยันชำระเงิน · ค่าเช่า ${amounts.rental} · ค่าส่ง ${amounts.shipping} · เงินมัดจำ ${amounts.deposit} บาท`, [{ field: "payment", before: "unpaid", after: "paid" }, { field: "paidOn", before: null, after: paidOn }]);
     } else {
       await voidBookingPayment(db, booking._id, admin, body.reason.trim());
       await log("booking.payment_reverted", `ยกเลิกสถานะชำระเงิน: ${body.reason.trim()}`, [{ field: "payment", before: "paid", after: "unpaid" }]);
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     const picks = body.units === undefined ? booking.items.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
     if (!picks) return Response.json({ error: "ชิ้นสินค้าที่เลือกไม่ถูกต้อง กรุณาโหลดหน้าใหม่" }, { status: 400 });
     // No deposit was taken, so the piece only leaves once the customer's identity has been checked.
-    if (!booking.shipment && booking.verification?.mode === "identity" && booking.verification.status !== "approved") return Response.json({ error: "ลูกค้าเลือกไม่วางเงินประกัน ต้องตรวจเอกสารยืนยันตัวตนให้ผ่านก่อนจัดส่ง" }, { status: 409 });
+    if (!booking.shipment && booking.verification?.mode === "identity" && booking.verification.status !== "approved") return Response.json({ error: "ลูกค้าเลือกไม่วางเงินมัดจำ ต้องตรวจเอกสารยืนยันตัวตนให้ผ่านก่อนจัดส่ง" }, { status: 409 });
     const items = booking.items.map((item, index) => withUnit(item, picks[index]));
     const released = booking.items.map(item => item.unitSku).filter((sku): sku is string => !!sku && !picks.includes(sku));
     const shipment: Shipment = { carrier: body.carrier.trim(), trackingNumber: body.trackingNumber.trim(), shippedAt: booking.shipment?.shippedAt || new Date(), by, byName: admin.name };

@@ -2,7 +2,7 @@
 export type VerificationSettings = { enabled: boolean; maxRental: number | null; excludedCategories: string[]; validMonths: number; deleteAfterDays: number; note: string };
 export const defaultVerification: VerificationSettings = {
   enabled: true, maxRental: null, excludedCategories: [], validMonths: 6, deleteAfterDays: 30,
-  note: "ไม่ต้องวางเงินประกัน ส่งรูปบัตรประชาชน เซลฟี่คู่บัตร และที่อยู่ เพื่อยืนยันตัวตนแทน",
+  note: "ไม่ต้องวางเงินมัดจำ ส่งรูปบัตรประชาชน เซลฟี่คู่บัตร และที่อยู่ เพื่อยืนยันตัวตนแทน",
 };
 export type VerificationStatus = "pending" | "submitted" | "approved" | "rejected";
 export type BookingVerification = {
