@@ -13,6 +13,7 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "booking.shipped": { label: "บันทึกเลขพัสดุ / ส่งมอบ", group: "bookings" },
   "booking.returned": { label: "รับคืนสินค้า", group: "bookings" },
   "booking.customer_return": { label: "ลูกค้าแจ้งส่งคืน", group: "bookings" },
+  "booking.refund_account": { label: "ลูกค้ากรอกบัญชีรับเงินมัดจำคืน", group: "bookings" },
   "identity.submitted": { label: "ลูกค้าส่งเอกสารยืนยันตัวตน", group: "bookings" },
   "identity.approved": { label: "ยืนยันตัวตนผ่าน", group: "bookings" },
   "identity.rejected": { label: "ขอเอกสารยืนยันตัวตนใหม่", group: "bookings" },

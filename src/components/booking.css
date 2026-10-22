@@ -111,3 +111,4 @@
 .booking-return-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 @media(max-width:480px) { .booking-return-options { grid-template-columns: 1fr; } }
 .booking-deposit-options { display: grid; gap: 8px; }
+.booking-refund-account { display: grid; gap: 8px; }

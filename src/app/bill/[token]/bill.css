@@ -50,3 +50,9 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-identity-example{display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:8px;background:#fdf5f9;color:#907181;text-decoration:none}.bill-identity-example small{font-size:11px}
 .bill-identity-consent{flex-direction:row!important;align-items:flex-start;gap:8px!important;line-height:1.6}.bill-identity-consent input{margin-top:4px}
 @media(max-width:560px){.bill-identity-form{grid-template-columns:1fr}}
+.bill-refund-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
+.bill-refund-form label{display:flex;flex-direction:column;gap:4px;color:#475467;font-size:13px}
+.bill-refund-form input,.bill-refund-form select{height:42px;padding:0 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font:inherit;font-size:15px}
+.bill-refund-form>div,.bill-refund-form .bill-error{grid-column:1/-1}.bill-refund-form>div{display:flex;flex-wrap:wrap;gap:8px}
+.bill-refund-saved{margin:8px 0 4px;font-weight:600;line-height:1.6}
+@media(max-width:560px){.bill-refund-form{grid-template-columns:1fr}}

@@ -10,13 +10,16 @@ import { rentalStage, stageLabel, stageSteps } from "@/lib/rental-stage";
 import type { UnitChoice } from "@/lib/rental-units";
 import { returnDay, returnMethods, type ScheduleRecord } from "@/lib/schedule";
 import { identityFileLabel, verificationLabels, type BookingVerification } from "@/lib/identity";
+import type { RefundAccount } from "@/lib/refund-account";
 
 export type Shipment = { carrier: string; trackingNumber: string; shippedAt: string; byName: string };
 export type Returned = { at: string; condition: string; note: string; byName: string };
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string; via?: "line" | "bill" };
 export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
-export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit };
+export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount };
+// Returned to the shop while its deposit is still held: the refund is the step left to do.
+export const awaitingRefund = (row: FulfillmentRow) => row.status !== "cancelled" && !!row.returned && row.deposit?.status === "held";
 type Log = { _id: string; at: string; action: string; summary: string; actorName: string; actorEmail: string; changes: { field: string; before: unknown; after: unknown }[] };
 
 const conditions = [{ key: "good", label: "สภาพปกติ" }, { key: "damaged", label: "ชำรุด / มีคราบ" }, { key: "missing", label: "สูญหาย / ไม่ครบ" }];
@@ -117,14 +120,17 @@ export default function BookingFulfillment({ row, permissions, unitChoices, onCh
       <h3>เงินมัดจำ</h3>
       <p className="bookings-deposit-head"><strong>{money(row.deposit.amount)} บาท</strong><span className={`bookings-deposit-badge is-${row.deposit.status}`}>{depositStatus[row.deposit.status]}</span></p>
       <p className="bookings-deposit-meta">รับเมื่อ {day(row.deposit.receivedAt)} · {row.deposit.receivedByName}</p>
+      {awaitingRefund(row) && <p className="bookings-deposit-alert" role="status"><Icon name="payment" />รับชุดคืนแล้ว แต่ยังไม่ได้โอนเงินมัดจำคืน</p>}
+      {row.refundAccount ? <div className="bookings-refund-account"><span>บัญชีรับเงินคืน</span><strong>{row.refundAccount.bank} · {row.refundAccount.accountNumber}</strong><small>{row.refundAccount.accountName}</small>{row.deposit.status === "held" && <button type="button" onClick={() => { void navigator.clipboard?.writeText(row.refundAccount!.accountNumber).then(() => { setNotice("คัดลอกเลขบัญชีแล้ว"); setError(""); }).catch(() => undefined); }}>คัดลอกเลขบัญชี</button>}</div>
+        : row.deposit.status === "held" && <p className="bookings-deposit-meta">ลูกค้ายังไม่ได้กรอกบัญชีรับเงินคืน (กรอกได้ในลิงก์บิล)</p>}
       {row.deposit.refund && <div className="bookings-deposit-refund"><p>คืน <b>{money(row.deposit.refund.amount)}</b> บาท{row.deposit.refund.deducted > 0 && <> · หัก <b>{money(row.deposit.refund.deducted)}</b> บาท</>} · {day(row.deposit.refund.date)}</p>{row.deposit.refund.reason && <p>เหตุผล: {row.deposit.refund.reason}</p>}<p className="bookings-deposit-meta">บันทึกโดย {row.deposit.refund.byName} · {stamp(row.deposit.refund.at)}</p>{!!row.deposit.refund.evidence.length && <div className="bookings-evidence">{row.deposit.refund.evidence.map((url, index) => <a key={url} href={url} target="_blank" rel="noopener noreferrer">หลักฐาน {index + 1}</a>)}</div>}</div>}
       {row.deposit.status === "held" && canRefund && (!row.returned ? <p className="bookings-fulfillment-wait">คืนเงินมัดจำได้หลังบันทึกรับคืนสินค้า</p>
-        : !refundForm ? <p className="bookings-fulfillment-wait">รอคืนเงินมัดจำ<button type="button" disabled={busy} onClick={() => setRefundForm({ refund: String(row.deposit!.amount), date: today(), reason: "", evidence: [] })}>บันทึกคืนเงินมัดจำ</button></p>
+        : !refundForm ? <p className="bookings-fulfillment-wait">รอคืนเงินมัดจำ<button type="button" disabled={busy} onClick={() => setRefundForm({ refund: String(row.deposit!.amount), date: today(), reason: "", evidence: [] })}>ยืนยันโอนเงินมัดจำคืน</button></p>
         : <div className="bookings-inline-form"><label>ยอดคืน (บาท)<input type="number" min="0" max={row.deposit.amount} step="0.01" value={refundForm.refund} onChange={event => setRefundForm({ ...refundForm, refund: event.target.value })} /></label><label>วันที่คืน<input type="date" value={refundForm.date} max={today()} onChange={event => setRefundForm({ ...refundForm, date: event.target.value })} /></label>
           {deducted > 0 && <label className="is-wide">เหตุผลที่หัก {money(deducted)} บาท<input value={refundForm.reason} maxLength={500} required onChange={event => setRefundForm({ ...refundForm, reason: event.target.value })} placeholder="เช่น ค่าซักคราบ / ส่งคืนล่าช้า 1 วัน" /></label>}
           <label className="is-wide">หลักฐานการโอนคืน{Number(refundForm.refund) > 0 ? " (จำเป็น)" : ""}<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={busy || refundForm.evidence.length >= 5} onChange={event => { void upload(event.target.files); event.target.value = ""; }} /></label>
           {!!refundForm.evidence.length && <div className="bookings-evidence is-wide">{refundForm.evidence.map((url, index) => <span key={url}><a href={url} target="_blank" rel="noopener noreferrer">หลักฐาน {index + 1}</a><button type="button" aria-label={`ลบหลักฐาน ${index + 1}`} onClick={() => setRefundForm({ ...refundForm, evidence: refundForm.evidence.filter(item => item !== url) })}>×</button></span>)}</div>}
-          <div><button type="button" disabled={busy} onClick={() => setRefundForm(null)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || (deducted > 0 && !refundForm.reason.trim()) || (Number(refundForm.refund) > 0 && !refundForm.evidence.length)} onClick={refund}>{busy ? "กำลังบันทึก…" : "ยืนยันคืนเงินมัดจำ"}</button></div></div>)}
+          <div><button type="button" disabled={busy} onClick={() => setRefundForm(null)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || (deducted > 0 && !refundForm.reason.trim()) || (Number(refundForm.refund) > 0 && !refundForm.evidence.length)} onClick={refund}>{busy ? "กำลังบันทึก…" : "ยืนยันโอนเงินมัดจำคืน"}</button></div></div>)}
     </div></div>}
     {error && <p className="admin-error" role="alert">{error}</p>}
     {notice && !error && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
