@@ -13,6 +13,7 @@ import { unitStatusLabels, type UnitStatus } from "@/lib/products";
 import { assignUnits, validUnitPicks } from "@/lib/rental-units";
 import { cleanCode, customerDiscount, discountCoupons, validCoupon } from "@/lib/discounts";
 import { claimBill } from "@/lib/bill-owner";
+import { requestOrigin } from "@/lib/request-origin";
 const statuses = ["new", "contacted", "confirmed", "cancelled"];
 const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     if (!booking.quote) return Response.json({ error: "กรุณากดบันทึกราคาในใบสรุปก่อนส่งบิล" }, { status: 409 });
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken, payment: booking.payment || "unpaid" } });
-    const origin = new URL(request.url).origin, billUrl = `${origin}/bill/${billToken}`;
+    const origin = requestOrigin(request), billUrl = `${origin}/bill/${billToken}`;
     const imageUrl = `${billUrl}/image?v=${Date.now()}`;
     const message = { type: "text" as const, text: `ใบรายละเอียดการเช่า (${booking._id}) ของคุณ${booking.name ? " " + booking.name : ""} พร้อมแล้วค่ะ\nดูบิลและบันทึกไฟล์: ${billUrl}\n\nกรุณาตรวจสอบยอด โอนเงินตามยอดสุทธิ และส่งสลิปในแชทนี้นะคะ 🙏${booking.verification?.mode === "identity" && booking.verification.status !== "approved" ? `\n\nคำขอนี้ไม่วางเงินมัดจำ รบกวนยืนยันตัวตน (บัตรประชาชน + แคปหน้า Instagram เต็มหน้าจอ + ที่อยู่) ได้ที่ลิงก์เดียวกันนี้ก่อนวันจัดส่งค่ะ` : ""}` };
     try { await pushLine(booking.lineUserId, origin.startsWith("https://") ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }, message] : [message]); } catch (error) { console.error("LINE push failed:", error); return Response.json({ error: "ส่งข้อความไม่สำเร็จ ลูกค้าอาจบล็อกบัญชีร้านหรือ token ไม่ถูกต้อง" }, { status: 502 }); }
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
     if (booking.lineUserId && lineConfigured() && (!booking.shipment || booking.shipment.trackingNumber !== shipment.trackingNumber || booking.shipment.carrier !== shipment.carrier)) {
       const billToken = booking.billToken || randomBytes(18).toString("base64url");
       if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken } });
-      const billUrl = `${new URL(request.url).origin}/bill/${billToken}`;
+      const billUrl = `${requestOrigin(request)}/bill/${billToken}`;
       const text = booking.method === "pickup"
         ? `ส่งมอบสินค้าคำขอ ${booking._id} เรียบร้อยแล้วค่ะ\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nเมื่อส่งคืนแล้ว แจ้งเลขพัสดุได้ที่ ${billUrl}`
         : `จัดส่งสินค้าคำขอ ${booking._id} แล้วค่ะ 📦\n${shipment.carrier} ${shipment.trackingNumber}\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nติดตามสถานะและแจ้งเลขพัสดุตอนส่งคืนได้ที่ ${billUrl}`;

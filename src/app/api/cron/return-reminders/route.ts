@@ -8,6 +8,7 @@ import type { BookingVerification } from "@/lib/identity";
 import { purgeIdentity } from "@/lib/identity-store";
 import { getStoreSettings } from "@/lib/store-settings";
 import { promoteWaitlist } from "@/lib/waitlist";
+import { requestOrigin } from "@/lib/request-origin";
 
 type BookingDoc = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; billToken?: string; lineUserId?: string; returnReminderSentAt?: Date; lateNoticeSentAt?: Date; verification?: BookingVerification };
 const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   const bookings = db.collection<BookingDoc>("bookingRequests");
   // Due back tomorrow, still out with the customer, and not reminded yet.
   const due = await bookings.find({ status: "confirmed", $or: [{ "schedule.returnDate": tomorrow }, { schedule: { $exists: false }, end: tomorrow }], shipment: { $exists: true }, returned: { $exists: false }, customerReturn: { $exists: false }, returnReminderSentAt: { $exists: false }, lineUserId: { $exists: true, $ne: "" } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, billToken: 1, lineUserId: 1 } }).toArray();
-  const origin = new URL(request.url).origin;
+  const origin = requestOrigin(request);
   let sent = 0, failed = 0;
   for (const booking of due) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");

@@ -11,6 +11,7 @@ import { carrierFor, saysReturned, trackingIn } from "@/lib/line-return";
 import { rentalStage, stageLabel } from "@/lib/rental-stage";
 import { returnMethods, type ScheduleRecord } from "@/lib/schedule";
 import { ensureCustomer, type CustomerRecord } from "@/lib/customer-credits";
+import { requestOrigin } from "@/lib/request-origin";
 
 type LineEvent = { type: string; replyToken?: string; source?: { userId?: string }; message?: { type: string; text?: string } };
 type BookingDoc = {
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
   let events: LineEvent[] = [];
   try { events = JSON.parse(raw).events || []; } catch { return new Response("bad request", { status: 400 }); }
   if (!events.length) return Response.json({ ok: true });
-  const origin = new URL(request.url).origin;
+  const origin = requestOrigin(request);
   after(() => handle(request, events, origin));
   return Response.json({ ok: true });
 }

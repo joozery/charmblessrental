@@ -11,6 +11,7 @@ import type { Product } from "@/lib/products";
 import { setUnitStatuses } from "@/lib/product-store";
 import { lineConfigured, pushLine } from "@/lib/line";
 import type { Extension } from "@/lib/extension";
+import { requestOrigin } from "@/lib/request-origin";
 
 type InputItem = { id: number; quantity: number };
 type BookingItem = { id: number; name: string; sku: string; image: string; dailyRate: number | null; unitSku?: string; quantity?: number; depositPrice?: number; rentalPrice?: number | null };
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
   await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: `แก้ไขสินค้า/วันเช่าหลังชำระเงิน · ส่วนต่าง ${difference} บาท` });
   let lineNotified = false;
   if (extension?.billToken && booking.lineUserId && lineConfigured()) {
-    try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${difference.toLocaleString("th-TH")} บาท\nบิลใหม่ต้องชำระภายใน 1 ชั่วโมง: ${new URL(request.url).origin}/bill/${extension.billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE booking modification notice failed:", error); }
+    try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${difference.toLocaleString("th-TH")} บาท\nบิลใหม่ต้องชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${extension.billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE booking modification notice failed:", error); }
   }
   return Response.json({ ok: true, items, start, end, days, schedule, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, lineNotified });
 }

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { adminAccounts, type PublicAdmin } from "./admin-accounts";
 import { can, type Permission } from "./permissions";
+import { requestOrigin } from "@/lib/request-origin";
 export function equal(a: string, b: string) {
   const x = Buffer.from(a), y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);
@@ -26,7 +27,7 @@ export async function currentAdmin(): Promise<PublicAdmin | null> {
   return (await adminAccounts()).findOne({ _id: value.id, version: value.version, active: true }, { projection: { passwordHash: 0 } });
 }
 export async function isAdmin() { return !!await currentAdmin(); }
-export function sameOrigin(request: Request) { return request.headers.get("origin") === new URL(request.url).origin; }
+export function sameOrigin(request: Request) { return request.headers.get("origin") === requestOrigin(request); }
 // Route handlers: returns the admin, or the 401/403 response to send back.
 export async function requireAdmin(permission?: Permission | "owner") {
   const admin = await currentAdmin();

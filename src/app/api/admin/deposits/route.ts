@@ -8,6 +8,7 @@ import type { LateReturn } from "@/lib/extension";
 import { deposits, ledgerDate, transactions, validDay, type DepositRecord } from "@/lib/finance";
 import { R2_PUBLIC_URL } from "@/lib/product-images";
 import type { Extension } from "@/lib/extension";
+import { requestOrigin } from "@/lib/request-origin";
 
 const isEvidence = (value: unknown) => typeof value === "string" && value.startsWith(`${R2_PUBLIC_URL}/evidence/`) && /^[a-f0-9-]+\.(png|jpg|webp)$/.test(value.slice(`${R2_PUBLIC_URL}/evidence/`.length));
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   if (booking.lineUserId && lineConfigured()) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: booking._id }, { $set: { billToken } });
-    const account = booking.refundAccount, link = `${new URL(request.url).origin}/bill/${billToken}`;
+    const account = booking.refundAccount, link = `${requestOrigin(request)}/bill/${billToken}`;
     const text = refund > 0
       ? `💸 ร้านโอนเงินมัดจำคืนให้แล้วค่ะ\nคำขอ ${deposit.bookingId}\nยอดคืน ${money(refund)} บาท${account ? ` เข้าบัญชี ${account.bank} •••${account.accountNumber.slice(-4)}` : ""}${deducted > 0 ? `\nหัก ${money(deducted)} บาท: ${reason}` : ""}\nดูรายละเอียด: ${link}\n\nขอบคุณที่ใช้บริการ Charm Bless นะคะ 💗`
       : `แจ้งเรื่องเงินมัดจำคำขอ ${deposit.bookingId} ค่ะ\nร้านหักเงินมัดจำทั้งหมด ${money(deducted)} บาท\nเหตุผล: ${reason}\nหากมีข้อสงสัย ทักแชทนี้ได้เลยค่ะ`;
@@ -69,6 +70,6 @@ async function createPenaltyBill(request: Request, body: { action?: string; book
   if (!result.modifiedCount) return Response.json({ error: "สร้างบิลค่าปรับไม่สำเร็จ กรุณาลองใหม่" }, { status: 409 });
   await audit(request, auth.admin, { action: "booking.penalty_bill_created", targetType: "booking", targetId: booking._id, summary: `สร้างบิลค่าปรับ ${money(amount)} บาท · ${extension.note}`, changes: [{ field: "penaltyAmount", before: null, after: amount }, { field: "penaltyReason", before: null, after: extension.note }] });
   let lineNotified = false;
-  if (booking.lineUserId && lineConfigured()) try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีบิลค่าปรับเพิ่มเติมสำหรับคำขอ ${booking._id} ค่ะ\nยอด ${money(amount)} บาท\nเหตุผล: ${extension.note}\nกรุณาชำระภายใน 1 ชั่วโมง: ${new URL(request.url).origin}/bill/${billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE penalty notice failed:", error); }
+  if (booking.lineUserId && lineConfigured()) try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีบิลค่าปรับเพิ่มเติมสำหรับคำขอ ${booking._id} ค่ะ\nยอด ${money(amount)} บาท\nเหตุผล: ${extension.note}\nกรุณาชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE penalty notice failed:", error); }
   return Response.json({ extension, lineNotified });
 }

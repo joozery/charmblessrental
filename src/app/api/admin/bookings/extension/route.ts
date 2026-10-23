@@ -11,6 +11,7 @@ import { effectivePricing, priceFor } from "@/lib/pricing";
 import type { Product } from "@/lib/products";
 import { blockRange, countUseDays, type ScheduleRecord } from "@/lib/schedule";
 import { getStoreSettings } from "@/lib/store-settings";
+import { requestOrigin } from "@/lib/request-origin";
 
 type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; shipment?: object; extensions?: Extension[]; lineUserId?: string; billToken?: string; quote?: { accountNumber?: string } };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
@@ -53,7 +54,7 @@ async function notify(request: Request, db: Db, booking: BookingDoc, text: (link
   if (!booking.lineUserId || !lineConfigured()) return false;
   const billToken = token || booking.billToken || randomBytes(18).toString("base64url");
   if (!token && !booking.billToken) await db.collection<BookingDoc>("bookingRequests").updateOne({ _id: booking._id }, { $set: { billToken } });
-  try { await pushLine(booking.lineUserId, [{ type: "text", text: text(`${new URL(request.url).origin}/bill/${billToken}`) }]); return true; } catch (error) { console.error("LINE extension notice failed:", error); return false; }
+  try { await pushLine(booking.lineUserId, [{ type: "text", text: text(`${requestOrigin(request)}/bill/${billToken}`) }]); return true; } catch (error) { console.error("LINE extension notice failed:", error); return false; }
 }
 
 export async function POST(request: Request) {

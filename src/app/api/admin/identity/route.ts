@@ -7,6 +7,7 @@ import { identityFiles, identityProfiles } from "@/lib/identity-store";
 import { lineConfigured, pushLine } from "@/lib/line";
 import { database } from "@/lib/mongodb";
 import { getStoreSettings } from "@/lib/store-settings";
+import { requestOrigin } from "@/lib/request-origin";
 
 type BookingDoc = { _id: string; status: string; billToken?: string; lineUserId?: string; verification?: BookingVerification };
 
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
   if (booking.lineUserId && lineConfigured()) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: booking._id }, { $set: { billToken } });
-    const link = `${new URL(request.url).origin}/bill/${billToken}`;
+    const link = `${requestOrigin(request)}/bill/${billToken}`;
     const message = body.approve ? `✅ ยืนยันตัวตนคำขอ ${booking._id} เรียบร้อยแล้วค่ะ ไม่ต้องวางเงินมัดจำ ร้านจะดำเนินการตามกำหนดนะคะ 💗` : `รบกวนส่งเอกสารยืนยันตัวตนคำขอ ${booking._id} ใหม่อีกครั้งค่ะ 🙏\nเหตุผล: ${reason}\nส่งได้ที่ ${link}`;
     try { await pushLine(booking.lineUserId, [{ type: "text", text: message }]); lineNotified = true; } catch (error) { console.error("LINE identity notice failed:", error); }
   }

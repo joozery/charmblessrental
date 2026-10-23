@@ -7,6 +7,7 @@ import { lineConfigured, pushLine } from "@/lib/line";
 import { database } from "@/lib/mongodb";
 import { countUseDays, type ScheduleRecord } from "@/lib/schedule";
 import { getStoreSettings } from "@/lib/store-settings";
+import { requestOrigin } from "@/lib/request-origin";
 
 type BookingDoc = { _id: string; status: string; schedule?: ScheduleRecord; items: { id: number }[]; shipment?: object; lateReturn?: LateReturn; lineUserId?: string; billToken?: string };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: booking._id }, { $set: { billToken } });
     const settings = await getStoreSettings();
-    try { await pushLine(booking.lineUserId, [{ type: "text", text: `แจ้งค่าปรับส่งคืนล่าช้า คำขอ ${booking._id} ค่ะ\nกำหนดคืน ${day(dueDate)} · คืนจริง ${day(body.actualDate)} (ช้า ${days} วัน)\nค่าปรับวันละ ${settings.lateRates.lateFinePerDay} บาท รวม ${money(fine)} บาท\nดูรายละเอียดและบัญชีร้านได้ที่ ${new URL(request.url).origin}/bill/${billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE late fine notice failed:", error); }
+    try { await pushLine(booking.lineUserId, [{ type: "text", text: `แจ้งค่าปรับส่งคืนล่าช้า คำขอ ${booking._id} ค่ะ\nกำหนดคืน ${day(dueDate)} · คืนจริง ${day(body.actualDate)} (ช้า ${days} วัน)\nค่าปรับวันละ ${settings.lateRates.lateFinePerDay} บาท รวม ${money(fine)} บาท\nดูรายละเอียดและบัญชีร้านได้ที่ ${requestOrigin(request)}/bill/${billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE late fine notice failed:", error); }
   }
   return Response.json({ lateReturn: { ...lateReturn, createdAt: now.toISOString() }, schedule, lineNotified });
 }

@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "deploy": "bash scripts/deploy.sh",
     "lint": "eslint",
     "rental-history:extract": "python3 scripts/extract-rental-history.py",
     "rental-history:dry-run": "node --env-file=.env.local scripts/import-rental-history.mjs",

@@ -4,12 +4,13 @@ import { audit } from "./audit";
 import { getQueue, holdMinutes } from "./availability-store";
 import { lineConfigured, pushLine } from "./line";
 import { blockRange, type ScheduleRecord } from "./schedule";
+import { requestOrigin } from "@/lib/request-origin";
 
 type Waiting = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number }[]; createdAt: Date; lineUserId?: string; billToken?: string };
 
 // Requests waiting behind someone's payment hold, oldest first: each whose pieces are free again gets its turn now,
 // with the same time to pay. Runs whenever the queue is looked at (booking, availability, admin pages, daily cron).
-export async function promoteWaitlist(db: Db, request: Request | null, origin = request ? new URL(request.url).origin : undefined) {
+export async function promoteWaitlist(db: Db, request: Request | null, origin = request ? requestOrigin(request) : undefined) {
   const bookings = db.collection<Waiting>("bookingRequests");
   const waiting = await bookings.find({ status: { $in: ["new", "contacted"] }, waitlist: { $exists: true } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, items: 1, createdAt: 1, lineUserId: 1, billToken: 1 } }).sort({ createdAt: 1 }).limit(50).toArray();
   let promoted = 0;
