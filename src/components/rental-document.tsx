@@ -1,5 +1,7 @@
 import Image from "next/image";
 import { returnDay, type ScheduleRecord } from "@/lib/schedule";
+import { bankByName } from "@/lib/banks";
+import BankBadge from "./bank-badge";
 import type { RentalDocumentDefaults } from "@/lib/store-settings";
 
 export type Quote = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string };
@@ -30,7 +32,7 @@ export function RentalDocument({ row, quote, store, printOnly = false }: { row: 
     <section className="rental-paper-section rental-paper-items"><h3>รายการสินค้าเช่า</h3><table><thead><tr><th>ลำดับ</th><th>รูป</th><th>รหัสสินค้า / รายการ</th><th>จำนวน</th><th>ราคาเช่า (บาท)</th></tr></thead><tbody>{row.items.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{item.image ? <Image unoptimized src={item.image} alt="" width={45} height={56} /> : <span>—</span>}</td><td><b>{item.sku}</b><span>{item.name}</span></td><td>1</td><td>{itemPrice(item, row.days) === null ? "สอบถาม" : money(itemPrice(item, row.days))}</td></tr>)}</tbody></table></section>
     <div className="rental-paper-columns rental-paper-payment-row">
       <section className="rental-paper-section rental-paper-total"><h3>สรุปยอดค่าเช่า</h3><p><span>ค่าเช่ารวม</span><b>{money(quote.rental)}</b></p><p><span>เงินมัดจำ{row.verification?.mode === "identity" && quote.deposit === 0 ? " (ยืนยันตัวตนแทน)" : ""}</span><b>{money(quote.deposit)}</b></p><p><span>ค่าจัดส่ง</span><b>{money(quote.shipping)}</b></p><strong><span>ยอดรวมสุทธิ</span><b>{money(quote.rental + quote.deposit + quote.shipping)} บาท</b></strong></section>
-      <section className="rental-paper-section rental-paper-bank"><h3>ช่องทางชำระเงิน</h3><div><span className="rental-paper-qr">{quote.qrImage && safeUrl(quote.qrImage) ? <Image unoptimized src={safeUrl(quote.qrImage)} alt="QR ชำระเงิน" width={130} height={130} /> : <>QR<br />ชำระเงิน</>}</span><p><b>ข้อมูลบัญชีร้าน</b><span>ธนาคาร　:　{quote.bank || "กรอกชื่อธนาคาร"}</span><span>เลขที่บัญชี　:　{quote.accountNumber || "กรอกเลขบัญชี"}</span><span>ชื่อบัญชี　:　{quote.accountName || "กรอกชื่อบัญชี"}</span></p></div><small>ตรวจสอบยอดและบัญชีก่อนโอน</small></section>
+      <section className="rental-paper-section rental-paper-bank"><h3>ช่องทางชำระเงิน</h3><div><span className="rental-paper-qr">{quote.qrImage && safeUrl(quote.qrImage) ? <Image unoptimized src={safeUrl(quote.qrImage)} alt="QR ชำระเงิน" width={130} height={130} /> : <>QR<br />ชำระเงิน</>}</span><p><b>ข้อมูลบัญชีร้าน</b><span>ธนาคาร　:　{bankByName(quote.bank) && <BankBadge code={bankByName(quote.bank)!.code} size={18} />} {quote.bank || "กรอกชื่อธนาคาร"}</span><span>เลขที่บัญชี　:　{quote.accountNumber || "กรอกเลขบัญชี"}</span><span>ชื่อบัญชี　:　{quote.accountName || "กรอกชื่อบัญชี"}</span></p></div><small>ตรวจสอบยอดและบัญชีก่อนโอน</small></section>
     </div>
     <div className="rental-paper-reminder"><strong>ส่งคืนภายในวันที่กำหนด {dateLabel(returnDay(row))} ก่อน 18:00 น.</strong><span>แจ้งเลขพัสดุทาง Inbox ภายใน 20:00 น.</span></div>
     <section className="rental-paper-section rental-paper-rules"><h3>เงื่อนไขการเช่า</h3><ol>{store.rentalRules.slice(0, 5).map((rule, index) => <li key={`${index}-${rule}`}>{rule}</li>)}</ol></section>

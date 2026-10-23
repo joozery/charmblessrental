@@ -33,7 +33,7 @@ export const defaultStoreSettings: StoreSettings = {
   schedule: defaultSchedule,
   verification: defaultVerification,
   lateRates: defaultLateRates,
-  rentalDocument: { deposit: 0, bank: "", accountName: "", accountNumber: "", qrImage: "", returnAddress: "", returnPhone: "", returnMethod: "ไปรษณีย์ / Flash / KEX" },
+  rentalDocument: { deposit: 0, bank: "", accountName: "", accountNumber: "", qrImage: "", returnAddress: "", returnPhone: "", returnMethod: "ไปรษณีย์ / Flash / KEX", accounts: [] },
   rentalRules: [
     "ทางร้านจะจัดส่งล่วงหน้าให้ 3 วัน เช่น แจ้งเช่า 5–10/5 ทางร้านจะจัดส่งวันที่ 2/5 คืนวันที่ 11/5 ก่อน 14:00",
     "✈️ กรณีลูกค้าให้แมสที่สนามบินสุวรรณภูมิหรือดอนเมือง ลูกค้าต้องจ่ายในราคาแบบด่วนพิเศษเท่านั้น‼️",

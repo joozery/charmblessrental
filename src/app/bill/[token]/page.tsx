@@ -49,6 +49,8 @@ async function Content({ params }: PageProps) {
   const doc: DocRow = { ...rest, verification: verification || null, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
   const store = { logoImage: settings.logoImage, lineUrl: settings.lineUrl, instagramUrl: settings.instagramUrl, rentalRules: settings.rentalRules, rentalDocument: settings.rentalDocument };
   const quote = quoteForRow(doc, settings.rentalDocument);
+  // Payments made later (an extension, a late fine) go to the account in use today, not the one on the original bill.
+  const today = settings.rentalDocument;
   const paid = row.payment === "paid";
   return <main className="bill-page">
     <header className="bill-head"><div><span>CHARM BLESS RENTAL</span><h1>ใบรายละเอียดการเช่า</h1><p>เลขที่คำขอ {doc._id}</p></div>{row.status !== "cancelled" && row.quote && <strong className={paid ? "bill-status is-paid" : "bill-status"}>{paid ? "ชำระเงินแล้ว" : "รอชำระเงิน"}</strong>}</header>
@@ -59,12 +61,12 @@ async function Content({ params }: PageProps) {
           </div>}
     {row.status !== "cancelled" && extended.length > 0 && <div className="bill-track bill-extension"><strong>ค่าเช่าต่อ{unpaidExtension ? " · รอชำระ" : ""}</strong>
       <ul>{extended.map(item => <li key={item.id}><span>เช่าต่อ +{item.addedDays} วัน · ใช้งานได้ถึง {dateLabel(item.toEnd)}</span><b>{money(item.amount)} บาท</b><small className={`is-${item.status}`}>{extensionLabels[item.status]}</small></li>)}</ul>
-      {unpaidExtension && <div className="bill-extension-pay">{quote.qrImage && safeUrl(quote.qrImage) && <img src={safeUrl(quote.qrImage)} alt="QR ชำระเงิน" />}<p>โอนค่าเช่าต่อ <b>{money(unpaidExtension.amount)} บาท</b><br />ธนาคาร {quote.bank} · เลขบัญชี <b>{quote.accountNumber}</b><br />ชื่อบัญชี {quote.accountName}<br />แล้วส่งสลิปให้ร้านทาง LINE พร้อมเลขที่คำขอ {doc._id}</p></div>}
+      {unpaidExtension && <div className="bill-extension-pay">{today.qrImage && safeUrl(today.qrImage) && <img src={safeUrl(today.qrImage)} alt="QR ชำระเงิน" />}<p>โอนค่าเช่าต่อ <b>{money(unpaidExtension.amount)} บาท</b><br />ธนาคาร {today.bank} · เลขบัญชี <b>{today.accountNumber}</b><br />ชื่อบัญชี {today.accountName}<br />แล้วส่งสลิปให้ร้านทาง LINE พร้อมเลขที่คำขอ {doc._id}</p></div>}
       {returnDay(doc) && !returned && <p>กำหนดส่งคืนชุดใหม่ <b>{dateLabel(returnDay(doc))}</b></p>}
     </div>}
     {row.status !== "cancelled" && lateReturn && lateReturn.fine > 0 && <div className="bill-track bill-extension"><strong>ค่าปรับส่งคืนล่าช้า{lateReturn.status === "unpaid" ? " · รอชำระ" : ""}</strong>
       <ul><li><span>กำหนดคืน {dateLabel(lateReturn.dueDate)} · คืนจริง {dateLabel(lateReturn.actualDate)} (ช้า {lateReturn.days} วัน)</span><b>{money(lateReturn.fine)} บาท</b><small className={`is-${lateReturn.status === "unpaid" ? "unpaid" : "paid"}`}>{lateReturnLabels[lateReturn.status]}</small></li></ul>
-      {lateReturn.status === "unpaid" && <div className="bill-extension-pay">{quote.qrImage && safeUrl(quote.qrImage) && <img src={safeUrl(quote.qrImage)} alt="QR ชำระเงิน" />}<p>โอนค่าปรับ <b>{money(lateReturn.fine)} บาท</b><br />ธนาคาร {quote.bank} · เลขบัญชี <b>{quote.accountNumber}</b><br />ชื่อบัญชี {quote.accountName}<br />{deposit?.status === "held" ? "หรือร้านจะหักจากเงินมัดจำตอนคืนเงิน" : `แล้วส่งสลิปให้ร้านทาง LINE พร้อมเลขที่คำขอ ${doc._id}`}</p></div>}
+      {lateReturn.status === "unpaid" && <div className="bill-extension-pay">{today.qrImage && safeUrl(today.qrImage) && <img src={safeUrl(today.qrImage)} alt="QR ชำระเงิน" />}<p>โอนค่าปรับ <b>{money(lateReturn.fine)} บาท</b><br />ธนาคาร {today.bank} · เลขบัญชี <b>{today.accountNumber}</b><br />ชื่อบัญชี {today.accountName}<br />{deposit?.status === "held" ? "หรือร้านจะหักจากเงินมัดจำตอนคืนเงิน" : `แล้วส่งสลิปให้ร้านทาง LINE พร้อมเลขที่คำขอ ${doc._id}`}</p></div>}
     </div>}
     {askRefund && <div className="bill-track bill-refund"><strong>บัญชีรับเงินมัดจำคืน</strong>
       {refunded ? <p>{refunded.amount > 0 ? <>✅ ร้านโอนเงินมัดจำคืนแล้ว <b>{money(refunded.amount)} บาท</b>{refundAccount ? ` เข้าบัญชี ${refundAccount.bank} ${refundAccount.accountNumber}` : ""}</> : "ร้านไม่ได้คืนเงินมัดจำรายการนี้"}{refunded.deducted > 0 ? ` · หัก ${money(refunded.deducted)} บาท (${refunded.reason})` : ""}</p>

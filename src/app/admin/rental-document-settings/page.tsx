@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { pageAdmin } from "@/lib/admin-auth";
 import { getStoreSettings } from "@/lib/store-settings";
+import { thaiDay } from "@/lib/finance";
 import RentalDocumentSettings from "./rental-document-settings";
 import "./rental-document-settings.css";
 
@@ -9,7 +10,8 @@ export const metadata = { title: "ตั้งค่าใบรายละเ�
 async function Content() {
   await pageAdmin("settings");
   const settings = await getStoreSettings();
-  return <RentalDocumentSettings initial={settings.rentalDocument} />;
+  const today = Number(thaiDay().slice(8));
+  return <RentalDocumentSettings initial={settings.rentalDocument} today={today} />;
 }
 
 export default function Page() {
