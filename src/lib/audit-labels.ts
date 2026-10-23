@@ -15,6 +15,9 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "booking.customer_return": { label: "ลูกค้าแจ้งส่งคืน", group: "bookings" },
   "booking.refund_account": { label: "ลูกค้ากรอกบัญชีรับเงินมัดจำคืน", group: "bookings" },
   "booking.extended": { label: "ขยายวันเช่า", group: "bookings" },
+  "booking.edited": { label: "แก้ไขการจอง", group: "bookings" },
+  "booking.adjustment_paid": { label: "รับเงินส่วนต่างจากการแก้ไข", group: "finance" },
+  "booking.adjustment_refunded": { label: "คืนเงินส่วนต่างจากการแก้ไข", group: "finance" },
   "booking.late_return": { label: "ส่งคืนล่าช้า", group: "bookings" },
   "booking.late_fine_paid": { label: "ยืนยันรับค่าปรับคืนช้า", group: "finance" },
   "booking.late_notice": { label: "ส่ง LINE ถามลูกค้าที่คืนช้า", group: "bookings" },
@@ -51,7 +54,7 @@ export const actionGroups = [
 export const fieldLabels: Record<string, string> = {
   status: "สถานะ", payment: "การชำระเงิน", paidOn: "วันที่ชำระ", rental: "ค่าเช่า", deposit: "เงินมัดจำ", shipping: "ค่าจัดส่ง",
   bank: "ธนาคาร", accountName: "ชื่อบัญชี", accountNumber: "เลขบัญชี", qrImage: "รูป QR", returnAddress: "ที่อยู่ส่งคืน", returnPhone: "เบอร์ร้าน", returnMethod: "วิธีส่งคืน",
-  end: "วันใช้งานวันสุดท้าย", returnDate: "กำหนดคืน", carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", lineName: "ชื่อ LINE", condition: "สภาพสินค้า", note: "หมายเหตุ", units: "ชิ้นสินค้า",
+  start: "วันเริ่มใช้งาน", items: "ชุด", end: "วันใช้งานวันสุดท้าย", returnDate: "กำหนดคืน", carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", lineName: "ชื่อ LINE", condition: "สภาพสินค้า", note: "หมายเหตุ", units: "ชิ้นสินค้า",
   depositStatus: "สถานะเงินมัดจำ", refundAmount: "ยอดคืน", deducted: "ยอดหัก", amount: "จำนวนเงิน", category: "หมวดหมู่", date: "วันที่", voided: "เหตุผลที่ยกเลิก",
   name: "ชื่อ", sku: "รหัสสินค้า", color: "สี", size: "ไซซ์", dailyRate: "ราคาเช่า", cost: "ต้นทุน", stock: "จำนวน", active: "แสดงหน้าร้าน", description: "รายละเอียด", images: "รูปสินค้า",
   email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS", rentalPricing: "ตารางราคาเช่า", extraDayRates: "ค่าเช่าส่วนเกิน", shippingOptions: "ขนส่ง", shippingFee: "ค่าส่งเฉพาะสินค้า", customPricing: "ราคาเฉพาะสินค้า", enabled: "เปิดใช้", origin: "ตำแหน่งร้าน", originLabel: "ชื่อจุดรับส่ง", baseFee: "ค่าเริ่มต้น", includedKm: "รวมระยะแรก (กม.)", perKm: "กม.ละ", maxKm: "ส่งไกลสุด (กม.)", inBill: "รวมในบิล",

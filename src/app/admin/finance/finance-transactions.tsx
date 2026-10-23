@@ -4,9 +4,9 @@ import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 
-type Transaction = { _id: string; type: "income" | "expense"; category: string; amount: number; date: string; note: string; createdBy?: string; createdByName?: string; bookingId?: string; source?: "manual" | "booking" | "deposit" | "extension" | "late"; voided?: { reason: string; byName: string; at: string } };
+type Transaction = { _id: string; type: "income" | "expense"; category: string; amount: number; date: string; note: string; createdBy?: string; createdByName?: string; bookingId?: string; source?: "manual" | "booking" | "deposit" | "extension" | "late" | "adjustment"; voided?: { reason: string; byName: string; at: string } };
 const categories = { income: ["ค่าเช่า", "ค่าจัดส่ง", "ค่าปรับ", "อื่น ๆ"], expense: ["ซื้อสินค้า", "ค่าซ่อมแซม", "ค่าแพ็กของ", "ค่าโฆษณา", "ค่าเดินทาง", "ค่าสาธารณูปโภค", "อื่น ๆ"] };
-const sourceLabel = { manual: "บันทึกเอง", booking: "จากการยืนยันชำระ", deposit: "หักจากเงินมัดจำ", extension: "จากค่าเช่าต่อ", late: "จากค่าปรับคืนช้า" };
+const sourceLabel = { manual: "บันทึกเอง", booking: "จากการยืนยันชำระ", deposit: "หักจากเงินมัดจำ", extension: "จากค่าเช่าต่อ", late: "จากค่าปรับคืนช้า", adjustment: "จากการแก้ไขการจอง" };
 const money = (value: number) => `${value.toLocaleString("th-TH", { maximumFractionDigits: 2 })} บาท`;
 const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(value));
 

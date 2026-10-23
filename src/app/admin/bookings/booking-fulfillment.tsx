@@ -13,6 +13,8 @@ import { identityFileLabel, verificationLabels, type BookingVerification } from 
 import type { RefundAccount } from "@/lib/refund-account";
 import { lastUseDay, type Extension, type LateReturn } from "@/lib/extension";
 import ExtensionPanel from "./extension-panel";
+import EditBookingPanel from "./edit-booking-panel";
+import type { Adjustment } from "@/lib/adjustment";
 import LateReturnPanel from "./late-return-panel";
 import type { NextRisk, QueueClash } from "@/lib/queue";
 
@@ -21,7 +23,7 @@ export type Returned = { at: string; condition: string; note: string; byName: st
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string; via?: "line" | "bill" };
 export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
-export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; clashes?: QueueClash[]; lateDays?: number; risks?: NextRisk[]; lateNoticeSentAt?: string; lineLinked?: boolean; lateReturn?: LateReturn; hold?: { kind: "held" | "waitlist" | "expired"; until: string } };
+export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; clashes?: QueueClash[]; lateDays?: number; risks?: NextRisk[]; lateNoticeSentAt?: string; lineLinked?: boolean; lateReturn?: LateReturn; hold?: { kind: "held" | "waitlist" | "expired"; until: string }; adjustments?: Adjustment[] };
 // Returned to the shop while its deposit is still held: the refund is the step left to do.
 export const awaitingRefund = (row: FulfillmentRow) => row.status !== "cancelled" && !!row.returned && row.deposit?.status === "held";
 type Log = { _id: string; at: string; action: string; summary: string; actorName: string; actorEmail: string; changes: { field: string; before: unknown; after: unknown }[] };
@@ -125,6 +127,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
         : <div className="bookings-inline-form">{unitPicker(returnForm.units, units => setReturnForm({ ...returnForm, units }), true)}<label>สภาพสินค้า<select value={returnForm.condition} onChange={event => setReturnForm({ ...returnForm, condition: event.target.value })}>{conditions.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><label>หมายเหตุ<input value={returnForm.note} maxLength={500} onChange={event => setReturnForm({ ...returnForm, note: event.target.value })} placeholder="เช่น มีคราบที่ชายกระโปรง" /></label><div><button type="button" disabled={busy} onClick={() => setReturnForm(null)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy} onClick={receive}>{busy ? "กำลังบันทึก…" : "ยืนยันรับคืน"}</button></div></div>)}
       <LateReturnPanel row={row} permissions={permissions} finePerDay={finePerDay} onChange={onChange} />
     </div></div>}
+    {row.status !== "cancelled" && <EditBookingPanel row={row} permissions={permissions} onChange={onChange} />}
     {row.status !== "cancelled" && <ExtensionPanel row={row} permissions={permissions} onChange={onChange} />}
     {row.deposit && row.deposit.status !== "void" && <div className="bookings-detail-section bookings-deposit"><Icon name="shield" /><div>
       <h3>เงินมัดจำ</h3>

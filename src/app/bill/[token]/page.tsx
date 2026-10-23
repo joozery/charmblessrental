@@ -17,11 +17,12 @@ import { activeExtensions, extendedDays, extensionLabels, lastUseDay, lateReturn
 import { verificationLabels, type BookingVerification } from "@/lib/identity";
 import "@/app/admin/bookings/bookings.css";
 import "./bill.css";
+import { adjustmentLabels, type Adjustment } from "@/lib/adjustment";
 
 export const metadata = { title: "ใบรายละเอียดการเช่า | Charm Bless", robots: { index: false, follow: false } };
 type BillDoc = Omit<DocRow, "createdAt" | "items"> & {
   status: string; payment?: "unpaid" | "paid"; billToken: string; createdAt: Date; method?: string; items: (DocRow["items"][number] & { unitSku?: string })[];
-  verification?: BookingVerification; refundAccount?: RefundAccount; extensions?: Extension[]; lateReturn?: LateReturn; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returned?: { at: Date };
+  verification?: BookingVerification; refundAccount?: RefundAccount; extensions?: Extension[]; lateReturn?: LateReturn; adjustments?: Adjustment[]; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returned?: { at: Date };
 };
 // What the next customer sees while their reserved piece is still being prepared.
 const prepText: Partial<Record<UnitStatus, string>> = { rented: "รอรับสินค้าคืนจากลูกค้ารอบก่อน", inspection: "กำลังตรวจสภาพสินค้า", washing: "กำลังซักและทำความสะอาด", repair: "กำลังดูแลซ่อมแซม" };
@@ -32,7 +33,7 @@ async function Content({ params }: PageProps) {
   await connection();
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) notFound();
-  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, lateReturn: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
+  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, lateReturn: 1, adjustments: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
   if (!row) notFound();
   const stage = rentalStage(row), pickup = row.method === "pickup";
   const skus = row.items.map(item => item.unitSku).filter((sku): sku is string => !!sku);
@@ -40,7 +41,7 @@ async function Content({ params }: PageProps) {
   const unitStatus = new Map<string, UnitStatus>();
   if (preparing && skus.length) for (const product of await (await database()).collection<Product>("products").find({ "units.sku": { $in: skus } }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, legacyId: 1, units: 1 } }).toArray()) for (const unit of unitsOf(product)) if (skus.includes(unit.sku)) unitStatus.set(unit.sku, unit.status);
   const settings = await getStoreSettings();
-  const { shipment, customerReturn, returned, verification, refundAccount, extensions, lateReturn, ...rest } = row;
+  const { shipment, customerReturn, returned, verification, refundAccount, extensions, lateReturn, adjustments, ...rest } = row;
   const extended = activeExtensions(extensions), unpaidExtension = extended.find(item => item.status === "unpaid");
   // Deposit customers say where the deposit goes back, and see when the shop has sent it.
   const askRefund = !verification && row.status !== "cancelled" && (!row.quote || (row.quote.deposit || 0) > 0);
@@ -63,6 +64,10 @@ async function Content({ params }: PageProps) {
       <ul>{extended.map(item => <li key={item.id}><span>เช่าต่อ +{item.addedDays} วัน · ใช้งานได้ถึง {dateLabel(item.toEnd)}</span><b>{money(item.amount)} บาท</b><small className={`is-${item.status}`}>{extensionLabels[item.status]}</small></li>)}</ul>
       {unpaidExtension && <div className="bill-extension-pay">{today.qrImage && safeUrl(today.qrImage) && <img src={safeUrl(today.qrImage)} alt="QR ชำระเงิน" />}<p>โอนค่าเช่าต่อ <b>{money(unpaidExtension.amount)} บาท</b><br />ธนาคาร {today.bank} · เลขบัญชี <b>{today.accountNumber}</b><br />ชื่อบัญชี {today.accountName}<br />แล้วส่งสลิปให้ร้านทาง LINE พร้อมเลขที่คำขอ {doc._id}</p></div>}
       {returnDay(doc) && !returned && <p>กำหนดส่งคืนชุดใหม่ <b>{dateLabel(returnDay(doc))}</b></p>}
+    </div>}
+    {row.status !== "cancelled" && !!adjustments?.length && <div className="bill-track bill-extension"><strong>ส่วนต่างจากการแก้ไขการจอง</strong>
+      <ul>{adjustments.map(item => <li key={item.id}><span>{item.summary}</span><b>{item.amount > 0 ? "" : "คืน "}{money(Math.abs(item.amount))} บาท</b><small className={`is-${item.status === "unpaid" || item.status === "refund" ? "unpaid" : "paid"}`}>{adjustmentLabels[item.status]}</small></li>)}</ul>
+      {adjustments.some(item => item.status === "unpaid") && <div className="bill-extension-pay">{today.qrImage && safeUrl(today.qrImage) && <img src={safeUrl(today.qrImage)} alt="QR ชำระเงิน" />}<p>โอนส่วนต่าง <b>{money(adjustments.filter(item => item.status === "unpaid").reduce((sum, item) => sum + item.amount, 0))} บาท</b><br />ธนาคาร {today.bank} · เลขบัญชี <b>{today.accountNumber}</b><br />ชื่อบัญชี {today.accountName}<br />แล้วส่งสลิปให้ร้านทาง LINE พร้อมเลขที่คำขอ {doc._id}</p></div>}
     </div>}
     {row.status !== "cancelled" && lateReturn && lateReturn.fine > 0 && <div className="bill-track bill-extension"><strong>ค่าปรับส่งคืนล่าช้า{lateReturn.status === "unpaid" ? " · รอชำระ" : ""}</strong>
       <ul><li><span>กำหนดคืน {dateLabel(lateReturn.dueDate)} · คืนจริง {dateLabel(lateReturn.actualDate)} (ช้า {lateReturn.days} วัน)</span><b>{money(lateReturn.fine)} บาท</b><small className={`is-${lateReturn.status === "unpaid" ? "unpaid" : "paid"}`}>{lateReturnLabels[lateReturn.status]}</small></li></ul>
