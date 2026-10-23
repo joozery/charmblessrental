@@ -25,3 +25,10 @@
 .commissions-muted{color:#8a7f87}.commissions-empty{margin:0;padding:24px;color:#8a7f87;text-align:center}
 .commissions-note{margin:0;padding:10px 14px;color:#8a7f87;font-size:12px}.commissions-error{margin:0;color:#b42318;font-size:13px}
 .commissions-month>span{visibility:hidden}
+.commissions-cards button{gap:6px}
+.commissions-card-name{display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.commissions-card-name i{display:grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;background:#f3e8ef;color:#79516c;font-size:12px;font-style:normal;font-weight:700}
+.commissions-card-count{color:#8a7f87!important;font-size:12px!important;font-weight:400!important}.commissions-card-count b{color:#3b313e;font-size:22px;font-weight:700;margin-right:2px}
+.commissions-cards button strong{font-size:16px!important;color:#79516c}
+.commissions-cards button:disabled{opacity:.55;cursor:default}
+.commissions-warning{margin:0;padding:10px 14px;border:1px solid #f3d79b;border-radius:10px;background:#fffaf0;color:#7a5a12;font-size:13px}
