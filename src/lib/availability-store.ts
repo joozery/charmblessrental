@@ -61,7 +61,7 @@ export async function getQueue(db: Db, productId: number, from: string, to: stri
 type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
 // Every booking or hold that takes this piece out of the queue in [from, to), with the days of each step (admin calendars).
 export async function queueBookings(db: Db, productId: number, from: string, to: string): Promise<QueueBooking[]> {
-  const rows = await db.collection<QueueDoc>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, extensions: 1 } }).sort({ start: 1 }).toArray();
+  const rows = await db.collection<QueueDoc>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray();
   return rows.map(row => {
     const item = row.items.find(entry => entry.id === productId), range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row);
     return { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to };
