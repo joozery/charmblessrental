@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { money } from "@/components/rental-document";
+import { Icon } from "@/components/ui/icon";
 import { slipStatusLabels, type SlipStatus } from "@/lib/payment-slips";
 
 type Slip = { _id: string; status: SlipStatus; reason: string; due: number; createdAt: string; transRef?: string; amount?: number; dateTime?: string; senderName?: string; receiverName?: string; reviewedByName?: string };
@@ -31,7 +32,7 @@ export default function SlipPanel({ bookingId, deposit, onChange }: { bookingId:
   }
 
   if (!slips?.length) return null;
-  return <div className="bookings-detail-section bookings-slips"><div>
+  return <div className="bookings-detail-section bookings-slips"><Icon name="payment" /><div>
     <h3>สลิปที่ลูกค้าแนบ</h3>
     {error && <p className="bookings-slip-error" role="alert">{error}</p>}
     <ul>{slips.map(slip => <li key={slip._id} className={`is-${slip.status}`}>

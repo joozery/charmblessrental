@@ -288,11 +288,11 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-pagination button:disabled{cursor:not-allowed;opacity:.45}
 .bookings-pagination span{min-width:38px;text-align:center}
 @media(max-width:1180px){.bookings-detail-panel{max-height:none;overflow:visible}}
-.bookings-slips>div{flex:1;min-width:0}.bookings-slips ul{display:grid;gap:10px;margin:8px 0 0;padding:0;list-style:none}
-.bookings-slips li{display:grid;grid-template-columns:86px 1fr;gap:12px;padding:10px;border:1px solid #ece4e9;border-radius:10px;background:#fff}
+.bookings-slips>div{min-width:0}.bookings-slips ul{display:grid;gap:10px;margin:8px 0 0;padding:0;list-style:none}
+.bookings-slips li{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;padding:10px;border:1px solid #ece4e9;border-radius:10px;background:#fff}
 .bookings-slips li.is-review{border-color:#f3c96b;background:#fffaf0}.bookings-slips li.is-rejected{opacity:.75}
-.bookings-slips li img{width:86px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #eee}
-.bookings-slips li strong{display:block;font-size:13px}.bookings-slips li.is-verified strong,.bookings-slips li.is-accepted strong{color:#067647}.bookings-slips li.is-review strong{color:#b54708}.bookings-slips li.is-rejected strong{color:#b42318}
+.bookings-slips li img{display:block;width:72px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #eee}
+.bookings-slips li strong{display:block;font-size:12px}.bookings-slips li.is-verified strong,.bookings-slips li.is-accepted strong{color:#067647}.bookings-slips li.is-review strong{color:#b54708}.bookings-slips li.is-rejected strong{color:#b42318}
 .bookings-slips li small{color:#8a7f87;font-size:11px}.bookings-slips li p{margin:4px 0 0;font-size:12px;overflow-wrap:anywhere}
 .bookings-slip-reason{color:#b54708}.bookings-slip-error{color:#b42318;font-size:12px}
 .bookings-slip-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.bookings-slip-actions input{flex:1 1 180px;height:32px;padding:0 8px;border:1px solid #d0d5dd;border-radius:7px;font:inherit;font-size:12px}
