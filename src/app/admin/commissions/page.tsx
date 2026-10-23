@@ -11,24 +11,31 @@ import "./commissions.css";
 
 export const metadata = { title: "สรุปบิลตามแอดมิน | Charm Bless", robots: { index: false, follow: false } };
 
-type Query = { month?: string | string[]; tab?: string | string[] };
+type Query = { from?: string | string[]; to?: string | string[]; month?: string | string[]; tab?: string | string[] };
 type BookingDoc = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; paidAt?: Date | null; createdAt: Date; billOwner?: BillOwner; extensions?: Extension[]; adjustments?: Adjustment[]; quote?: { rental?: number; deposit?: number; shipping?: number; discountAmount?: number; updatedAt?: Date } };
 const one = (value?: string | string[]) => Array.isArray(value) ? value[0] : value || "";
-const monthLabel = (month: string) => new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
+const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && new Date(`${day}T12:00:00Z`).toISOString().slice(0, 10) === day;
+const shiftDay = (day: string, by: number) => { const date = new Date(`${day}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + by); return date.toISOString().slice(0, 10); };
 const shiftMonth = (month: string, by: number) => { const date = new Date(`${month}-01T12:00:00Z`); date.setUTCMonth(date.getUTCMonth() + by); return date.toISOString().slice(0, 7); };
+const lastOfMonth = (month: string) => shiftDay(`${shiftMonth(month, 1)}-01`, -1);
+const dayLabel = (day: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
 
 async function Commissions({ searchParams }: { searchParams: Promise<Query> }) {
   const admin = await pageAdmin("finance");
   const query = await searchParams;
-  const thisMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit" }).format(new Date());
-  const month = /^\d{4}-\d{2}$/.test(one(query.month)) ? one(query.month) : thisMonth;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()), thisMonth = today.slice(0, 7);
+  // Paid bills in a date range (by payment day); an old ?month= link still opens that whole month.
+  const month = /^\d{4}-\d{2}$/.test(one(query.month)) ? one(query.month) : "";
+  let from = validDay(one(query.from)) ? one(query.from) : month ? `${month}-01` : `${thisMonth}-01`;
+  let to = validDay(one(query.to)) ? one(query.to) : month ? lastOfMonth(month) : today;
+  if (from > to) [from, to] = [to, from];
   const open = one(query.tab) === "open";
   const db = await database();
   await backfillBillOwners(db);
   // Paid bills count in the month they were paid; open bills are every priced bill still waiting for payment.
   const filter = open
     ? { status: { $ne: "cancelled" }, payment: { $ne: "paid" as const }, quote: { $exists: true } }
-    : { status: { $ne: "cancelled" }, payment: "paid" as const, paidAt: { $gte: new Date(`${month}-01T00:00:00Z`), $lt: new Date(`${shiftMonth(month, 1)}-01T00:00:00Z`) } };
+    : { status: { $ne: "cancelled" }, payment: "paid" as const, paidAt: { $gte: new Date(`${from}T00:00:00Z`), $lt: new Date(`${shiftDay(to, 1)}T00:00:00Z`) } };
   const [bookings, admins] = await Promise.all([
     db.collection<BookingDoc>("bookingRequests").find(filter, { projection: { _id: 1, name: 1, status: 1, payment: 1, paidAt: 1, createdAt: 1, billOwner: 1, extensions: 1, adjustments: 1, quote: 1 } }).sort(open ? { createdAt: -1 } : { paidAt: -1 }).toArray(),
     db.collection<AdminAccount>("admins").find({}, { projection: { _id: 1, name: 1, active: 1 } }).sort({ name: 1 }).toArray(),
@@ -47,10 +54,19 @@ async function Commissions({ searchParams }: { searchParams: Promise<Query> }) {
   return <main className="admin-main commissions-page">
     <header className="commissions-header">
       <div><span className="commissions-eyebrow">ADMIN SALES</span><h1>สรุปบิลตามแอดมิน</h1><p>บิลของแต่ละแอดมินและยอดค่าเช่า ใช้คิดค่าคอมมิชชัน ผู้ทำบิลคือแอดมินที่บันทึกราคาในใบสรุปเป็นคนแรก หรือเปิดบิลจากหลังบ้าน</p></div>
-      <nav className="commissions-tabs" aria-label="เลือกรายการ"><a href={`/admin/commissions?month=${month}`} className={open ? "" : "is-active"}>ชำระแล้ว</a><a href="/admin/commissions?tab=open" className={open ? "is-active" : ""}>ส่งบิลแล้ว รอชำระ</a></nav>
+      <nav className="commissions-tabs" aria-label="เลือกรายการ"><a href={`/admin/commissions?from=${from}&to=${to}`} className={open ? "" : "is-active"}>ชำระแล้ว</a><a href="/admin/commissions?tab=open" className={open ? "is-active" : ""}>ส่งบิลแล้ว รอชำระ</a></nav>
     </header>
-    {!open && <nav className="commissions-month" aria-label="เลือกเดือน"><a href={`/admin/commissions?month=${shiftMonth(month, -1)}`} aria-label="เดือนก่อน"><Icon name="chevronLeft" /></a><strong>{monthLabel(month)}</strong>{month < thisMonth ? <a href={`/admin/commissions?month=${shiftMonth(month, 1)}`} aria-label="เดือนถัดไป"><Icon name="chevron" /></a> : <span />}<small>นับตามวันที่ชำระ</small></nav>}
-    <CommissionTable key={`${open ? "open" : month}`} rows={rows} admins={admins.map(item => ({ id: String(item._id), name: item.name, active: item.active !== false }))} canAssign={admin.role === "owner"} fileName={open ? "บิลรอชำระ" : `บิลตามแอดมิน-${month}`} open={open} />
+    {!open && <section className="commissions-range" aria-label="เลือกช่วงวันที่ชำระ">
+      <form action="/admin/commissions" method="get"><label>ตั้งแต่<input type="date" name="from" defaultValue={from} max={today} required /></label><span>ถึง</span><label>ถึงวันที่<input type="date" name="to" defaultValue={to} max={today} required /></label><button type="submit"><Icon name="calendar" />แสดง</button></form>
+      <div className="commissions-presets">{[
+        { label: "เดือนนี้", from: `${thisMonth}-01`, to: today },
+        { label: "เดือนที่แล้ว", from: `${shiftMonth(thisMonth, -1)}-01`, to: lastOfMonth(shiftMonth(thisMonth, -1)) },
+        { label: "7 วันล่าสุด", from: shiftDay(today, -6), to: today },
+        { label: "30 วันล่าสุด", from: shiftDay(today, -29), to: today },
+      ].map(preset => <a key={preset.label} href={`/admin/commissions?from=${preset.from}&to=${preset.to}`} className={preset.from === from && preset.to === to ? "is-active" : ""}>{preset.label}</a>)}</div>
+      <small>วันที่ชำระ {dayLabel(from)} – {dayLabel(to)}</small>
+    </section>}
+    <CommissionTable key={open ? "open" : `${from}-${to}`} rows={rows} admins={admins.map(item => ({ id: String(item._id), name: item.name, active: item.active !== false }))} canAssign={admin.role === "owner"} fileName={open ? "บิลรอชำระ" : `บิลตามแอดมิน-${from}-ถึง-${to}`} open={open} />
   </main>;
 }
 

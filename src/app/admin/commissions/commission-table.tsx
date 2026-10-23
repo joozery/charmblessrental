@@ -47,7 +47,7 @@ export default function CommissionTable({ rows: initial, admins, canAssign, file
   // Only paid bills earn commission; the open tab shows what is still owed, under its own label.
   const label = open ? "ยอดรอชำระ (ยังไม่นับค่าคอม)" : "ยอดคิดค่าคอม";
   return <>
-    {open && <p className="commissions-warning">บิลในแท็บนี้ยังไม่ชำระ จึง<b>ยังไม่นับเป็นค่าคอม</b> จะนับเมื่อลูกค้าชำระแล้ว และไปอยู่ในแท็บ "ชำระแล้ว" ตามเดือนที่ชำระ</p>}
+    {open && <p className="commissions-warning">บิลในแท็บนี้ยังไม่ชำระ จึง<b>ยังไม่นับเป็นค่าคอม</b> จะนับเมื่อลูกค้าชำระแล้ว และไปอยู่ในแท็บ “ชำระแล้ว” ตามวันที่ชำระ</p>}
     <section className="commissions-cards" aria-label="ยอดตามแอดมิน">
       <button type="button" className={selected ? "" : "is-active"} onClick={() => setSelected("")}><span className="commissions-card-name"><i>รวม</i>ทุกคน</span><span className="commissions-card-count"><b>{rows.length}</b> บิล</span><strong>{money(rows.reduce((total, row) => total + row.total, 0))} ฿</strong><small>{label}</small></button>
       {groups.map(group => <button type="button" key={group.id} disabled={!group.count} className={`${selected === group.id ? "is-active" : ""}${group.id === none ? " is-none" : ""}`} onClick={() => setSelected(selected === group.id ? "" : group.id)}><span className="commissions-card-name"><i>{group.id === none ? "?" : group.name.trim().slice(0, 1).toUpperCase()}</i>{group.name}</span><span className="commissions-card-count"><b>{group.count}</b> บิล</span><strong>{money(group.total)} ฿</strong><small>{group.count ? `ค่าเช่า ${money(group.rental)} ฿` : "ยังไม่มีบิล"}</small></button>)}

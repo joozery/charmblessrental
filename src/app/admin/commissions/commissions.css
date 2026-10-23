@@ -32,3 +32,11 @@
 .commissions-cards button strong{font-size:16px!important;color:#79516c}
 .commissions-cards button:disabled{opacity:.55;cursor:default}
 .commissions-warning{margin:0;padding:10px 14px;border:1px solid #f3d79b;border-radius:10px;background:#fffaf0;color:#7a5a12;font-size:13px}
+.commissions-range{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.commissions-range form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px}
+.commissions-range label{display:grid;gap:3px;color:#8a7f87;font-size:11px}
+.commissions-range input{height:34px;padding:0 8px;border:1px solid #d9cfd6;border-radius:8px;background:#fff;color:#3b313e;font:inherit;font-size:13px}
+.commissions-range form>span{padding-bottom:8px;color:#8a7f87;font-size:12px}
+.commissions-range button{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border:0;border-radius:8px;background:#79516c;color:#fff;font:inherit;font-size:13px;cursor:pointer}.commissions-range button svg{width:14px;height:14px}
+.commissions-presets{display:flex;flex-wrap:wrap;gap:6px}.commissions-presets a{padding:6px 10px;border:1px solid #e4dde2;border-radius:999px;background:#fff;color:#604a5b;font-size:12px;text-decoration:none}.commissions-presets a.is-active{border-color:#79516c;background:#f3e8ef;color:#79516c;font-weight:600}
+.commissions-range>small{color:#8a7f87;font-size:12px}
