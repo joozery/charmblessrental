@@ -283,3 +283,5 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-extension-rule{color:#667085}
 .bookings-late-return{margin-top:6px}.bookings-fulfillment-wait.is-late{color:#b42318;font-weight:600}.bookings-fulfillment-wait button.is-danger{border-color:#d92d20;background:#d92d20;color:#fff}
 .bookings-late-card{display:grid;gap:3px;margin:8px 0;padding:9px 11px;border:1px solid #f4b7b0;border-radius:9px;background:#fef3f2;font-size:12px}.bookings-late-card.is-paid,.bookings-late-card.is-deposit{border-color:#d1e9da;background:#f3faf6}.bookings-late-card p{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0}.bookings-late-card small{color:#475467}
+.bookings-hold{margin:0 0 12px;padding:9px 12px;border-radius:9px;font-size:12px;font-weight:600}.bookings-hold.is-held{background:#fff7ed;color:#9a3412}.bookings-hold.is-waitlist{background:#eff6ff;color:#1d4ed8}.bookings-hold.is-expired{background:#f2f4f7;color:#475467}
+.bookings-row-status small.is-waitlist{color:#1d4ed8;font-weight:700}.bookings-row-status small.is-expired{color:#667085;font-weight:700}

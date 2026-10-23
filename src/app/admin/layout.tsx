@@ -3,6 +3,8 @@ import { currentAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
 import { deposits, thaiDay } from "@/lib/finance";
 import { clashGroups } from "@/lib/clash-groups";
+import { headers } from "next/headers";
+import { promoteWaitlist } from "@/lib/waitlist";
 import { can, permissionsOf } from "@/lib/permissions";
 import AdminChrome from "./admin-chrome";
 import "./admin.css";
@@ -11,6 +13,9 @@ async function Workspace({ children }: { children: React.ReactNode }) {
   const admin = await currentAdmin();
   if (!admin) return children;
   const db = await database();
+  // Opening any admin page also moves the waiting list on, so the counts below are current.
+  const head = await headers();
+  await promoteWaitlist(db, null, head.get("host") ? `${head.get("x-forwarded-proto") || "https"}://${head.get("host")}` : undefined);
   // Rentals back at the shop whose deposit is still held: the same count as the "รอคืนมัดจำ" filter on the bookings page.
   const awaitingRefund = async () => {
     const held = await deposits(db).find({ status: "held" }, { projection: { _id: 1 } }).toArray();

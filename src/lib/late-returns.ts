@@ -4,7 +4,7 @@ import { unitChoices } from "./rental-units";
 import type { NextRisk } from "./queue";
 import { addDays, blockRange, countUseDays, returnDay, type ScheduleRecord } from "./schedule";
 
-type Row = { _id: string; name?: string; status: string; createdAt?: Date | string; start: string; end: string; schedule?: ScheduleRecord | null; shipment?: unknown; returned?: unknown; customerReturn?: unknown; verification?: { status: string } | null; items: { id: number; name: string; sku: string; unitSku?: string }[] };
+type Row = { _id: string; name?: string; status: string; createdAt?: Date | string; payment?: string; holdUntil?: Date | null; waitlist?: unknown; start: string; end: string; schedule?: ScheduleRecord | null; shipment?: unknown; returned?: unknown; customerReturn?: unknown; verification?: { status: string } | null; items: { id: number; name: string; sku: string; unitSku?: string }[] };
 // The piece is still with the customer after the day it was due back, and the customer has not said it is on its way.
 export const lateDays = (row: Row, today: string) => row.status === "confirmed" && row.shipment && !row.returned && !row.customerReturn && returnDay(row) < today ? countUseDays(returnDay(row), today) - 1 : 0;
 // Where the open rentals that matter for late returns stand: shipped and not back, or confirmed and waiting for a piece.
@@ -13,7 +13,7 @@ export const lateFilter = { status: { $ne: "cancelled" }, returned: { $exists: f
 // For each rental out with a customer that is late, or due within a day with the next rental right behind it:
 // the next booking that needs the same piece, and other pieces of that product free for it.
 export async function lateReturnRisks(db: Db, today: string) {
-  const rows = await db.collection<Row>("bookingRequests").find(lateFilter, { projection: { _id: 1, name: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, customerReturn: 1, "verification.status": 1, items: 1 } }).toArray();
+  const rows = await db.collection<Row>("bookingRequests").find(lateFilter, { projection: { _id: 1, name: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, customerReturn: 1, "verification.status": 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray();
   const out = rows.filter(row => row.status === "confirmed" && row.shipment && !row.customerReturn);
   const waiting = rows.filter(row => !row.shipment && isBlocking(row));
   const result = new Map<string, NextRisk[]>();

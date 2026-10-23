@@ -112,3 +112,5 @@
 @media(max-width:480px) { .booking-return-options { grid-template-columns: 1fr; } }
 .booking-deposit-options { display: grid; gap: 8px; }
 .booking-refund-account { display: grid; gap: 8px; }
+.booking-queue-note { margin: 8px 0; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-size: 12px; line-height: 1.7; }
+.booking-queue-note.is-waitlist { background: #eff6ff; color: #1d4ed8; }

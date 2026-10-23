@@ -7,6 +7,7 @@ import { addDays, returnDay, type ScheduleRecord } from "@/lib/schedule";
 import type { BookingVerification } from "@/lib/identity";
 import { purgeIdentity } from "@/lib/identity-store";
 import { getStoreSettings } from "@/lib/store-settings";
+import { promoteWaitlist } from "@/lib/waitlist";
 
 type BookingDoc = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; billToken?: string; lineUserId?: string; returnReminderSentAt?: Date; lateNoticeSentAt?: Date; verification?: BookingVerification };
 const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return Response.json({ error: "unauthorized" }, { status: 401 });
   const db = await database(), settings = await getStoreSettings();
+  await promoteWaitlist(db, request);
   const purged = await purgeIdentity(db, settings.verification);
   for (const bookingId of purged.bookings) await audit(request, null, { action: "identity.deleted", targetType: "booking", targetId: bookingId, summary: `ลบเอกสารยืนยันตัวตนอัตโนมัติ (ครบ ${settings.verification.deleteAfterDays} วันหลังจบการเช่า)`, actorEmail: "ระบบอัตโนมัติ" }).catch(() => undefined);
   if (!lineConfigured()) return Response.json({ ok: true, purged: purged.removed, error: "ยังไม่ได้ตั้งค่า LINE" });

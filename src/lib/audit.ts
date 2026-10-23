@@ -29,13 +29,14 @@ export async function auditLogs(db?: Db) {
 }
 
 // Append-only: nothing in the app updates or deletes these records.
-export async function audit(request: Request, actor: Actor, entry: { action: string; targetType: string; targetId: string; summary: string; changes?: AuditChange[]; actorEmail?: string }) {
+// request is null for work the system starts by itself (e.g. the waiting list moving on), which has no caller to record.
+export async function audit(request: Request | null, actor: Actor, entry: { action: string; targetType: string; targetId: string; summary: string; changes?: AuditChange[]; actorEmail?: string }) {
   try {
     await (await auditLogs()).insertOne({
       _id: randomUUID(), at: new Date(), action: entry.action, targetType: entry.targetType, targetId: entry.targetId, summary: entry.summary,
       actorId: actor?._id || null, actorName: actor?.name || "", actorEmail: actor?.email || actor?.username || entry.actorEmail || "", changes: entry.changes || [],
-      ip: (request.headers.get("x-forwarded-for")?.split(",")[0] || request.headers.get("x-real-ip") || "").trim().slice(0, 64),
-      userAgent: (request.headers.get("user-agent") || "").slice(0, 300),
+      ip: (request?.headers.get("x-forwarded-for")?.split(",")[0] || request?.headers.get("x-real-ip") || "").trim().slice(0, 64),
+      userAgent: (request?.headers.get("user-agent") || "").slice(0, 300),
     });
   } catch (error) { console.error("Audit log failed:", error); }
 }

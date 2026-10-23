@@ -1,0 +1,32 @@
+import { randomBytes } from "node:crypto";
+import type { Db } from "mongodb";
+import { audit } from "./audit";
+import { getQueue, holdMinutes } from "./availability-store";
+import { lineConfigured, pushLine } from "./line";
+import { blockRange, type ScheduleRecord } from "./schedule";
+
+type Waiting = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number }[]; createdAt: Date; lineUserId?: string; billToken?: string };
+
+// Requests waiting behind someone's payment hold, oldest first: each whose pieces are free again gets its turn now,
+// with the same time to pay. Runs whenever the queue is looked at (booking, availability, admin pages, daily cron).
+export async function promoteWaitlist(db: Db, request: Request | null, origin = request ? new URL(request.url).origin : undefined) {
+  const bookings = db.collection<Waiting>("bookingRequests");
+  const waiting = await bookings.find({ status: { $in: ["new", "contacted"] }, waitlist: { $exists: true } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, items: 1, createdAt: 1, lineUserId: 1, billToken: 1 } }).sort({ createdAt: 1 }).limit(50).toArray();
+  let promoted = 0;
+  for (const row of waiting) {
+    const range = blockRange(row);
+    const free = (await Promise.all([...new Set(row.items.map(item => item.id))].map(async id => (await getQueue(db, id, range.from, range.to, row._id)).every(day => day.remaining >= 1)))).every(Boolean);
+    if (!free) continue;
+    const holdUntil = new Date(Date.now() + holdMinutes * 60000);
+    const result = await bookings.updateOne({ _id: row._id, waitlist: { $exists: true } }, { $set: { holdUntil, promotedAt: new Date() }, $unset: { waitlist: "" } });
+    if (!result.modifiedCount) continue;
+    promoted++;
+    await audit(request, null, { action: "booking.waitlist_promoted", targetType: "booking", targetId: row._id, summary: `ถึงคิวจากคิวสำรอง · กันคิวให้ ${holdMinutes} นาทีเพื่อชำระเงิน`, actorEmail: "ระบบคิวอัตโนมัติ" }).catch(() => undefined);
+    if (row.lineUserId && lineConfigured() && origin) {
+      const billToken = row.billToken || randomBytes(18).toString("base64url");
+      if (!row.billToken) await bookings.updateOne({ _id: row._id }, { $set: { billToken } });
+      await pushLine(row.lineUserId, [{ type: "text", text: `🎉 ถึงคิวของคุณแล้วค่ะ คำขอ ${row._id}\nชุดที่รอคิวว่างแล้ว ร้านกันคิวให้ ${holdMinutes} นาที กรุณาชำระเงินภายในเวลานี้ ไม่เช่นนั้นสิทธิ์จะเลื่อนไปยังคิวถัดไป\nดูบิลได้ที่ ${origin}/bill/${billToken}` }]).catch(error => console.error("LINE waitlist notice failed:", error));
+    }
+  }
+  return promoted;
+}

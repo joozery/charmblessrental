@@ -2,12 +2,12 @@ import type { Db } from "mongodb";
 import { queueClashes } from "./availability-store";
 import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 
-type Row = { _id: string; name?: string; phone?: string; status: string; createdAt?: Date | string; start: string; end: string; schedule?: ScheduleRecord | null; shipment?: object; returned?: unknown; verification?: { status: string } | null; items: { id: number; name: string; sku: string; unitSku?: string }[] };
+type Row = { _id: string; name?: string; phone?: string; status: string; createdAt?: Date | string; payment?: string; holdUntil?: Date | null; waitlist?: unknown; start: string; end: string; schedule?: ScheduleRecord | null; shipment?: object; returned?: unknown; verification?: { status: string } | null; items: { id: number; name: string; sku: string; unitSku?: string }[] };
 export type ClashGroup = { key: string; item: string; from: string; to: string; bookings: { id: string; name: string; phone: string; status: string; shipped: boolean; ship: string; ready: string }[] };
 
 // Every clash between open bookings, one group per piece and set of bookings, with the run of days they overlap.
 export async function clashGroups(db: Db) {
-  const rows = (await db.collection<Row>("bookingRequests").find({ status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, "verification.status": 1, items: 1 } }).toArray()).map(row => ({ ...row, _id: String(row._id) }));
+  const rows = (await db.collection<Row>("bookingRequests").find({ status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, "verification.status": 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray()).map(row => ({ ...row, _id: String(row._id) }));
   const clashes = await queueClashes(db, rows);
   const byId = new Map(rows.map(row => [row._id, row]));
   const groups = new Map<string, ClashGroup>();

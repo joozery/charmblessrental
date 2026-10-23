@@ -6,19 +6,27 @@ import type { QueueBooking, QueueClash } from "./queue";
 type Capacity = { productId: number; date: string; capacity: number };
 type BlockingBooking = { _id: string; start: string; end: string; items: { id: number }[]; schedule?: ScheduleRecord };
 
-// A request not yet confirmed (waiting for ID documents, payment or the shop) keeps its queue for this long after it was sent,
-// and for as long as its ID documents wait for the shop's review.
-export const holdHours = 24;
-// A confirmed booking, or a request still on hold, holds its piece from the day the shop ships it until its gap ends (see schedule.ts).
+// Who holds a piece. Firmly: a confirmed booking, a paid one, or one whose ID documents wait for the shop's review.
+// For a while: a new request has this long to pay from when it got its turn (`holdUntil`); after that it loses the
+// queue and the next waiting request (`waitlist`) gets its turn. Requests from before `holdUntil` existed count from creation.
+export const holdMinutes = 60;
+type HoldState = { status: string; createdAt?: Date | string; payment?: string; holdUntil?: Date | string | null; waitlist?: unknown; verification?: { status: string } | null };
+export const isFirm = (row: HoldState) => row.status === "confirmed" || (["new", "contacted"].includes(row.status) && (row.payment === "paid" || row.verification?.status === "submitted"));
+export const holdEnds = (row: HoldState) => row.holdUntil ? new Date(row.holdUntil) : row.waitlist || !row.createdAt ? null : new Date(new Date(row.createdAt).getTime() + holdMinutes * 60000);
+export const isHeld = (row: HoldState) => ["new", "contacted"].includes(row.status) && !isFirm(row) && (holdEnds(row)?.getTime() ?? 0) > Date.now();
 // The same rule as blockingFilter, for a booking already loaded.
-export const isBlocking = (row: { status: string; createdAt?: Date | string; verification?: { status: string } | null }) => row.status === "confirmed" || (["new", "contacted"].includes(row.status) && ((!!row.createdAt && new Date(row.createdAt).getTime() > Date.now() - holdHours * 3600000) || row.verification?.status === "submitted"));
-export const blockingFilter = (from: string, to: string) => ({ $and: [
-  { $or: [{ status: "confirmed" }, { status: { $in: ["new", "contacted"] }, $or: [{ createdAt: { $gt: new Date(Date.now() - holdHours * 3600000) } }, { "verification.status": "submitted" }] }] },
+export const isBlocking = (row: HoldState) => isFirm(row) || isHeld(row);
+const firmClause = { $or: [{ status: "confirmed" }, { status: { $in: ["new", "contacted"] }, $or: [{ payment: "paid" }, { "verification.status": "submitted" }] }] };
+const heldClause = () => ({ status: { $in: ["new", "contacted"] }, $or: [{ holdUntil: { $gt: new Date() } }, { holdUntil: { $exists: false }, waitlist: { $exists: false }, createdAt: { $gt: new Date(Date.now() - holdMinutes * 60000) } }] });
+// Bookings holding a piece any day in [from, to), from the day the shop ships it until its gap ends (see schedule.ts).
+// firmOnly leaves out requests that are only on a payment hold: what a waiting request could get once those lapse.
+export const blockingFilter = (from: string, to: string, firmOnly = false) => ({ $and: [
+  firmOnly ? firmClause : { $or: [firmClause, heldClause()] },
   { $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] },
 ] });
 
-export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string) {
-  const bookings = await db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray();
+export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string, firmOnly = false) {
+  const bookings = await db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to, firmOnly), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray();
   const result = new Map<string, number>();
   for (const booking of bookings) {
     const count = booking.items.filter(item => item.id === productId).length;
@@ -33,14 +41,16 @@ export async function getReservationCounts(db: Db, productId: number, from: stri
 // Every day in [from, to): a hand-set capacity wins, otherwise the pieces in service (stock) are the capacity.
 // `over` counts bookings beyond the pieces that exist (an extension the shop let run into the next rental): a real clash.
 export async function getQueue(db: Db, productId: number, from: string, to: string, exceptId?: string) {
-  const [capacities, reservations, product] = await Promise.all([
+  const [capacities, reservations, firm, product] = await Promise.all([
     db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
     getReservationCounts(db, productId, from, to, exceptId),
+    getReservationCounts(db, productId, from, to, exceptId, true),
     db.collection<{ id: number; stock?: number }>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1 } }),
   ]);
   const set = new Map(capacities.map(day => [day.date, day.capacity]));
-  const stock = product?.stock ?? 0, days: { date: string; remaining: number; over: number }[] = [];
-  for (let date = from; date < to; date = addDays(date, 1)) { const reserved = reservations.get(date) || 0; days.push({ date, remaining: Math.max(0, (set.get(date) ?? stock) - reserved), over: Math.max(0, reserved - stock) }); }
+  // `waitable`: full only because of payment holds, so a new request can join the waiting list for it.
+  const stock = product?.stock ?? 0, days: { date: string; remaining: number; over: number; waitable: boolean }[] = [];
+  for (let date = from; date < to; date = addDays(date, 1)) { const reserved = reservations.get(date) || 0, capacity = set.get(date) ?? stock; days.push({ date, remaining: Math.max(0, capacity - reserved), over: Math.max(0, reserved - stock), waitable: reserved >= capacity && capacity - (firm.get(date) || 0) >= 1 }); }
   return days;
 }
 

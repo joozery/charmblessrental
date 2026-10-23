@@ -24,3 +24,6 @@
 .legend-role-ship { color: #e889b2; } .legend-role-use { color: #d01470; } .legend-role-return { color: #9a6dd4; } .legend-role-gap { color: #d6aa12; } .legend-role-ready { color: #2e9a5c; }
 .product-calendar-alert { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff0f2; color: #b42340; font-size: 12px; line-height: 1.7; }
 .product-calendar-ok { margin: 0; padding: 10px 12px; border-radius: 8px; background: #ecf8f1; color: #277c51; font-size: 12px; }
+.calendar-grid button.availability-waitlist { background: #fff7e6; border-color: #f5d49a; color: #a15c07; }
+.availability-legend-waitlist { color: #a15c07; }
+.product-calendar-waitlist { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: #eff6ff; color: #1d4ed8; font-size: 12px; line-height: 1.7; }
