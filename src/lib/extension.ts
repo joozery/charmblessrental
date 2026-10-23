@@ -6,6 +6,7 @@ export type ExtensionStatus = "unpaid" | "paid" | "cancelled";
 export type Extension = {
   id: string; fromEnd: string; toEnd: string; addedDays: number; amount: number; status: ExtensionStatus;
   createdAt: string | Date; createdByName: string;
+  billToken?: string; dueAt?: string | Date; chargeType?: "standard" | "delivered" | "late" | "penalty"; lateDays?: number;
   // The shop's note (e.g. a delayed flight), and the days it knowingly ran into another booking.
   note?: string; clashDates?: string[];
   paidOn?: string; paidByName?: string; cancelledAt?: string | Date; cancelledByName?: string;

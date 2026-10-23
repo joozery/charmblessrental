@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const booking = await db.collection<BookingDoc>("bookingRequests").findOne({ _id: bookingId }, { projection: { verification: 1 } });
   if (!booking?.verification) return Response.json({ error: "รายการนี้ไม่ได้เลือกยืนยันตัวตน" }, { status: 404 });
   const [profile, files] = await Promise.all([
-    identityProfiles(db).findOne({ _id: booking.verification.profileId }, { projection: { fullName: 1, address: 1, backupPhone: 1, social: 1, status: 1, approvedAt: 1, approvedByName: 1, consentAt: 1 } }),
+    identityProfiles(db).findOne({ _id: booking.verification.profileId }, { projection: { fullName: 1, address: 1, status: 1, approvedAt: 1, approvedByName: 1, consentAt: 1 } }),
     identityFiles(db).find({ bookingId }, { projection: { _id: 1, kind: 1, size: 1, createdAt: 1 } }).toArray(),
   ]);
   return Response.json({ profile, files });

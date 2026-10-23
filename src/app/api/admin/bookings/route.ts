@@ -11,6 +11,7 @@ import type { Permission } from "@/lib/permissions";
 import { setUnitStatuses } from "@/lib/product-store";
 import { unitStatusLabels, type UnitStatus } from "@/lib/products";
 import { assignUnits, validUnitPicks } from "@/lib/rental-units";
+import { cleanCode, customerDiscount, discountCoupons, validCoupon } from "@/lib/discounts";
 const statuses = ["new", "contacted", "confirmed", "cancelled"];
 const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
@@ -21,11 +22,11 @@ type BookingDoc = { _id: string; status: string; method?: string; billToken?: st
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
 const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
-type QuoteInput = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string };
+type QuoteInput = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string };
 const validQuote = (quote: unknown): quote is QuoteInput => { if (!quote || typeof quote !== "object") return false; const value = quote as Record<string, unknown>; return ["rental", "deposit", "shipping"].every(key => typeof value[key] === "number" && Number.isFinite(value[key]) && (value[key] as number) >= 0) && ["bank", "accountName", "accountNumber", "returnAddress", "returnPhone", "returnMethod"].every(key => typeof value[key] === "string" && (value[key] as string).length <= 500) && typeof value.qrImage === "string" && value.qrImage.length <= 2000; };
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim().length <= max;
 const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping" };
-const quoteFields = ["rental", "deposit", "shipping", "bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod"];
+const quoteFields = ["rental", "deposit", "shipping", "bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod", "rentalBeforeDiscount", "discountAmount", "discountPercent", "discountLabel", "discountCode"];
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   const body = await request.json().catch(() => null);
@@ -80,11 +81,19 @@ export async function POST(request: Request) {
   }
   if (body.action === "saveQuote") {
     if (booking.payment === "paid" && ["rental", "deposit", "shipping"].some(key => booking.quote?.[key] !== body.quote[key])) return Response.json({ error: "รายการนี้ยืนยันชำระแล้ว หากต้องแก้ยอดเงิน กรุณายกเลิกสถานะชำระก่อน" }, { status: 409 });
-    const quote = Object.fromEntries(quoteFields.map(key => [key, body.quote[key]]));
+    const before = typeof body.quote.rentalBeforeDiscount === "number" ? body.quote.rentalBeforeDiscount : body.quote.rental;
+    const code = cleanCode(body.quote.discountCode), coupon = code ? await discountCoupons(db).findOne({ code }) : null;
+    if (code && !validCoupon(coupon)) return Response.json({ error: "โค้ดส่วนลดไม่ถูกต้อง หมดอายุ หรือใช้ครบแล้ว" }, { status: 400 });
+    const customer = booking.lineUserId ? await db.collection<{ _id: string; bookingCount?: number; completedCount?: number; reviewCount?: number }>("customers").findOne({ _id: booking.lineUserId }) : null;
+    const loyalty = customerDiscount(customer?.completedCount ?? customer?.bookingCount ?? 0, customer?.reviewCount ?? 0);
+    const percent = Math.min(100, (coupon?.percent || 0) + loyalty.percent), discountAmount = Math.round(before * percent / 100 * 100) / 100;
+    const quote = Object.fromEntries(quoteFields.map(key => [key, body.quote[key]])) as QuoteInput;
+    quote.rentalBeforeDiscount = before; quote.discountPercent = percent; quote.discountAmount = discountAmount; quote.rental = Math.max(0, Math.round((before - discountAmount) * 100) / 100); quote.discountLabel = [loyalty.label, coupon?.label].filter(Boolean).join(" + "); quote.discountCode = coupon?.code || "";
     await bookings.updateOne({ _id: body.id }, { $set: { quote: { ...quote, updatedAt: new Date(), updatedBy: by } } });
     const changes = diff(booking.quote, quote, quoteFields);
     if (changes.length) await log("booking.quote", booking.quote ? "แก้ไขราคาในใบสรุป" : "บันทึกราคาในใบสรุป", changes);
-    return Response.json({ ok: true });
+    if (coupon && booking.quote?.discountCode !== coupon.code) await discountCoupons(db).updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $set: { updatedAt: new Date() } });
+    return Response.json({ ok: true, quote });
   }
   if (body.action === "ship") {
     if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });

@@ -10,6 +10,7 @@ import { audit } from "@/lib/audit";
 import { carrierFor, saysReturned, trackingIn } from "@/lib/line-return";
 import { rentalStage, stageLabel } from "@/lib/rental-stage";
 import { returnMethods, type ScheduleRecord } from "@/lib/schedule";
+import { ensureCustomer, type CustomerRecord } from "@/lib/customer-credits";
 
 type LineEvent = { type: string; replyToken?: string; source?: { userId?: string }; message?: { type: string; text?: string } };
 type BookingDoc = {
@@ -78,6 +79,8 @@ async function handle(request: Request, events: LineEvent[], origin: string) {
       const before = await bookings.findOne({ _id: target._id }, { projection: { lineUserId: 1, lineName: 1, name: 1 } });
       const lineName = await lineProfileName(userId);
       await bookings.updateOne({ _id: target._id }, { $set: { lineUserId: userId, lineName, lineLinkedAt: new Date() } });
+      await ensureCustomer(db, { lineUserId: userId, lineName, name: target.name, phone: target.phone });
+      if (before?.lineUserId !== userId) await db.collection<CustomerRecord>("customers").updateOne({ _id: userId }, { $inc: { bookingCount: 1 }, $set: { updatedAt: new Date() } });
       // Only a new or different LINE account goes in the history; repeating the request number is not news.
       if (before?.lineUserId !== userId) await audit(request, null, { action: "booking.line_linked", targetType: "booking", targetId: target._id, actorEmail: `ลูกค้า${before?.name ? ` ${before.name}` : ""}`,
         summary: `${before?.lineUserId ? "เปลี่ยน LINE ที่ผูกกับคำขอ" : "ผูก LINE กับคำขอ"}${lineName ? ` · ${lineName}` : ""} (พิมพ์${id ? "เลขคำขอ" : "เบอร์โทร"})`, changes: [{ field: "lineName", before: before?.lineUserId ? before.lineName || "(ไม่ทราบชื่อ)" : null, after: lineName || "(ไม่ทราบชื่อ)" }] });

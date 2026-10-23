@@ -12,7 +12,7 @@ import type { Product } from "@/lib/products";
 import { blockRange, countUseDays, type ScheduleRecord } from "@/lib/schedule";
 import { getStoreSettings } from "@/lib/store-settings";
 
-type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; extensions?: Extension[]; shipment?: object; lineUserId?: string; billToken?: string; quote?: { accountNumber?: string } };
+type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; shipment?: object; extensions?: Extension[]; lineUserId?: string; billToken?: string; quote?: { accountNumber?: string } };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const actions = { preview: "bookings", create: "bookings", cancel: "bookings", paid: "payments" } as const;
@@ -33,21 +33,26 @@ async function plan(db: Db, booking: BookingDoc, toEnd: string) {
     const item = booking.items.find(row => row.id === id)!;
     for (const row of full) conflicts.push({ item: item.sku || item.name, date: row.date, bookings: others.filter(other => other.items.some(entry => entry.id === id) && blockRange(other).from <= row.date && row.date < blockRange(other).to).map(other => ({ id: other._id, name: other.name || "" })) });
   }
-  // Suggested price. Before shipping: what the longer rental costs minus the current length, per piece (the shop's table).
-  // Once the piece is with the customer: the shop's flat rate per piece per day.
+  // Suggested price: what the longer rental costs minus what the current length costs, per piece.
   const settings = await getStoreSettings();
-  if (booking.shipment) return { fromEnd, toEnd, added, schedule, conflicts, suggested: added * settings.lateRates.afterShipPerDay * booking.items.length, rule: `ส่งชุดแล้ว คิดวันละ ${settings.lateRates.afterShipPerDay} บาท × ${booking.items.length} ชุด` };
   const products = await db.collection<Product>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, customPricing: 1, dailyRate: 1, category: 1 } }).toArray();
   const before = booking.days + extendedDays(booking), after = before + added;
   const parts = booking.items.map(item => { const product = products.find(row => row.id === item.id); const pricing = product ? effectivePricing(product, settings.rentalPricing, settings.extraDayRates) : null; const was = priceFor(pricing, before), now = priceFor(pricing, after); return was === null || now === null ? null : Math.max(0, now - was); });
-  const suggested = parts.every(part => part !== null) ? parts.reduce<number>((sum, part) => sum + (part || 0), 0) : null;
-  return { fromEnd, toEnd, added, schedule, conflicts, suggested, rule: "ยังไม่ส่งชุด คิดตามตารางราคาเช่า (ราคาวันใหม่ − ราคาเดิม)" };
+  const standard = parts.every(part => part !== null) ? parts.reduce<number>((sum, part) => sum + (part || 0), 0) : null;
+  // After dispatch, late days include the return day and every Gap day.
+  const lateDays = booking.shipment ? Math.max(0, countUseDays(booking.schedule.returnDate, toEnd)) : 0;
+  const deliveredDays = booking.shipment ? Math.max(0, added - lateDays) : 0;
+  const deliveredAmount = deliveredDays * 50;
+  const lateAmount = lateDays * 100;
+  const suggested = !booking.shipment ? standard : deliveredAmount + lateAmount;
+  const chargeType: Extension["chargeType"] = !booking.shipment ? "standard" : lateDays ? "late" : "delivered";
+  return { fromEnd, toEnd, added, schedule, conflicts, suggested, standard, deliveredDays, lateDays, deliveredAmount, lateAmount, chargeType };
 }
 
-async function notify(request: Request, db: Db, booking: BookingDoc, text: (link: string) => string) {
+async function notify(request: Request, db: Db, booking: BookingDoc, text: (link: string) => string, token?: string) {
   if (!booking.lineUserId || !lineConfigured()) return false;
-  const billToken = booking.billToken || randomBytes(18).toString("base64url");
-  if (!booking.billToken) await db.collection<BookingDoc>("bookingRequests").updateOne({ _id: booking._id }, { $set: { billToken } });
+  const billToken = token || booking.billToken || randomBytes(18).toString("base64url");
+  if (!token && !booking.billToken) await db.collection<BookingDoc>("bookingRequests").updateOne({ _id: booking._id }, { $set: { billToken } });
   try { await pushLine(booking.lineUserId, [{ type: "text", text: text(`${new URL(request.url).origin}/bill/${billToken}`) }]); return true; } catch (error) { console.error("LINE extension notice failed:", error); return false; }
 }
 
@@ -76,13 +81,13 @@ export async function POST(request: Request) {
     if (result.conflicts.length && !note) return Response.json({ error: "คิวซ้อนกับลูกค้าคนอื่น กรุณาใส่หมายเหตุ" }, { status: 400 });
     if (activeExtensions(booking.extensions).some(item => item.status === "unpaid")) return Response.json({ error: "มีค่าเช่าต่อที่ยังไม่ชำระ กรุณายืนยันรับเงินหรือยกเลิกรายการเดิมก่อน" }, { status: 409 });
     if (typeof body.amount !== "number" || !Number.isFinite(body.amount) || body.amount < 0 || body.amount > 1000000) return Response.json({ error: "กรุณากรอกค่าเช่าต่อ" }, { status: 400 });
-    const amount = Math.round(body.amount * 100) / 100, now = new Date();
-    const extension: Extension = { id: randomUUID(), fromEnd: result.fromEnd, toEnd: result.toEnd, addedDays: result.added, amount, status: amount > 0 ? "unpaid" : "paid", createdAt: now, createdByName: admin.name, ...(note ? { note } : {}), ...(result.conflicts.length ? { clashDates: [...new Set(result.conflicts.map(row => row.date))] } : {}), ...(amount > 0 ? {} : { paidOn: thaiDay(), paidByName: admin.name }) };
+    const amount = Math.round(body.amount * 100) / 100, now = new Date(), billToken = amount > 0 ? randomBytes(18).toString("base64url") : undefined, dueAt = amount > 0 ? new Date(now.getTime() + 60 * 60 * 1000) : undefined;
+    const extension: Extension = { id: randomUUID(), fromEnd: result.fromEnd, toEnd: result.toEnd, addedDays: result.added, amount, status: amount > 0 ? "unpaid" : "paid", createdAt: now, createdByName: admin.name, ...(billToken ? { billToken, dueAt } : {}), chargeType: result.chargeType, ...(result.lateDays ? { lateDays: result.lateDays } : {}), ...(note ? { note } : {}), ...(result.conflicts.length ? { clashDates: [...new Set(result.conflicts.map(row => row.date))] } : {}), ...(amount > 0 ? {} : { paidOn: thaiDay(), paidByName: admin.name }) };
     // Guard on the current ready day so two admins extending at once cannot both shift it.
     const updated = await bookings.updateOne({ _id: booking._id, "schedule.ready": booking.schedule!.ready }, { $set: { schedule: result.schedule, updatedAt: now }, $push: { extensions: extension }, $unset: { returnReminderSentAt: "", lateNoticeSentAt: "" } });
     if (!updated.modifiedCount) return Response.json({ error: "คำขอนี้เพิ่งถูกแก้ไข กรุณาโหลดใหม่แล้วลองอีกครั้ง" }, { status: 409 });
     await log("booking.extended", `ขยายวันเช่า +${result.added} วัน ถึง ${result.toEnd} · ค่าเช่าต่อ ${money(amount)} บาท${result.conflicts.length ? ` · คิวซ้อน ${result.conflicts.map(row => `${day(row.date)} ${row.bookings.map(other => other.id).join("/")}`).join(", ")}` : ""}${note ? ` · ${note}` : ""}`, [{ field: "end", before: result.fromEnd, after: result.toEnd }, { field: "returnDate", before: booking.schedule!.returnDate, after: result.schedule.returnDate }]);
-    const lineNotified = await notify(request, db, booking, link => `📅 ขยายวันเช่าคำขอ ${booking._id} เรียบร้อยค่ะ\nใช้งานได้ถึง ${day(result.toEnd)} (+${result.added} วัน)\nส่งคืนชุดภายใน ${day(result.schedule.returnDate)}${amount > 0 ? `\nค่าเช่าต่อ ${money(amount)} บาท\n\nโอนและดูบัญชีร้านได้ที่ลิงก์บิลเดิม 👉 ${link}\nแล้วส่งสลิปในแชทนี้นะคะ 🙏` : ""}`);
+    const lineNotified = await notify(request, db, booking, link => `📅 ขยายวันเช่าคำขอ ${booking._id} เรียบร้อยค่ะ\nใช้งานได้ถึง ${day(result.toEnd)} (+${result.added} วัน)\nส่งคืนชุดภายใน ${day(result.schedule.returnDate)}${amount > 0 ? `\n${result.lateDays ? `ค่าปรับล่าช้า ${money(result.lateAmount)} บาท (${result.lateDays} วัน × 100)` : `ค่าเช่าต่อ ${money(amount)} บาท`}\n\nบิลนี้ต้องชำระภายใน 1 ชั่วโมง: ${link}\nแล้วส่งสลิปในแชทนี้นะคะ 🙏` : ""}`, billToken);
     return Response.json({ extension, schedule: result.schedule, lineNotified });
   }
 

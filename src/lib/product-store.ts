@@ -13,7 +13,7 @@ export async function readProducts(): Promise<Product[]> {
   return stored;
 }
 
-export type ProductFields = Pick<Product, "name" | "thai" | "category" | "tag" | "color" | "size" | "dailyRate" | "deposit" | "description" | "notes" | "images" | "active" | "customPricing" | "shippingFee">;
+export type ProductFields = Pick<Product, "name" | "thai" | "category" | "tag" | "color" | "size" | "dailyRate" | "deposit" | "description" | "notes" | "images" | "active" | "customPricing" | "shippingFee" | "gapDays">;
 const products = (db: Db) => db.collection<Product>("products");
 const round = (value: number) => Math.round(value * 100) / 100;
 const total = (values: (number | null | undefined)[]) => values.some(value => typeof value === "number") ? round(values.reduce<number>((sum, value) => sum + (value || 0), 0)) : null;

@@ -7,7 +7,7 @@ export type FinanceTransaction = {
   bookingId?: string; source?: "manual" | "booking" | "deposit" | "extension" | "late" | "adjustment";
   voided?: { at: Date; by: string; byName: string; reason: string };
 };
-export type DepositRefund = { amount: number; deducted: number; reason: string; date: Date; evidence: string[]; at: Date; by: string; byName: string };
+export type DepositRefund = { amount: number; deducted: number; reason: string; transferRef?: string; date: Date; evidence: string[]; at: Date; by: string; byName: string };
 // Customer money held by the shop, kept apart from income. _id is the booking id: one deposit per booking.
 export type DepositRecord = {
   _id: string; bookingId: string; customerName: string; amount: number;

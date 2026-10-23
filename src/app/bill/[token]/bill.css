@@ -45,6 +45,7 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-identity-form input:not([type=checkbox]):not([type=file]),.bill-identity-form textarea{min-height:42px;padding:8px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font:inherit;font-size:15px}
 .bill-identity-form .is-wide{grid-column:1/-1}
 .bill-identity-file{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed #d9b9ca;border-radius:10px;background:#fff;color:#475467;font-size:13px}
+.bill-identity-file label{gap:8px!important;font-weight:650}.bill-identity-file input[type=file]{width:100%;padding:9px;border:1px solid #d9b9ca;border-radius:9px;background:#fff8fb;color:#79516c;font:inherit;font-size:13px;cursor:pointer}.bill-identity-file input[type=file]::file-selector-button{margin-right:10px;padding:8px 13px;border:0;border-radius:7px;background:#79516c;color:#fff;font:inherit;font-size:13px;font-weight:650;cursor:pointer}.bill-identity-file input[type=file]::file-selector-button:hover{background:#633f58}
 .bill-identity-file img{max-height:160px;max-width:100%;align-self:flex-start;border-radius:8px;object-fit:contain}
 .bill-identity-file span{color:#907181;font-size:12px}
 .bill-identity-example{display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:8px;background:#fdf5f9;color:#907181;text-decoration:none}.bill-identity-example small{font-size:11px}

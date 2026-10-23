@@ -21,12 +21,12 @@ export function readImage(bytes: Buffer) {
   return { contentType, data: new Binary(bytes) };
 }
 
-export async function saveSubmission(db: Db, booking: { _id: string; phone: string }, profileId: string, fields: Pick<IdentityProfile, "fullName" | "address" | "backupPhone" | "social">, files: { kind: IdentityFileKind; contentType: string; data: Binary }[]) {
+export async function saveSubmission(db: Db, booking: { _id: string; phone: string }, profileId: string, fields: Pick<IdentityProfile, "fullName" | "address">, files: { kind: IdentityFileKind; contentType: string; data: Binary }[]) {
   const now = new Date();
   // A new submission replaces the files sent earlier for this booking.
   await identityFiles(db).deleteMany({ bookingId: booking._id });
   await identityFiles(db).insertMany(files.map(file => ({ _id: randomUUID(), bookingId: booking._id, profileId, kind: file.kind, contentType: file.contentType, size: file.data.length(), data: file.data, createdAt: now })));
-  await identityProfiles(db).updateOne({ _id: profileId }, { $set: { phone: booking.phone, ...fields, status: "submitted", consentAt: now, updatedAt: now }, $setOnInsert: { lineUserIds: [] } }, { upsert: true });
+  await identityProfiles(db).updateOne({ _id: profileId }, { $set: { phone: booking.phone, ...fields, backupPhone: "", social: "", status: "submitted", consentAt: now, updatedAt: now }, $setOnInsert: { lineUserIds: [] } }, { upsert: true });
 }
 
 // A customer approved within `validMonths` and reached through the same LINE account skips sending documents again.

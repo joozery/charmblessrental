@@ -21,7 +21,7 @@ export function leadDaysFor(settings: LeadSource, method: string) {
   if (method === "messenger") return settings.schedule.messengerLead;
   return settings.shippingOptions.find(option => option.id === method)?.leadDays ?? 3;
 }
-export const planFor = (settings: LeadSource, start: string, end: string, method: string, returnMethod: ReturnMethod) => planRental(start, end, leadDaysFor(settings, method), settings.schedule.gap[returnMethod]);
+export const planFor = (settings: LeadSource, start: string, end: string, method: string, returnMethod: ReturnMethod, gap = settings.schedule.gap[returnMethod]) => planRental(start, end, leadDaysFor(settings, method), gap);
 
 export type DayRole = "ship" | "transit" | "use" | "return" | "gap" | "ready";
 export function dayRole(plan: RentalPlan, day: string): DayRole | null {

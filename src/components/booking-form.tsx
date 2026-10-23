@@ -49,6 +49,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const [address, setAddress] = useState("");
   const [pin, setPin] = useState("");
   const [note, setNote] = useState("");
+  const [discountCode, setDiscountCode] = useState("");
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [depositMode, setDepositMode] = useState<"deposit" | "identity">("deposit");
@@ -131,7 +132,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   async function sendRequest() {
     setSubmitting(true); setError("");
     try {
-      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id })), start, end, name, phone, method, returnMethod, depositMode: mode, ...(mode === "deposit" ? { refundAccount } : {}), address, pin, note, acceptPrivacy: accepted }) });
+      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id })), start, end, name, phone, method, returnMethod, depositMode: mode, ...(mode === "deposit" ? { refundAccount } : {}), address, pin, note, discountCode, acceptPrivacy: accepted }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่");
       saveContact({ name: name.trim(), phone: phone.trim(), address: address.trim(), pin: pin.trim(), method, returnMethod });
@@ -187,6 +188,8 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
       <label>ชื่อบัญชี<input maxLength={120} value={refundAccount.accountName} onChange={e => setRefundAccount({ ...refundAccount, accountName: e.target.value })} placeholder="ชื่อ-นามสกุลเจ้าของบัญชี" /></label>
       <label>เลขบัญชี / พร้อมเพย์<input inputMode="numeric" maxLength={20} value={refundAccount.accountNumber} onChange={e => setRefundAccount({ ...refundAccount, accountNumber: e.target.value })} placeholder="xxx-x-xxxxx-x" /></label>
     </div><p className="booking-help">ร้านโอนเงินมัดจำคืนเข้าบัญชีนี้หลังได้รับชุดคืนและตรวจสภาพแล้ว แก้ไขภายหลังได้ในลิงก์บิล</p></fieldset>}
+    <label>โค้ดส่วนลด (ถ้ามี)<input value={discountCode} onChange={e => setDiscountCode(e.target.value.toUpperCase())} maxLength={60} autoCapitalize="characters" spellCheck={false} placeholder="เช่น WELCOME10" /></label>
+    <p className="booking-help">ร้านจะตรวจสอบโค้ดและนำไปคำนวณส่วนลดในใบสรุปก่อนยืนยันการจอง</p>
     <label>โน้ตถึงร้าน (ไม่บังคับ)<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder="เช่น งานรับปริญญา / สอบถามเพิ่มเติม…" /></label>
     <dl className="booking-summary">{[["วันใช้งาน", `${shortDate(start)} – ${shortDate(end)} · ${days} วัน`, 0], ["รับชุด", `${methodLabel}${plan ? ` · ร้าน${method === "pickup" ? "เตรียมไว้" : "ส่ง"} ${shortDate(plan.ship)}` : ""}`, 1], ["คืนชุด", `${returnMethods.find(item => item.key === returnMethod)?.label}${plan ? ` · ภายใน ${shortDate(plan.returnDate)}` : ""}`, 1], ...(method !== "pickup" ? [["ที่อยู่", address, 1]] : [])].map(([label, value, at]) => <div key={label as string}><dt>{label}</dt><dd>{value}</dd><button type="button" onClick={() => goTo(at as number)}>แก้ไข</button></div>)}</dl>
     <details className="booking-rules"><summary>กติกาของร้าน และการใช้ข้อมูลติดต่อ</summary><RentalRules rules={settings.rentalRules} /><p>ร้านบันทึกชื่อ เบอร์โทร ที่อยู่จัดส่ง (ถ้ามี) และรายละเอียดคำขอ เพื่อประสานงานการเช่าและติดต่อกลับเท่านั้น</p></details>

@@ -13,12 +13,12 @@ import { startingTier } from "@/lib/pricing";
 
 type Draft = {
   id?: number; name: string; category: string; description: string; images: string[];
-  color: string; size: string; dailyRate: number | null; deposit: number | null; shippingFee: number | null; active: boolean;
+  color: string; size: string; dailyRate: number | null; deposit: number | null; shippingFee: number | null; gapDays: number | null; active: boolean;
   pieces: number; cost: number | null;
   custom: boolean; tierRows: TierRow[]; extra: string;
 };
 type Restock = { product: Product; count: number; cost: number | null; note: string };
-const empty: Draft = { name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, shippingFee: null, active: true, pieces: 1, cost: null, custom: false, tierRows: rowsFrom(null), extra: "" };
+const empty: Draft = { name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, shippingFee: null, gapDays: null, active: true, pieces: 1, cost: null, custom: false, tierRows: rowsFrom(null), extra: "" };
 const money = (value?: number | null) => value == null ? "—" : value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const numeric = (input: HTMLInputElement) => Number.isNaN(input.valueAsNumber) ? null : input.valueAsNumber;
 const nextCodes = (product: Product, count: number) => {
@@ -68,7 +68,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
   }
   function edit(product?: Product) {
     setError(""); setNotice(""); setUnitEdits({});
-    setDraft(product ? { id: product.id, name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: null, deposit: product.deposit ?? null, shippingFee: product.shippingFee ?? null, active: product.active !== false, pieces: 0, cost: null, ...customFields(product) } : { ...empty });
+    setDraft(product ? { id: product.id, name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: null, deposit: product.deposit ?? null, shippingFee: product.shippingFee ?? null, gapDays: product.gapDays ?? null, active: product.active !== false, pieces: 0, cost: null, ...customFields(product) } : { ...empty });
   }
   async function upload(file?: File) {
     if (!file || !draft) return;
@@ -162,6 +162,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       <label>ต้นทุนต่อชิ้น (บาท)<Input type="number" min="0" step="0.01" value={draft.cost ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, cost: numeric(e.target) })} /></label></>}
       <label>เงินมัดจำ (บาท)<Input type="number" min="0" step="0.01" value={draft.deposit ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, deposit: numeric(e.target) })} /></label>
       <label>ค่าส่งพัสดุเฉพาะสินค้า (บาท)<Input type="number" min="0" step="1" value={draft.shippingFee ?? ""} placeholder="ใช้ค่าส่งปกติ" onChange={e => { const value = numeric(e.target); setDraft({ ...draft, shippingFee: value === null ? null : Math.round(value) }); }} /><small className="inventory-help">ของชิ้นใหญ่ เช่น The North Face 80 บาท · ใช้เป็นค่าส่งขั้นต่ำของคำขอที่มีสินค้านี้</small></label>
+      <label>Gap พักชุดของสินค้านี้ (วัน)<Input type="number" min="0" max="14" step="1" value={draft.gapDays ?? ""} placeholder="เว้นว่าง = ค่าเริ่มต้น 2 วัน" onChange={e => { const value = numeric(e.target); setDraft({ ...draft, gapDays: value === null ? null : Math.max(0, Math.min(14, Math.round(value))) }); }} /><small className="inventory-help">ใส่ 0 ได้ = ไม่เพิ่มวันพักชุด หากเว้นว่างจะใช้ค่าตามวิธีคืนของร้าน</small></label>
       <div className="admin-form-full inventory-pricing"><label className="flex flex-row items-center gap-2"><Input type="checkbox" checked={draft.custom} onChange={e => setDraft({ ...draft, custom: e.target.checked })} />ตั้งราคาเฉพาะสินค้านี้ (ไม่ใช้ตารางราคาของร้าน)</label>{draft.custom ? <PriceTiersEditor extraHint="เว้นว่าง = ใช้ค่าส่วนเกินของร้าน (ตามหมวด)" rows={draft.tierRows} extra={draft.extra} onChange={(tierRows, extra) => setDraft({ ...draft, tierRows, extra })} /> : <small>ใช้ราคาตามตาราง <a href="/admin/rental-pricing" target="_blank" rel="noopener noreferrer">ราคาเช่ามาตรฐานของร้าน</a></small>}</div>
       <label>สี<Input maxLength={100} value={draft.color} onChange={e => setDraft({ ...draft, color: e.target.value })} /></label>
       <label>ไซซ์<Input maxLength={100} value={draft.size} onChange={e => setDraft({ ...draft, size: e.target.value })} /></label>

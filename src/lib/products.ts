@@ -10,6 +10,7 @@ export type Product = {
   customPricing?: RentalPricing | null; pricing?: RentalPricing | null;
   // Lowest parcel fee when this item is in the order, for bulky items (The North Face 80).
   shippingFee?: number | null;
+  gapDays?: number | null;
 };
 // One physical piece of a product. `sku` is the piece code (A0002-03); the product's `sku` is the code shared by its pieces (A0002).
 // After a rental a piece goes inspection → washing (or repair) → available; only "available" may be sent to the next customer.
