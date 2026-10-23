@@ -43,8 +43,8 @@ export default function SlipPanel({ bookingId, deposit, onChange }: { bookingId:
         {slip.amount !== undefined && <p>ยอดในสลิป <b>{money(slip.amount)}</b> / ยอดบิล {money(slip.due)} บาท{slip.dateTime ? ` · โอน ${when(slip.dateTime)}` : ""}</p>}
         {(slip.senderName || slip.receiverName) && <p>{slip.senderName || "?"} → {slip.receiverName || "?"}</p>}
         {slip.transRef && <p>อ้างอิง {slip.transRef}</p>}
-        {slip.reason && <p className="bookings-slip-reason">{slip.status === "rejected" ? "เหตุผล: " : "ตรวจอัตโนมัติไม่ผ่าน: "}{slip.reason}</p>}
-        {slip.status === "review" && (rejecting?.id === slip._id
+        {slip.reason && <p className="bookings-slip-reason">{slip.status === "rejected" ? "เหตุผล: " : slip.status === "checking" ? "ระบบจะตรวจซ้ำอัตโนมัติ: " : "ตรวจอัตโนมัติไม่ผ่าน: "}{slip.reason}</p>}
+        {(slip.status === "review" || slip.status === "checking") && (rejecting?.id === slip._id
           ? <div className="bookings-slip-actions"><input autoFocus maxLength={300} placeholder="เหตุผลที่แจ้งลูกค้า เช่น ยอดไม่ครบ" value={rejecting.reason} onChange={event => setRejecting({ id: slip._id, reason: event.target.value })} /><button type="button" disabled={busy === slip._id || !rejecting.reason.trim()} onClick={() => decide(slip._id, "reject", rejecting.reason.trim())}>ยืนยันว่าไม่ถูกต้อง</button><button type="button" onClick={() => setRejecting(null)}>ยกเลิก</button></div>
           : <div className="bookings-slip-actions"><button type="button" className="is-primary" disabled={busy === slip._id} onClick={() => decide(slip._id, "accept")}>สลิปถูกต้อง ยืนยันชำระ</button><button type="button" disabled={busy === slip._id} onClick={() => setRejecting({ id: slip._id, reason: "" })}>สลิปไม่ถูกต้อง</button></div>)}
       </div>

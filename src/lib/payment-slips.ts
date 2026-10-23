@@ -2,15 +2,18 @@ import type { Binary, Db } from "mongodb";
 
 // Transfer slips customers attach on their bill. Like ID documents they stay out of the public image bucket
 // and are served only to admins. A slip Slip2Go confirms (right amount, the shop's account, never used before)
-// marks the bill paid by itself; any other slip waits for the shop to look at it.
-export type SlipStatus = "verified" | "review" | "accepted" | "rejected";
+// marks the bill paid by itself; any other slip waits for the shop to look at it. A slip the bank has no record of yet
+// stays "checking" while /api/cron/slips asks again a few minutes later.
+export type SlipStatus = "verified" | "review" | "accepted" | "rejected" | "checking";
 export type PaymentSlip = {
   _id: string; bookingId: string; billToken?: string; contentType: string; size: number; data: Binary; createdAt: Date;
   status: SlipStatus; reason: string; due: number;
   transRef?: string; amount?: number; dateTime?: string; senderName?: string; receiverName?: string; raw?: string;
-  reviewedAt?: Date; reviewedByName?: string;
+  reviewedAt?: Date; reviewedByName?: string; rechecks?: number; recheckAt?: Date;
 };
-export const slipStatusLabels: Record<SlipStatus, string> = { verified: "ตรวจผ่านอัตโนมัติ", review: "รอร้านตรวจสลิป", accepted: "ร้านยืนยันสลิปแล้ว", rejected: "สลิปไม่ถูกต้อง" };
+export const slipStatusLabels: Record<SlipStatus, string> = { verified: "ตรวจผ่านอัตโนมัติ", review: "รอร้านตรวจสลิป", accepted: "ร้านยืนยันสลิปแล้ว", rejected: "สลิปไม่ถูกต้อง", checking: "กำลังตรวจกับธนาคาร" };
+// When a "checking" slip is asked about again, counted from the previous try; after the last one it goes to the shop.
+export const recheckDelays = [2 * 60000, 3 * 60000];
 let indexes: Promise<unknown> | undefined;
 export async function paymentSlips(db: Db) {
   const collection = db.collection<PaymentSlip>("paymentSlips");

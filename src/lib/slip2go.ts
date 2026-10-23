@@ -3,12 +3,14 @@
 // Every call costs a token, so callers cap how often one bill may try.
 export type SlipCheck =
   | { ok: true; transRef: string; amount: number; dateTime: string; senderName: string; receiverName: string; receiverAccounts: string[]; raw: string }
-  | { ok: false; reason: string; raw?: string };
+  | { ok: false; reason: string; raw?: string; retry?: boolean };
 
 export const slip2goConfigured = () => !!process.env.SLIP2GO_SECRET_KEY;
 
 // Codes for "this slip is a real transaction"; anything else (not found, fraud, duplicate) is a failed check.
 const foundCodes = new Set(["200000", "200200"]);
+// A slip sent seconds after the transfer is often not at the bank's lookup yet: worth asking again a few minutes later.
+const retryCodes = new Set(["200404", "200502"]);
 const failures: Record<string, string> = { "200404": "ไม่พบรายการนี้ในระบบธนาคาร", "200500": "สลิปเสียหรือสลิปปลอม", "200501": "สลิปนี้เคยถูกตรวจแล้ว (สลิปซ้ำ)", "200502": "ระบบธนาคารขัดข้อง กรุณาลองใหม่อีกครั้ง" };
 const str = (value: unknown) => typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
 // Every account-like string under the receiver (masked as "xxx-x-x1234-x" by the bank), wherever Slip2Go puts it.
@@ -18,25 +20,27 @@ const accountStrings = (value: unknown, out: string[] = []): string[] => {
   return out;
 };
 
-export async function checkSlip(image: Uint8Array, contentType: string): Promise<SlipCheck> {
+// Slip2Go remembers every slip it is shown, even one it could not find, so a re-check of the same slip must turn
+// checkDuplicate off and rely on the shop's own transRef check instead.
+export async function checkSlip(image: Uint8Array, contentType: string, checkDuplicate = true): Promise<SlipCheck> {
   const url = process.env.SLIP2GO_API_URL || "https://connect.slip2go.com", key = process.env.SLIP2GO_SECRET_KEY;
   if (!key) return { ok: false, reason: "ยังไม่ได้ตั้งค่า Slip2Go" };
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(image)], { type: contentType }), contentType === "image/png" ? "slip.png" : "slip.jpg");
   // Slip2Go also remembers slips checked through the shop's LINE chat, so a slip already used there is caught too.
-  form.append("payload", JSON.stringify({ checkDuplicate: true }));
+  form.append("payload", JSON.stringify({ checkDuplicate }));
   let response: Response;
   try {
     response = await fetch(`${url.replace(/\/+$/, "")}/api/verify-slip/qr-image/info`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(15000), cache: "no-store" });
   } catch (error) {
     console.error("Slip2Go request failed:", error);
-    return { ok: false, reason: "ระบบตรวจสลิปไม่ตอบสนอง" };
+    return { ok: false, reason: "ระบบตรวจสลิปไม่ตอบสนอง", retry: true };
   }
   const text = await response.text(), raw = text.slice(0, 4000);
   let body: { code?: unknown; message?: unknown; data?: Record<string, unknown> };
   try { body = JSON.parse(text); } catch { return { ok: false, reason: `ระบบตรวจสลิปตอบกลับผิดรูปแบบ (HTTP ${response.status})`, raw }; }
   const code = str(body.code);
-  if (!response.ok || !foundCodes.has(code) || !body.data) return { ok: false, reason: `ตรวจสลิปไม่ผ่าน: ${failures[code] || str(body.message) || `รหัส ${code || response.status}`}`, raw };
+  if (!response.ok || !foundCodes.has(code) || !body.data) return { ok: false, reason: `ตรวจสลิปไม่ผ่าน: ${failures[code] || str(body.message) || `รหัส ${code || response.status}`}`, raw, retry: retryCodes.has(code) || response.status >= 500 };
   const data = body.data as { transRef?: unknown; amount?: unknown; dateTime?: unknown; sender?: { account?: { name?: unknown } }; receiver?: { account?: { name?: unknown } } };
   const amount = Number(str(data.amount).replace(/,/g, ""));
   if (!str(data.transRef) || !Number.isFinite(amount)) return { ok: false, reason: "อ่านเลขอ้างอิงหรือยอดเงินจากสลิปไม่ได้", raw };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // The slip's QR code has to stay sharp: keep small files as they are, and shrink big phone photos only gently.
 async function prepare(file: File) {
@@ -13,12 +13,18 @@ async function prepare(file: File) {
   return new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("แปลงรูปไม่สำเร็จ")), "image/jpeg", 0.92));
 }
 
-export type SlipState = { status: "review" | "rejected"; reason: string } | null;
+export type SlipState = { status: "review" | "rejected" | "checking"; reason: string } | null;
 
 export default function SlipForm({ token, last }: { token: string; last: SlipState }) {
   const router = useRouter();
   const [file, setFile] = useState<{ blob: Blob; url: string } | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [result, setResult] = useState<SlipState>(last);
+  // While the bank re-check runs, reload the bill now and then; the page keys this form on the slip state, so the result shows up.
+  useEffect(() => {
+    if (result?.status !== "checking") return;
+    const timer = setInterval(() => router.refresh(), 20000);
+    return () => clearInterval(timer);
+  }, [result?.status, router]);
 
   async function pick(input: HTMLInputElement) {
     const chosen = input.files?.[0]; input.value = ""; setError("");
@@ -35,12 +41,13 @@ export default function SlipForm({ token, last }: { token: string; last: SlipSta
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "ส่งสลิปไม่สำเร็จ");
       URL.revokeObjectURL(file.url); setFile(null);
-      if (data.status === "review") setResult({ status: "review", reason: data.reason || "" });
+      if (data.status === "review" || data.status === "checking") setResult({ status: data.status, reason: data.reason || "" });
       router.refresh();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "ส่งสลิปไม่สำเร็จ"); } finally { setBusy(false); }
   }
 
   return <form className="bill-slip-form" onSubmit={submit}>
+    {result?.status === "checking" && <p className="bill-slip-note">ร้านได้รับสลิปแล้ว ระบบกำลังตรวจสอบรายการกับธนาคาร ใช้เวลาไม่เกิน 5 นาที ไม่ต้องส่งสลิปซ้ำค่ะ</p>}
     {result?.status === "review" && <p className="bill-slip-note">ร้านได้รับสลิปแล้ว ระบบตรวจอัตโนมัติไม่ผ่าน ({result.reason}) ร้านจะตรวจและยืนยันให้อีกครั้งค่ะ</p>}
     {result?.status === "rejected" && <p className="bill-error">ร้านแจ้งว่าสลิปล่าสุดไม่ถูกต้อง: {result.reason} กรุณาแนบสลิปใหม่</p>}
     <label className="bill-slip-pick">{file ? <img src={file.url} alt="สลิปที่เลือก" /> : <span>แตะเพื่อเลือกรูปสลิปโอนเงิน</span>}<input type="file" accept="image/*" onChange={event => pick(event.currentTarget)} disabled={busy} /></label>

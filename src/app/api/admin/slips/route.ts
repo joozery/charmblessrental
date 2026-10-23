@@ -26,21 +26,22 @@ export async function POST(request: Request) {
   const admin = auth.admin, db = await database(), slips = await paymentSlips(db);
   const slip = await slips.findOne({ _id: body.id }, { projection: { data: 0 } });
   if (!slip) return Response.json({ error: "ไม่พบสลิปนี้" }, { status: 404 });
-  if (slip.status !== "review") return Response.json({ error: "สลิปนี้ตรวจไปแล้ว" }, { status: 409 });
+  if (slip.status !== "review" && slip.status !== "checking") return Response.json({ error: "สลิปนี้ตรวจไปแล้ว" }, { status: 409 });
   const bookings = db.collection<BookingDoc>("bookingRequests");
   const booking = await bookings.findOne({ _id: slip.bookingId }, { projection: { _id: 1, name: 1, status: 1, payment: 1, quote: 1, extensions: 1 } });
   if (!booking) return Response.json({ error: "ไม่พบคำขอจองของสลิปนี้" }, { status: 404 });
   const extension = slip.billToken ? activeExtensions(booking.extensions).find(item => item.billToken === slip.billToken) : null;
   const reviewed = { reviewedAt: new Date(), reviewedByName: admin.name };
   if (body.decision === "reject") {
-    await slips.updateOne({ _id: slip._id }, { $set: { status: "rejected", reason: body.reason.trim(), ...reviewed } });
+    if (!(await slips.updateOne({ _id: slip._id, status: slip.status }, { $set: { status: "rejected", reason: body.reason.trim(), ...reviewed } })).modifiedCount) return Response.json({ error: "สลิปนี้ตรวจไปแล้ว กรุณาโหลดหน้าใหม่" }, { status: 409 });
     await bookings.updateOne({ _id: booking._id }, { $unset: { slipReview: "" } });
     await audit(request, admin, { action: "booking.slip_rejected", targetType: "booking", targetId: booking._id, summary: `สลิปไม่ถูกต้อง: ${body.reason.trim()}` });
     return Response.json({ ok: true, status: "rejected", payment: booking.payment || "unpaid" });
   }
   if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
   if (!extension && !booking.quote) return Response.json({ error: "กรุณาบันทึกราคาในใบสรุปก่อนยืนยันชำระเงิน" }, { status: 409 });
-  await slips.updateOne({ _id: slip._id }, { $set: { status: "accepted", ...reviewed } });
+  // Guarded on the status read above: the re-check cron may settle a "checking" slip at the same moment.
+  if (!(await slips.updateOne({ _id: slip._id, status: slip.status }, { $set: { status: "accepted", ...reviewed } })).modifiedCount) return Response.json({ error: "สลิปนี้ตรวจไปแล้ว กรุณาโหลดหน้าใหม่" }, { status: 409 });
   const paidOn = thaiDay(slip.dateTime ? new Date(slip.dateTime) : slip.createdAt);
   if (extension) {
     const updated = await bookings.updateOne({ _id: booking._id, extensions: { $elemMatch: { id: extension.id, billToken: extension.billToken, status: "unpaid" } } }, { $set: { "extensions.$.status": "paid", "extensions.$.paidOn": new Date(`${paidOn}T12:00:00.000Z`), "extensions.$.paidByName": admin.name, updatedAt: new Date(), updatedBy: admin.email || admin.username }, $unset: { slipReview: "" } });
