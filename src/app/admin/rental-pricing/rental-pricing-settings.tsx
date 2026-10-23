@@ -4,10 +4,35 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import PriceTiersEditor, { pricingFrom, rowsFrom } from "@/components/price-tiers-editor";
-import { priceFor, type ExtraDayRates, type RentalPricing } from "@/lib/pricing";
+import { priceFor, type CategoryDeposits, type ExtraDayRates, type RentalPricing } from "@/lib/pricing";
 import type { LateRates } from "@/lib/extension";
 
 type History = { days: number; count: number; average: number };
+// Deposit per category; a product's own deposit (จัดการสินค้า) wins over it.
+function CategoryDepositsForm({ initial, categories }: { initial: CategoryDeposits; categories: string[] }) {
+  const [values, setValues] = useState<Record<string, string>>(Object.fromEntries([...new Set([...categories, ...Object.keys(initial)])].map(category => [category, initial[category] === undefined ? "" : String(initial[category])])));
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(""); setNotice("");
+    const filled = Object.entries(values).filter(([, value]) => value.trim() !== "");
+    if (filled.some(([, value]) => !(Number(value) >= 0))) { setError("เงินมัดจำต้องเป็นตัวเลขตั้งแต่ 0"); return; }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/rental-pricing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "deposits", deposits: Object.fromEntries(filled.map(([category, value]) => [category, Number(value)])) }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      setNotice("บันทึกแล้ว ใช้กับคำขอที่ทำใบสรุปหลังจากนี้");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); }
+  }
+  return <form className="rental-pricing-card delivery-form" onSubmit={save}>
+    <h2>เงินมัดจำตามหมวด</h2>
+    <p>ใบสรุปรวมมัดจำของสินค้าทุกชิ้นในคำขอ สินค้าที่ตั้งมัดจำเองในหน้าจัดการสินค้าจะใช้ยอดของสินค้านั้น ที่เหลือใช้ยอดของหมวด เว้นว่าง = ไม่เก็บมัดจำ</p>
+    {Object.keys(values).map(category => <label key={category}>{category} (บาทต่อชิ้น)<input type="number" min="0" step="1" value={values[category]} placeholder="ไม่เก็บมัดจำ" onChange={event => setValues({ ...values, [category]: event.target.value })} /></label>)}
+    {error && <p className="admin-error" role="alert">{error}</p>}
+    {notice && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
+    <div className="rental-pricing-actions"><Button type="submit" variant="primary" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกเงินมัดจำ"}</Button></div>
+  </form>;
+}
 // After the piece has gone out: extending is a flat rate per piece per day; returning late is a fine per piece per day.
 function LateRatesForm({ initial }: { initial: LateRates }) {
   const [form, setForm] = useState({ afterShipPerDay: String(initial.afterShipPerDay), lateFinePerDay: String(initial.lateFinePerDay) });
@@ -66,7 +91,7 @@ function ExtraRates({ initial, categories }: { initial: ExtraDayRates; categorie
   </form>;
 }
 
-export default function RentalPricingSettings({ initial, history, customCount, rates, lateRates, categories }: { initial: RentalPricing; history: History[]; customCount: number; rates: ExtraDayRates; lateRates: LateRates; categories: string[] }) {
+export default function RentalPricingSettings({ initial, history, customCount, rates, lateRates, categoryDeposits, categories }: { initial: RentalPricing; history: History[]; customCount: number; rates: ExtraDayRates; lateRates: LateRates; categoryDeposits: CategoryDeposits; categories: string[] }) {
   const [rows, setRows] = useState(rowsFrom(initial));
   const [extra, setExtra] = useState(initial.extraPerDay == null ? "" : String(initial.extraPerDay));
   const [busy, setBusy] = useState(false);
@@ -101,6 +126,7 @@ export default function RentalPricingSettings({ initial, history, customCount, r
       <aside className="rental-pricing-side">
         <ExtraRates initial={rates} categories={categories} />
         <LateRatesForm initial={lateRates} />
+        <CategoryDepositsForm initial={categoryDeposits} categories={categories} />
         <section className="rental-pricing-card"><h2>ตัวอย่างราคาที่ลูกค้าเห็น</h2>{preview?.tiers.length ? <table><tbody>{[1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14].map(days => { const price = priceFor(preview, days); return <tr key={days}><td>เช่า {days} วัน</td><td>{price == null ? "สอบถามร้าน" : `฿${price.toLocaleString("th-TH")}`}</td></tr>; })}</tbody></table> : <p>ยังไม่ได้ตั้งราคา หน้าร้านจะแสดง “สอบถามราคา”</p>}</section>
         {!!history.length && <section className="rental-pricing-card"><h2>อ้างอิงจากประวัติเช่าเดิม</h2><p>ราคาเฉลี่ยต่อชุดที่ลูกค้าเคยจ่าย (ไม่ได้ตั้งค่าให้อัตโนมัติ)</p><table><tbody>{history.map(row => <tr key={row.days}><td>{row.days} วัน <small>{row.count.toLocaleString("th-TH")} ครั้ง</small></td><td>~฿{row.average.toLocaleString("th-TH")}</td></tr>)}</tbody></table></section>}
       </aside>

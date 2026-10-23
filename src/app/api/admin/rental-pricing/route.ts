@@ -2,7 +2,7 @@ import { revalidateTag } from "next/cache";
 import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
 import { audit } from "@/lib/audit";
 import { database } from "@/lib/mongodb";
-import { cleanPricing, validExtraRates, validPricing, type ExtraDayRates } from "@/lib/pricing";
+import { cleanPricing, validCategoryDeposits, validExtraRates, validPricing, type CategoryDeposits, type ExtraDayRates } from "@/lib/pricing";
 import { getStoreSettings, type StoreSettings } from "@/lib/store-settings";
 import { validLateRates, type LateRates } from "@/lib/extension";
 
@@ -23,6 +23,16 @@ export async function POST(request: Request) {
     revalidateTag("catalog", { expire: 0 });
     if (show(before) !== show(rates)) await audit(request, auth.admin, { action: "settings.rental_pricing", targetType: "settings", targetId: "extraDayRates", summary: `แก้ไขค่าเช่าส่วนเกิน · ${show(rates)}`, changes: [{ field: "extraDayRates", before: show(before), after: show(rates) }] });
     return Response.json({ rates });
+  }
+  // Deposit per category, for products that have no deposit of their own.
+  if (body && typeof body === "object" && (body as { action?: string }).action === "deposits") {
+    const value = (body as { deposits?: unknown }).deposits;
+    if (!validCategoryDeposits(value)) return Response.json({ error: "ตรวจสอบเงินมัดจำอีกครั้ง" }, { status: 400 });
+    const deposits: CategoryDeposits = Object.fromEntries(Object.entries(value).map(([category, amount]) => [category.trim(), Math.round(amount)]));
+    const before = (await getStoreSettings()).categoryDeposits, show = (item: CategoryDeposits) => Object.entries(item).map(([category, amount]) => `${category} ${amount}`).join(" · ") || "ไม่ได้ตั้ง";
+    await (await database()).collection<{ _id: string }>("storeSettings").updateOne({ _id: "main" }, { $set: { categoryDeposits: deposits } }, { upsert: true });
+    if (show(before) !== show(deposits)) await audit(request, auth.admin, { action: "settings.rental_pricing", targetType: "settings", targetId: "categoryDeposits", summary: `แก้ไขเงินมัดจำตามหมวด · ${show(deposits)}`, changes: [{ field: "categoryDeposits", before: show(before), after: show(deposits) }] });
+    return Response.json({ deposits });
   }
   // Once the piece is with the customer: extending per day, and the fine per day for returning late.
   if (body && typeof body === "object" && (body as { action?: string }).action === "late") {

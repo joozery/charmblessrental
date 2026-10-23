@@ -45,3 +45,8 @@ export function validPricing(value: unknown): value is RentalPricing {
   return tiers.every(tier => tier && Number.isSafeInteger(tier.days) && tier.days >= 1 && tier.days <= 90 && amount(tier.price)) && new Set(days).size === days.length;
 }
 export const cleanPricing = (pricing: RentalPricing): RentalPricing => ({ tiers: sorted(pricing).map(tier => ({ days: tier.days, price: Math.round(tier.price * 100) / 100 })), extraPerDay: pricing.extraPerDay == null ? null : Math.round(pricing.extraPerDay * 100) / 100 });
+
+// Deposit for one product: its own figure when set (0 means none), else its category's, else none.
+export type CategoryDeposits = Record<string, number>;
+export const depositFor = (product: { deposit?: number | null; category?: string }, byCategory: CategoryDeposits) => product.deposit ?? (product.category ? byCategory[product.category] : undefined) ?? 0;
+export const validCategoryDeposits = (value: unknown): value is CategoryDeposits => !!value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length <= 50 && Object.entries(value).every(([key, item]) => key.length > 0 && key.length <= 60 && typeof item === "number" && Number.isFinite(item) && item >= 0 && item <= 1000000);

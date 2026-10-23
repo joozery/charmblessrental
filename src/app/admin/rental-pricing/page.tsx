@@ -23,7 +23,7 @@ async function Content() {
     db.collection("products").countDocuments({ "customPricing.tiers.0": { $exists: true } }),
   ]);
   const categories = (await db.collection("products").distinct("category", { active: { $ne: false } })).filter((value): value is string => typeof value === "string" && !!value).sort();
-  return <RentalPricingSettings initial={settings.rentalPricing} history={history.map(row => ({ days: row._id, count: row.count, average: Math.round(row.average) }))} customCount={custom} rates={settings.extraDayRates} lateRates={settings.lateRates} categories={categories} />;
+  return <RentalPricingSettings initial={settings.rentalPricing} history={history.map(row => ({ days: row._id, count: row.count, average: Math.round(row.average) }))} customCount={custom} rates={settings.extraDayRates} lateRates={settings.lateRates} categoryDeposits={settings.categoryDeposits} categories={categories} />;
 }
 
 export default function Page() {

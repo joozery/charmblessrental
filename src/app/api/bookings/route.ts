@@ -16,7 +16,7 @@ import { cleanRefundAccount, refundAccountError, type RefundAccount } from "@/li
 
 const validDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 const thaiDay = (date = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-type BookingRecord = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; delivery?: { km: number; fee: number; inBill: boolean; location: LatLng; address: string } | { error: string }; shipping?: { label: string; base: number | null; discount: number }; schedule: ScheduleRecord; verification?: BookingVerification; refundAccount?: RefundAccount & { updatedAt: Date }; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice: number | null; stock: number; deposit: number | null }[]; createdAt: Date; updatedAt: Date; billToken: string; payment: "unpaid" | "paid" };
+type BookingRecord = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; delivery?: { km: number; fee: number; inBill: boolean; location: LatLng; address: string } | { error: string }; shipping?: { label: string; base: number | null; discount: number }; schedule: ScheduleRecord; verification?: BookingVerification; refundAccount?: RefundAccount & { updatedAt: Date }; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice: number | null; stock: number }[]; createdAt: Date; updatedAt: Date; billToken: string; payment: "unpaid" | "paid" };
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   try {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const ids = [...new Set((body.items as { id: number }[]).map(item => item.id))];
   if (ids.length !== body.items.length) return Response.json({ error: "มีสินค้าเดิมซ้ำในรายการ กรุณาตรวจสอบตะกร้า" }, { status: 400 });
   const db = await database();
-  const products = await db.collection<Product>("products").find({ id: { $in: ids }, active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, name: 1, thai: 1, sku: 1, dailyRate: 1, customPricing: 1, category: 1, shippingFee: 1, images: 1, image: 1, stock: 1, deposit: 1 } }).toArray();
+  const products = await db.collection<Product>("products").find({ id: { $in: ids }, active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, name: 1, thai: 1, sku: 1, dailyRate: 1, customPricing: 1, category: 1, shippingFee: 1, images: 1, image: 1, stock: 1 } }).toArray();
   if (products.length !== ids.length) return Response.json({ error: "มีสินค้าที่ไม่พร้อมให้เช่าแล้ว กรุณาโหลดหน้าร้านใหม่" }, { status: 409 });
   const settings = await getStoreSettings();
   // start and end are the first and last days of use (both counted); the plan adds shipping ahead, the return day and the gap.
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   await db.collection<BookingRecord>("bookingRequests").insertOne({
     _id: requestId, status: "new", name: body.name.trim(), phone: body.phone.trim(), address: body.method === "pickup" ? "" : body.address.trim(), pin: body.pin?.trim() || "", note: body.note?.trim() || "",
     method: body.method, start: body.start, end: body.end, days, schedule, ...(verification ? { verification } : {}), ...(refundAccount ? { refundAccount: { ...refundAccount, updatedAt: new Date() } } : {}), deliveryFee, estimatedTotal, shipping: { label: shipping.label, base: shipping.base, discount: shipping.discount }, ...(delivery ? { delivery } : {}),
-    items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, stock: product.stock ?? 1, deposit: product.deposit ?? null })),
+    items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, stock: product.stock ?? 1 })),
     ...(waitlisted ? { waitlist: { since: new Date() } } : { holdUntil: new Date(Date.now() + holdMinutes * 60000) }),
     createdAt: new Date(), updatedAt: new Date(), billToken: randomBytes(18).toString("base64url"), payment: "unpaid",
   });
