@@ -6,13 +6,14 @@ import type { RentalDocumentDefaults } from "@/lib/store-settings";
 
 export type Quote = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string };
 export type StoreInfo = { logoImage: string; lineUrl: string; instagramUrl: string; rentalRules: string[]; rentalDocument: RentalDocumentDefaults };
-export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; schedule?: ScheduleRecord | null; verification?: { mode: "identity"; status: string } | null; deliveryFee: number; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null }[]; createdAt: string };
+export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; schedule?: ScheduleRecord | null; verification?: { mode: "identity"; status: string } | null; deliveryFee: number; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; deposit?: number | null }[]; createdAt: string };
 // Price for the whole rental: the package price saved with the booking, else the old per-day rate × days.
 export const itemPrice = (item: DocRow["items"][number], days: number) => item.rentalPrice ?? (item.dailyRate === null ? null : item.dailyRate * days);
 export const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
 export const money = (value: number | null) => value === null ? "สอบถามราคา" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export function safeUrl(value: string) { try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) ? url.href : ""; } catch { return ""; } }
-const blankQuote = (row: DocRow, defaults: RentalDocumentDefaults): Quote => ({ rental: row.items.every(item => itemPrice(item, row.days) !== null) ? row.items.reduce((sum, item) => sum + (itemPrice(item, row.days) || 0), 0) : 0, shipping: row.deliveryFee || 0, ...defaults, ...(row.verification?.mode === "identity" ? { deposit: 0 } : {}) });
+// The deposit is each product's own deposit added up (set per product in จัดการสินค้า); none when identity replaces it.
+const blankQuote = (row: DocRow, defaults: RentalDocumentDefaults): Quote => ({ rental: row.items.every(item => itemPrice(item, row.days) !== null) ? row.items.reduce((sum, item) => sum + (itemPrice(item, row.days) || 0), 0) : 0, shipping: row.deliveryFee || 0, ...defaults, deposit: row.verification?.mode === "identity" ? 0 : row.items.reduce((sum, item) => sum + (item.deposit || 0), 0) });
 export function quoteForRow(row: DocRow, defaults: RentalDocumentDefaults): Quote {
   const quote = { ...blankQuote(row, defaults), ...row.quote };
   for (const key of ["bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod"] as const) {
