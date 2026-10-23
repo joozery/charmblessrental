@@ -9,7 +9,7 @@ import type { LateRates } from "@/lib/extension";
 
 type History = { days: number; count: number; average: number };
 // Deposit per category; a product's own deposit (จัดการสินค้า) wins over it.
-function CategoryDepositsForm({ initial, categories }: { initial: CategoryDeposits; categories: string[] }) {
+function CategoryDepositsForm({ initial = {}, categories }: { initial?: CategoryDeposits; categories: string[] }) {
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries([...new Set([...categories, ...Object.keys(initial)])].map(category => [category, initial[category] === undefined ? "" : String(initial[category])])));
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   async function save(event: FormEvent<HTMLFormElement>) {
