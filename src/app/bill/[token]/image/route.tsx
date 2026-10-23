@@ -6,7 +6,7 @@ import { connection } from "next/server";
 import { database } from "@/lib/mongodb";
 import { getStoreSettings } from "@/lib/store-settings";
 import { font_400, font_700, font_latin_400, font_latin_700 } from "@/assets/fonts/noto-sans-thai";
-import { dateLabel, itemPrice, money, quoteForRow, safeUrl, type DocRow } from "@/components/rental-document";
+import { dateLabel, money, quoteForRow, safeUrl, shownPrices, type DocRow } from "@/components/rental-document";
 
 type BillDoc = Omit<DocRow, "createdAt"> & { status: string; payment?: "unpaid" | "paid"; createdAt: Date };
 const ink = "#25212a", accent = "#a24d70", line = "#ddc5d1", soft = "#f3e4eb";
@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   const settings = await getStoreSettings();
   const doc: DocRow = { ...row, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
   const quote = quoteForRow(doc, settings.rentalDocument);
-  const total = quote.rental + quote.deposit + quote.shipping;
+  const total = quote.rental + quote.deposit + quote.shipping, prices = shownPrices(doc, quote);
   // An unpaid bill shows the shop's QR with the total fixed in it when the shop has read its QR.
   const amountQr = row.payment !== "paid" ? billQrPayload(settings.rentalDocument, row.quote, total) : null;
   const qr = amountQr ? await QRCode.toDataURL(amountQr, { width: 360, margin: 1, errorCorrectionLevel: "M" }) : quote.qrImage ? safeUrl(quote.qrImage) : "";
@@ -46,7 +46,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
       <span style={{ display: "flex", width: 28, fontSize: 20, color: "#7a6f78" }}>{index + 1}</span>
       {item.image && /^https?:/.test(item.image) ? <img src={item.image} width={46} height={58} style={{ objectFit: "cover", borderRadius: 6 }} alt="" /> : <div style={{ display: "flex", width: 46, height: 58, borderRadius: 6, background: soft }} />}
       <div style={{ display: "flex", flexDirection: "column", flex: 1 }}><span style={{ fontSize: 21, fontWeight: 700 }}>{item.sku || item.name}</span><span style={{ fontSize: 16, color: "#7a6f78" }}>{item.name}</span></div>
-      <span style={{ fontSize: 21, fontWeight: 700 }}>{itemPrice(item, doc.days) === null ? "สอบถาม" : `${money(itemPrice(item, doc.days)!)} บาท`}</span>
+      <span style={{ fontSize: 21, fontWeight: 700 }}>{prices[index] === null ? "สอบถาม" : `${money(prices[index]!)} บาท`}</span>
     </div>))}
     <div style={{ display: "flex", gap: 14 }}>
       {card("สรุปยอดค่าเช่า", [sum("ค่าเช่ารวม", money(quote.rental)), sum("เงินมัดจำ", money(quote.deposit)), sum("ค่าจัดส่ง", money(quote.shipping)), sum("ยอดรวมสุทธิ", `${money(total)} บาท`, true)], 1)}
