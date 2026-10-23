@@ -9,7 +9,7 @@ import type { Permission } from "@/lib/permissions";
 
 export default function AdminChrome({ user, counts, children }: {
   user: { name: string; email?: string; username: string; role: "owner" | "admin"; permissions: Permission[] };
-  counts: { products: number; admins: number; bookings: number; refunds: number; late: number; clashes?: number };
+  counts: { products: number; admins: number; bookings: number; refunds: number; late: number; clashes?: number; slips?: number };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -30,7 +30,7 @@ export default function AdminChrome({ user, counts, children }: {
   const navigation = [
     { href: "/admin", title: "ภาพรวม", description: "แดชบอร์ดร้าน", icon: "home" as const, count: null as number | null },
     { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
-    { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, alerts: [{ label: "เลยคืน", title: "เลยกำหนดคืน", count: counts.late, danger: true }, { label: "มัดจำ", title: "รอคืนมัดจำ", count: counts.refunds, danger: false }], permission: "bookings" as Permission },
+    { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, alerts: [{ label: "เลยคืน", title: "เลยกำหนดคืน", count: counts.late, danger: true }, { label: "สลิป", title: "สลิปรอตรวจ", count: counts.slips || 0, danger: true }, { label: "มัดจำ", title: "รอคืนมัดจำ", count: counts.refunds, danger: false }], permission: "bookings" as Permission },
     { href: "/admin/customers", title: "ลูกค้าและเครดิต", description: "ประวัติลูกค้า LINE และเครดิตส่วนลด", icon: "users" as const, count: null as number | null, permission: "bookings" as Permission },
     { href: "/admin/discounts", title: "ส่วนลดและโค้ด", description: "สร้างโค้ดส่วนลดสำหรับจัดทำบิล", icon: "sliders" as const, count: null as number | null, permission: "pricing" as Permission },
     { href: "/admin/preparation", title: "เตรียมสินค้า", description: "ตรวจสภาพ ซัก ซ่อม และยืนยันพร้อมให้เช่า", icon: "box" as const, count: null as number | null, permission: "shipping" as Permission },

@@ -9,6 +9,21 @@ import { Popover } from "radix-ui";
 import type { RentalDocumentDefaults } from "@/lib/store-settings";
 import { accountForDay, bankByCode, bankByName, banks, overlappingAccounts, type ShopAccount } from "@/lib/banks";
 import BankBadge from "@/components/bank-badge";
+import jsQR from "jsqr";
+import { thaiQrName, validThaiQr } from "@/lib/thai-qr";
+
+// The text inside a QR image (tried at full size, then smaller for big phone photos), or "" when none is found.
+async function readQr(image: Blob) {
+  const bitmap = await createImageBitmap(image);
+  for (const size of [1600, 1000, 600]) {
+    const scale = Math.min(1, size / Math.max(bitmap.width, bitmap.height)), canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+    const context = canvas.getContext("2d", { willReadFrequently: true })!; context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const found = jsQR(context.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+    if (found?.data) return found.data;
+  }
+  return "";
+}
 
 type TextField = "returnAddress" | "returnPhone" | "returnMethod";
 const days = Array.from({ length: 31 }, (_, index) => index + 1);
@@ -50,6 +65,20 @@ export default function RentalDocumentSettings({ initial, today }: { initial: Re
     return <label key={key} className={`rental-settings-field${wide ? " rental-settings-wide" : ""}`}><span>{label}</span><input value={settings[key]} placeholder={placeholder} onChange={event => setSettings(current => ({ ...current, [key]: event.target.value }))} /></label>;
   }
 
+  // QRs uploaded before amounts were supported: read the text from the saved image.
+  async function readSavedQr(account: ShopAccount) {
+    setUploadingFor(account.id); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/admin/store-settings/qr-image?url=${encodeURIComponent(account.qrImage)}`);
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || "โหลดรูป QR ไม่สำเร็จ");
+      const text = await readQr(await response.blob());
+      if (!validThaiQr(text)) throw new Error("อ่านข้อมูลใน QR ไม่ได้ ลองอัปโหลดรูป QR ที่ชัดกว่านี้");
+      setAccount(account.id, { qrPayload: text });
+      setNotice("อ่าน QR แล้ว กดบันทึกเพื่อให้บิลสร้าง QR ตามยอด");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "อ่าน QR ไม่สำเร็จ"); }
+    finally { setUploadingFor(null); }
+  }
+
   async function uploadQr(id: string, file?: File) {
     if (!file) return;
     setUploadingFor(id); setError(""); setNotice("");
@@ -58,8 +87,9 @@ export default function RentalDocumentSettings({ initial, today }: { initial: Re
       const response = await fetch("/api/admin/store-settings/images", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "อัปโหลด QR ไม่สำเร็จ");
-      setAccount(id, { qrImage: data.url });
-      setNotice("อัปโหลด QR แล้ว กดบันทึกเพื่อใช้กับใบรายละเอียดการเช่า");
+      const text = await readQr(file).catch(() => "");
+      setAccount(id, { qrImage: data.url, qrPayload: validThaiQr(text) ? text : "" });
+      setNotice(validThaiQr(text) ? "อัปโหลด QR แล้ว บิลจะสร้าง QR ตามยอดให้อัตโนมัติ กดบันทึกเพื่อใช้งาน" : "อัปโหลด QR แล้ว แต่อ่านข้อมูลใน QR ไม่ได้ บิลจะใช้รูปนี้ตามเดิม (ลูกค้าต้องกรอกยอดเอง) กดบันทึกเพื่อใช้งาน");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "อัปโหลด QR ไม่สำเร็จ"); }
     finally { setUploadingFor(null); }
   }
@@ -94,7 +124,8 @@ export default function RentalDocumentSettings({ initial, today }: { initial: Re
               <div className="rental-settings-field"><span>ใช้วันที่ของเดือน</span><div className="bank-days"><select aria-label="ตั้งแต่วันที่" value={account.fromDay} onChange={event => setAccount(account.id, { fromDay: Number(event.target.value), toDay: Math.max(Number(event.target.value), account.toDay) })}>{days.map(day => <option key={day} value={day}>{day}</option>)}</select><span>ถึง</span><select aria-label="ถึงวันที่" value={account.toDay} onChange={event => setAccount(account.id, { toDay: Number(event.target.value) })}>{days.filter(day => day >= account.fromDay).map(day => <option key={day} value={day}>{day === 31 ? "สิ้นเดือน" : day}</option>)}</select></div></div>
               <label className="rental-settings-field"><span>ชื่อบัญชี</span><input value={account.accountName} placeholder="ชื่อเจ้าของบัญชี" onChange={event => setAccount(account.id, { accountName: event.target.value })} /></label>
               <label className="rental-settings-field"><span>{account.bankCode === "promptpay" ? "เบอร์หรือเลขพร้อมเพย์" : "เลขที่บัญชี"}</span><input value={account.accountNumber} inputMode="numeric" placeholder="xxx-x-xxxxx-x" onChange={event => setAccount(account.id, { accountNumber: event.target.value })} /></label>
-              <div className="rental-settings-field rental-settings-wide"><span>QR ชำระเงินของบัญชีนี้</span><div className="bank-account-qr">{account.qrImage ? <Image src={account.qrImage} alt="" width={64} height={64} unoptimized /> : <span>QR</span>}<label className="rental-settings-upload">{uploadingFor === account.id ? "กำลังอัปโหลด…" : account.qrImage ? "เปลี่ยนรูป QR" : "อัปโหลดรูป QR"}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={event => { void uploadQr(account.id, event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>{account.qrImage && <button type="button" className="rental-settings-clear" onClick={() => setAccount(account.id, { qrImage: "" })}>นำรูป QR ออก</button>}</div></div>
+              <div className="rental-settings-field rental-settings-wide"><span>QR ชำระเงินของบัญชีนี้</span><div className="bank-account-qr">{account.qrImage ? <Image src={account.qrImage} alt="" width={64} height={64} unoptimized /> : <span>QR</span>}<label className="rental-settings-upload">{uploadingFor === account.id ? "กำลังอัปโหลด…" : account.qrImage ? "เปลี่ยนรูป QR" : "อัปโหลดรูป QR"}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={event => { void uploadQr(account.id, event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>{account.qrImage && <button type="button" className="rental-settings-clear" onClick={() => setAccount(account.id, { qrImage: "", qrPayload: "" })}>นำรูป QR ออก</button>}</div>
+                {account.qrImage && (account.qrPayload ? <small className="bank-account-qr-state is-ready">✓ บิลสร้าง QR ตามยอดให้อัตโนมัติ{thaiQrName(account.qrPayload) ? ` · ${thaiQrName(account.qrPayload)}` : ""}</small> : <small className="bank-account-qr-state">QR นี้ยังไม่ใส่ยอดอัตโนมัติ <button type="button" className="rental-settings-clear" disabled={uploading} onClick={() => void readSavedQr(account)}>อ่านข้อมูล QR</button></small>)}</div>
             </div>
           </article>)}</div>
           <button type="button" className="bank-account-add" onClick={addAccount}><Icon name="plus" />เพิ่มบัญชีธนาคาร</button>

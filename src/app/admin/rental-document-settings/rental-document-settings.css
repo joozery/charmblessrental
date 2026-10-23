@@ -26,3 +26,4 @@ body:has(.rental-document-settings-page),body:has(.rental-document-settings-page
 .bank-account-add{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:9px 14px;border:1px dashed #b47b96;border-radius:9px;background:#fff;color:#945875;font:inherit;font-size:12px;font-weight:650;cursor:pointer}.bank-account-add:hover{background:#fcf8fa}
 .bank-preview-name{display:flex;align-items:center;gap:6px}
 @media(max-width:650px){.bank-schedule{grid-template-columns:repeat(16,minmax(0,1fr))}.bank-picker-menu{grid-template-columns:1fr}}
+.bank-account-qr-state{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;color:#b54708;font-size:12px}.bank-account-qr-state.is-ready{color:#067647}

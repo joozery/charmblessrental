@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       if (!text(body.reason, 300) || !body.reason?.trim()) return Response.json({ error: "กรุณาระบุเหตุผลที่ยกเลิกสถานะชำระเงิน" }, { status: 400 });
     }
     const paidOn = body.paidOn || thaiDay();
-    await bookings.updateOne({ _id: body.id }, { $set: { payment: body.paid ? "paid" : "unpaid", paidAt: body.paid ? new Date(`${paidOn}T12:00:00.000Z`) : null, updatedAt: new Date(), updatedBy: by } });
+    await bookings.updateOne({ _id: body.id }, { $set: { payment: body.paid ? "paid" : "unpaid", paidAt: body.paid ? new Date(`${paidOn}T12:00:00.000Z`) : null, updatedAt: new Date(), updatedBy: by }, ...(body.paid ? { $unset: { slipReview: "" } } : {}) });
     if (body.paid) {
       const amounts = await recordBookingPayment(db, booking, admin, paidOn);
       await log("booking.payment_confirmed", `ยืนยันชำระเงิน · ค่าเช่า ${amounts.rental} · ค่าส่ง ${amounts.shipping} · เงินมัดจำ ${amounts.deposit} บาท`, [{ field: "payment", before: "unpaid", after: "paid" }, { field: "paidOn", before: null, after: paidOn }]);

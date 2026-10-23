@@ -1,3 +1,5 @@
+import { validThaiQr } from "./thai-qr";
+
 // Client-safe: Thai banks with their brand colour and logo (white marks from public/banks-logo-master, drawn on the colour).
 export type Bank = { code: string; name: string; color: string; logo: string | null };
 const logo = (code: string) => `/banks-logo-master/th/${code}.svg`;
@@ -30,12 +32,13 @@ export const bankByCode = (code: string) => banks.find(bank => bank.code === cod
 export const bankByName = (name: string) => banks.find(bank => bank.name === name.trim()) || banks.find(bank => name.trim() && (bank.name.includes(name.trim()) || name.includes(bank.name)));
 
 // The shop's receiving accounts. Each is used on the days of the month in [fromDay, toDay], e.g. 1–15 and 16–31.
-export type ShopAccount = { id: string; bankCode: string; accountName: string; accountNumber: string; qrImage: string; fromDay: number; toDay: number };
+export type ShopAccount = { id: string; bankCode: string; accountName: string; accountNumber: string; qrImage: string; fromDay: number; toDay: number; qrPayload?: string };
+// qrPayload is the text inside the account's QR image (read when the shop uploads it), so bills can fix the amount in it.
 const validUrl = (value: string) => { if (!value) return true; try { return ["https:", "http:"].includes(new URL(value).protocol); } catch { return false; } };
 export function validShopAccounts(value: unknown): value is ShopAccount[] {
   if (!Array.isArray(value) || value.length > 12) return false;
   const day = (item: unknown) => Number.isSafeInteger(item) && (item as number) >= 1 && (item as number) <= 31;
-  return value.every(item => { const v = item as ShopAccount; return !!v && typeof v.id === "string" && v.id.length <= 60 && !!bankByCode(v.bankCode) && typeof v.accountName === "string" && v.accountName.length <= 120 && typeof v.accountNumber === "string" && v.accountNumber.length <= 40 && typeof v.qrImage === "string" && v.qrImage.length <= 1000 && validUrl(v.qrImage) && day(v.fromDay) && day(v.toDay) && v.fromDay <= v.toDay; });
+  return value.every(item => { const v = item as ShopAccount; return !!v && typeof v.id === "string" && v.id.length <= 60 && !!bankByCode(v.bankCode) && typeof v.accountName === "string" && v.accountName.length <= 120 && typeof v.accountNumber === "string" && v.accountNumber.length <= 40 && typeof v.qrImage === "string" && v.qrImage.length <= 1000 && validUrl(v.qrImage) && (v.qrPayload === undefined || v.qrPayload === "" || validThaiQr(v.qrPayload)) && day(v.fromDay) && day(v.toDay) && v.fromDay <= v.toDay; });
 }
 // Day ranges that cover the same day: the earlier account would always win, so the shop is warned.
 export const overlappingAccounts = (accounts: ShopAccount[]) => accounts.flatMap((a, i) => accounts.slice(i + 1).filter(b => a.fromDay <= b.toDay && b.fromDay <= a.toDay).map(b => [a, b] as const));

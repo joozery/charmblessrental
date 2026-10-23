@@ -8,7 +8,7 @@ import type { VerificationSettings } from "@/lib/identity";
 export type StoreStep = { title: string; description: string };
 // bank/accountName/accountNumber/qrImage are the account in use today, taken from `accounts` by day of the month
 // (the shop may receive into one bank on the 1st–15th and another on the 16th–31st).
-export type RentalDocumentDefaults = { deposit: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; accounts: ShopAccount[] };
+export type RentalDocumentDefaults = { deposit: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; accounts: ShopAccount[]; qrPayload?: string };
 export type StoreSettings = {
   logoImage: string; heroImage: string; heroTitle: string; heroSubtitle: string; promotionImage: string;
   howTitle: string; howSteps: StoreStep[]; contactTitle: string; contactDescription: string;
@@ -25,7 +25,7 @@ import { accountForDay, bankByCode, type ShopAccount } from "@/lib/banks";
 const bangkokDayOfMonth = () => Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", day: "2-digit" }).format(new Date()));
 function withTodaysAccount(document: RentalDocumentDefaults): RentalDocumentDefaults {
   const account = accountForDay(document.accounts || [], bangkokDayOfMonth());
-  return account ? { ...document, bank: bankByCode(account.bankCode)?.name || document.bank, accountName: account.accountName, accountNumber: account.accountNumber, qrImage: account.qrImage || document.qrImage } : document;
+  return account ? { ...document, bank: bankByCode(account.bankCode)?.name || document.bank, accountName: account.accountName, accountNumber: account.accountNumber, qrImage: account.qrImage || document.qrImage, qrPayload: account.qrPayload || "" } : document;
 }
 
 export async function getStoreSettings(): Promise<StoreSettings> {

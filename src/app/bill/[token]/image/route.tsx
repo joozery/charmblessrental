@@ -1,3 +1,5 @@
+import QRCode from "qrcode";
+import { billQrPayload } from "@/lib/bill-qr";
 import { returnDay } from "@/lib/schedule";
 import { ImageResponse } from "next/og";
 import { connection } from "next/server";
@@ -6,7 +8,7 @@ import { getStoreSettings } from "@/lib/store-settings";
 import { font_400, font_700, font_latin_400, font_latin_700 } from "@/assets/fonts/noto-sans-thai";
 import { dateLabel, itemPrice, money, quoteForRow, safeUrl, type DocRow } from "@/components/rental-document";
 
-type BillDoc = Omit<DocRow, "createdAt"> & { status: string; createdAt: Date };
+type BillDoc = Omit<DocRow, "createdAt"> & { status: string; payment?: "unpaid" | "paid"; createdAt: Date };
 const ink = "#25212a", accent = "#a24d70", line = "#ddc5d1", soft = "#f3e4eb";
 const W = 800;
 
@@ -14,13 +16,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   await connection();
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) return new Response("Not found", { status: 404 });
-  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, schedule: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1 } });
+  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ billToken: token }, { projection: { _id: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, schedule: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1 } });
   if (!row || !row.quote || row.status === "cancelled") return new Response("Not found", { status: 404 });
   const settings = await getStoreSettings();
   const doc: DocRow = { ...row, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
   const quote = quoteForRow(doc, settings.rentalDocument);
   const total = quote.rental + quote.deposit + quote.shipping;
-  const qr = quote.qrImage ? safeUrl(quote.qrImage) : "";
+  // An unpaid bill shows the shop's QR with the total fixed in it when the shop has read its QR.
+  const amountQr = row.payment !== "paid" ? billQrPayload(settings.rentalDocument, row.quote, total) : null;
+  const qr = amountQr ? await QRCode.toDataURL(amountQr, { width: 360, margin: 1, errorCorrectionLevel: "M" }) : quote.qrImage ? safeUrl(quote.qrImage) : "";
   const logo = settings.logoImage && /^https?:/.test(settings.logoImage) ? settings.logoImage : "";
   const addressLines = Math.max(1, Math.ceil((doc.address || "").length / 34));
   const height = 770 + doc.items.length * 80 + addressLines * 30 + (qr ? 190 : 0) + 130;

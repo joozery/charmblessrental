@@ -24,15 +24,17 @@ async function Workspace({ children }: { children: React.ReactNode }) {
   // Out with a customer past the return day, and the customer has not said it is on its way.
   const today = thaiDay();
   const overdue = () => db.collection("bookingRequests").countDocuments({ status: "confirmed", shipment: { $exists: true }, returned: { $exists: false }, customerReturn: { $exists: false }, $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] });
-  const [products, admins, bookings, refunds, late, clashes] = await Promise.all([
+  const [products, admins, bookings, refunds, late, clashes, slips] = await Promise.all([
     db.collection("products").countDocuments(),
     admin.role === "owner" ? db.collection("admins").countDocuments() : Promise.resolve(0),
     can(admin, "bookings") ? db.collection("bookingRequests").countDocuments({ status: "new" }) : Promise.resolve(0),
     can(admin, "bookings") ? awaitingRefund() : Promise.resolve(0),
     can(admin, "bookings") ? overdue() : Promise.resolve(0),
     can(admin, "bookings") ? clashGroups(db).then(groups => groups.length) : Promise.resolve(0),
+    // Slips Slip2Go could not pass, waiting for someone who can confirm payments.
+    can(admin, "payments") ? db.collection("bookingRequests").countDocuments({ slipReview: { $exists: true }, payment: { $ne: "paid" }, status: { $ne: "cancelled" } }) : Promise.resolve(0),
   ]);
-  return <AdminChrome user={{ name: admin.name, email: admin.email, username: admin.username, role: admin.role, permissions: permissionsOf(admin) }} counts={{ products, admins, bookings, refunds, late, clashes }}>{children}</AdminChrome>;
+  return <AdminChrome user={{ name: admin.name, email: admin.email, username: admin.username, role: admin.role, permissions: permissionsOf(admin) }} counts={{ products, admins, bookings, refunds, late, clashes, slips }}>{children}</AdminChrome>;
 }
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<main className="admin-loading" role="status">กำลังโหลดพื้นที่จัดการร้าน…</main>}><Workspace>{children}</Workspace></Suspense>;
