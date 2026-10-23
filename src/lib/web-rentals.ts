@@ -17,7 +17,7 @@ type BookingDoc = {
 
 const statusOf = (row: BookingDoc, today: string) => {
   const stage = rentalStage(row);
-  if (stage === "shipped" && returnDay(row) < today) return "เกินกำหนดส่ง";
+  if (stage === "shipped" && returnDay(row) < today) return "คืนสินค้าเลยกำหนด";
   return { pending: "รอชำระเงิน", paid: "รอจัดส่ง", shipped: "จัดส่งแล้ว", returning: "ลูกค้าส่งคืนแล้ว", returned: "คืนสินค้าแล้ว", cancelled: "ยกเลิก" }[stage];
 };
 

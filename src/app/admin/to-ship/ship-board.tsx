@@ -17,7 +17,7 @@ const dayLabel = (day: string) => new Intl.DateTimeFormat("th-TH", { weekday: "s
 export default function ShipBoard({ rows: initial, today }: { rows: ShipRow[]; today: string }) {
   const [rows, setRows] = useState(initial);
   const [form, setForm] = useState<{ id: string; carrier: string; trackingNumber: string } | null>(null);
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [done, setDone] = useState("");
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [done, setDone] = useState(""); const [copied, setCopied] = useState("");
   const tomorrow = addDays(today, 1);
   const groups = [
     { key: "late", title: "เลยวันที่ต้องส่งแล้ว", rows: rows.filter(row => row.shipDay < today) },
@@ -25,6 +25,11 @@ export default function ShipBoard({ rows: initial, today }: { rows: ShipRow[]; t
     { key: "tomorrow", title: "ต้องส่งพรุ่งนี้", rows: rows.filter(row => row.shipDay === tomorrow) },
     { key: "later", title: "ส่งวันถัดไป", rows: rows.filter(row => row.shipDay > tomorrow) },
   ];
+
+  async function copyCustomer(row: ShipRow) {
+    const value = [`ชื่อ: ${row.name}`, `เบอร์โทร: ${row.phone}`, ...(!row.pickup && row.address ? [`ที่อยู่: ${row.address}`] : [])].join("\n");
+    try { await navigator.clipboard.writeText(value); setCopied(row.id); window.setTimeout(() => setCopied(current => current === row.id ? "" : current), 1600); } catch { setError("คัดลอกข้อมูลไม่สำเร็จ กรุณาลองใหม่"); }
+  }
 
   async function ship(row: ShipRow) {
     if (!form) return;
@@ -47,8 +52,9 @@ export default function ShipBoard({ rows: initial, today }: { rows: ShipRow[]; t
       {group.rows.map(row => <article key={row.id} className="to-ship-card">
         <div className="to-ship-when"><strong>{row.pickup ? "รับที่ร้าน" : "ส่ง"} {dayLabel(row.shipDay)}</strong><small>ใช้งาน {dayLabel(row.start)} · คืน {dayLabel(row.returnDay)}</small></div>
         <div className="to-ship-main">
-          <p className="to-ship-title"><Link href={`/admin/bookings?id=${encodeURIComponent(row.id)}`}>{row.id}</Link> · {row.name} · <a href={`tel:${row.phone.replace(/[^+\d]/g, "")}`}>{row.phone}</a></p>
-          <p className="to-ship-method">{row.methodLabel}{!row.pickup && row.address ? ` · ${row.address}` : ""}</p>
+          <p className="to-ship-title"><Link href={`/admin/bookings?id=${encodeURIComponent(row.id)}`}>{row.id}</Link> · {row.name} · <a href={`tel:${row.phone.replace(/[^+\d]/g, "")}`}>{row.phone}</a> <button type="button" className="to-ship-copy" onClick={() => void copyCustomer(row)}>{copied === row.id ? "คัดลอกแล้ว" : "คัดลอกข้อมูล"}</button></p>
+          <p className="to-ship-method">{row.methodLabel}</p>
+          {!row.pickup && row.address && <p className="to-ship-address"><span>{row.address}</span></p>}
           <ul className="to-ship-items">{row.items.map((item, index) => <li key={index} className={item.ready ? "" : "is-waiting"}>{item.image ? <img src={item.image} alt="" /> : <span />}<div><b>{item.sku}</b><small>{item.name}</small>{!item.ready && <em>{item.state || "ยังไม่พร้อม"}</em>}</div></li>)}</ul>
           {row.identityPending && <p className="to-ship-warn">⚠️ ลูกค้ายังยืนยันตัวตนไม่ผ่าน ต้องตรวจเอกสารก่อนจัดส่ง</p>}
           {row.items.some(item => !item.ready) && <p className="to-ship-warn">⚠️ มีชิ้นที่ยังไม่พร้อม ตรวจที่หน้าเตรียมสินค้าก่อนส่ง</p>}

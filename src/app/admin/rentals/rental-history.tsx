@@ -24,7 +24,7 @@ function externalUrl(value?: string) {
 function statusClass(value?: string) {
   if (value === "รอชำระเงิน") return "is-pending";
   if (value === "รอจัดส่ง") return "is-shipping";
-  if (value === "เกินกำหนดส่ง") return "is-overdue";
+  if (value === "เกินกำหนดส่ง" || value === "คืนสินค้าเลยกำหนด") return "is-overdue";
   return "is-other";
 }
 

@@ -14,6 +14,8 @@
 .to-ship-main{display:grid;gap:6px;min-width:0}.to-ship-main p{margin:0}
 .to-ship-title{font-size:14px;font-weight:600;color:#3b313e}.to-ship-title a{color:#79516c}
 .to-ship-method{color:#667085;font-size:12px;overflow-wrap:anywhere}
+.to-ship-address{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:#667085;font-size:12px;overflow-wrap:anywhere}.to-ship-address span{min-width:0}
+.to-ship-copy{height:26px!important;padding:0 8px!important;border:1px solid #d9cfd6!important;border-radius:6px!important;background:#fff!important;color:#79516c!important;font-size:11px!important;white-space:nowrap}
 .to-ship-items{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 0;padding:0;list-style:none}
 .to-ship-items li{display:flex;align-items:center;gap:8px;padding:5px 9px 5px 5px;border:1px solid #eee7ec;border-radius:9px;background:#fcfafb;font-size:12px}
 .to-ship-items li.is-waiting{border-color:#f3d79b;background:#fffaf0}

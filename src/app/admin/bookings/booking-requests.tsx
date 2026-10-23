@@ -32,7 +32,19 @@ export default function BookingRequests({ initial, store, permissions, selected,
   const visible = rows.filter(row => (filter === "all" || (filter === "refund" ? awaitingRefund(row) : filter === "late" ? !!row.lateDays : filter === "clash" ? !!(row.risks?.length || row.clashes?.length) : row.status === filter)) && (!cutoff || row.createdAt >= cutoff) && (!query.trim() || [row._id, row.name, row.phone, ...row.items.flatMap(item => [item.name, item.sku])].some(value => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))));
   const pageSize = 20, pageCount = Math.max(1, Math.ceil(visible.length / pageSize)), currentPage = Math.min(page, pageCount), pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   useEffect(() => { setPage(1); }, [filter, query, cutoff]);
-  const detail = visible.find(row => row._id === detailId) || visible[0] || null;
+  useEffect(() => {
+    const layout = document.querySelector<HTMLElement>(".bookings-inbox-layout"), list = layout?.querySelector<HTMLElement>(".bookings-inbox-list"), panel = layout?.querySelector<HTMLElement>(".bookings-detail-panel");
+    if (!layout || !list || !panel) return;
+    const place = () => {
+      if (window.matchMedia("(max-width: 760px)").matches) {
+        const selected = list.querySelector<HTMLElement>(".bookings-inbox-row.is-selected");
+        if (selected) { panel.hidden = false; selected.parentElement?.insertBefore(panel, selected.nextSibling); }
+        else { panel.hidden = true; if (panel.parentElement !== layout) layout.appendChild(panel); }
+      } else { panel.hidden = false; if (panel.parentElement !== layout) layout.appendChild(panel); }
+    };
+    place(); window.addEventListener("resize", place); return () => window.removeEventListener("resize", place);
+  }, [detailId, currentPage, visible.length]);
+  const detail = detailId ? visible.find(row => row._id === detailId) || null : null;
   const statusLabel = (key: string) => statuses.find(status => status.key === key)?.label || key;
   const [copied, setCopied] = useState("");
   async function post(body: Record<string, unknown>) { const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "ทำรายการไม่สำเร็จ"); return data; }
@@ -84,7 +96,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
     <div className="bookings-inbox-layout">
       <section className="bookings-inbox-list" aria-label="รายการคำขอจอง">
         <div className="bookings-inbox-filters"><button type="button" className={filter === "all" ? "is-active" : ""} onClick={() => setFilter("all")}>ทั้งหมด <b>{rows.length}</b></button>{statuses.map(status => <button type="button" key={status.key} className={filter === status.key ? "is-active" : ""} onClick={() => setFilter(status.key)}>{status.label} <b>{rows.filter(row => row.status === status.key).length}</b></button>)}<button type="button" className={filter === "refund" ? "is-active" : ""} onClick={() => setFilter("refund")}>รอคืนมัดจำ <b>{refunds}</b></button><button type="button" className={filter === "late" ? "is-active" : ""} onClick={() => setFilter("late")}>คืนช้า <b>{late}</b></button><button type="button" className={filter === "clash" ? "is-active" : ""} onClick={() => setFilter("clash")}>กระทบคิว <b>{clash}</b></button></div>
-        <div className="bookings-inbox-rows">{visible.length ? pageRows.map(row => <button type="button" key={row._id} className={detail?._id === row._id ? "bookings-inbox-row is-selected" : "bookings-inbox-row"} onClick={() => setDetailId(row._id)} aria-pressed={detail?._id === row._id}>
+        <div className="bookings-inbox-rows">{visible.length ? pageRows.map(row => <button type="button" key={row._id} className={detail?._id === row._id ? "bookings-inbox-row is-selected" : "bookings-inbox-row"} onClick={() => setDetailId(current => current === row._id ? null : row._id)} aria-pressed={detail?._id === row._id}>
           <span className="bookings-row-request"><strong>{row._id}</strong><small>{dateLabel(row.createdAt)}</small></span>
           <span className="bookings-row-customer"><strong>{row.name}</strong><small>☎ ••• ••• {row.phone.slice(-4)}</small></span>
           <span className="bookings-row-product">{row.items[0]?.image && <Image unoptimized src={row.items[0].image} alt="" width={36} height={48} />}<span><strong>{row.items[0]?.sku || row.items[0]?.name || "สินค้า"}</strong><small>{row.items.length > 1 ? row.items.length + " รายการ" : row.items[0]?.name}</small></span></span>

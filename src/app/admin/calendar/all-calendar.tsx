@@ -38,6 +38,7 @@ export default function AllCalendar({ month, today, products }: { month: string;
   const shown = products.filter(product => (showAll || query || product.bookings.length) && (!query || `${product.sku} ${product.name}`.toLocaleLowerCase().includes(query)));
   const column = (day: string) => days.indexOf(day < first ? first : day > last ? last : day) + 2;
   const busy = products.filter(product => product.bookings.length).length;
+  const dayCounts = new Map(days.map(day => [day, new Set(products.flatMap(product => product.bookings.filter(booking => booking.ship <= day && booking.ready > day).map(booking => booking.id))).size]));
   // One grid row per lane, numbered so the cells and the bars on top of them share it (row 1 is the day header).
   const rows = shown.flatMap(product => lanes(product.bookings.filter(booking => booking.ready > first && booking.ship <= last)).map((lane, laneIndex) => ({ product, lane, laneIndex }))).map((row, index) => ({ ...row, gridRow: index + 2 }));
 
@@ -49,7 +50,7 @@ export default function AllCalendar({ month, today, products }: { month: string;
     <div className="all-calendar-scroll">
       <div className="all-calendar-grid" style={{ gridTemplateColumns: `minmax(150px, 190px) repeat(${days.length}, minmax(30px, 1fr))` }}>
         <div className="all-calendar-corner">ชุด</div>
-        {days.map(day => <div key={day} className={`all-calendar-day${day === today ? " is-today" : ""}${["ส", "อา"].includes(weekday(day)) ? " is-weekend" : ""}`}><small>{weekday(day)}</small><b>{Number(day.slice(8))}</b></div>)}
+        {days.map(day => <Link key={day} href={`/admin/calendar/day?date=${day}`} className={`all-calendar-day${day === today ? " is-today" : ""}${["ส", "อา"].includes(weekday(day)) ? " is-weekend" : ""}`} title={`ดูคิววันที่ ${Number(day.slice(8))}`}><small>{weekday(day)}</small><b>{Number(day.slice(8))}</b>{dayCounts.get(day) ? <em>{dayCounts.get(day)} คิว</em> : null}</Link>)}
         {rows.map(({ product, lane, laneIndex, gridRow }) => <div key={`${product.id}-${laneIndex}`} className="all-calendar-row">
           <div className="all-calendar-label" style={{ gridColumn: 1, gridRow }}>{laneIndex === 0 ? <><strong>{product.sku || product.name}</strong><small>{product.name}{product.stock > 1 ? ` · ${product.stock} ชิ้น` : ""}</small></> : <small>คิวซ้อน / ชิ้นที่ {laneIndex + 1}</small>}</div>
           {days.map(day => <span key={day} className={`all-calendar-cell${day === today ? " is-today" : ""}`} style={{ gridColumn: column(day), gridRow }} />)}

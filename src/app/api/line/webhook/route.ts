@@ -73,6 +73,8 @@ async function handle(request: Request, events: LineEvent[], origin: string) {
       if (!target) {
         // Someone already linked is just chatting with the shop: leave the reply to the admins.
         if (await bookings.findOne({ lineUserId: userId }, { projection: { _id: 1 } })) continue;
+        // Do not answer every casual message. Only a booking number or phone number starts the lookup flow.
+        if (!id && wanted.length !== 10) continue;
         await replyLine(event.replyToken, [{ type: "text", text: id || wanted.length === 10 ? "ยังไม่พบคำขอที่ตรงกับข้อมูลนี้ค่ะ กรุณาตรวจสอบเลขที่คำขอหรือเบอร์โทร แล้วส่งมาอีกครั้งนะคะ" : greeting }]);
         continue;
       }

@@ -34,7 +34,7 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
   const db = await database();
   const collection = db.collection<Rental>("rentals");
   const filter: Record<string, unknown> = {};
-  if (status && status !== "all") filter.legacyStatus = status;
+  if (status && status !== "all") filter.legacyStatus = status === "คืนสินค้าเลยกำหนด" ? { $in: ["เกินกำหนดส่ง", "คืนสินค้าเลยกำหนด"] } : status;
   if (!reversedRange && (from || to)) {
     const enteredAt: Record<string, Date> = {};
     if (from) enteredAt.$gte = new Date(`${from}T00:00:00.000Z`);
@@ -50,7 +50,7 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
     collection.countDocuments(),
     collection.countDocuments({ legacyStatus: "รอชำระเงิน" }),
     collection.countDocuments({ legacyStatus: "รอจัดส่ง" }),
-    collection.countDocuments({ legacyStatus: "เกินกำหนดส่ง" }),
+    collection.countDocuments({ legacyStatus: { $in: ["เกินกำหนดส่ง", "คืนสินค้าเลยกำหนด"] } }),
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(requestedPage, pageCount);
@@ -67,7 +67,7 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
     itemsByRental.set(item.rentalId, list);
   }
   const serializeDate = (value?: Date | string | null) => { if (!value) return ""; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString(); };
-  const records = rentals.map(rental => ({ ...rental, enteredAt: serializeDate(rental.enteredAt), shipDate: serializeDate(rental.shipDate), returnDate: serializeDate(rental.returnDate), paidAt: serializeDate(rental.paidAt), items: itemsByRental.get(rental.legacyId) || [] }));
+  const records = rentals.map(rental => ({ ...rental, legacyStatus: rental.legacyStatus === "เกินกำหนดส่ง" ? "คืนสินค้าเลยกำหนด" : rental.legacyStatus, enteredAt: serializeDate(rental.enteredAt), shipDate: serializeDate(rental.shipDate), returnDate: serializeDate(rental.returnDate), paidAt: serializeDate(rental.paidAt), items: itemsByRental.get(rental.legacyId) || [] }));
   const buildHref = (next: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -84,14 +84,14 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
       <article><span>รายการเช่าทั้งหมด</span><strong>{allCount.toLocaleString("th-TH")}</strong></article>
       <article className="is-pending"><span>รอชำระเงิน</span><strong>{pendingCount.toLocaleString("th-TH")}</strong></article>
       <article className="is-shipping"><span>รอจัดส่ง</span><strong>{shippingCount.toLocaleString("th-TH")}</strong></article>
-      <article className="is-overdue"><span>เกินกำหนดส่ง</span><strong>{overdueCount.toLocaleString("th-TH")}</strong></article>
+      <article className="is-overdue"><span>คืนสินค้าเลยกำหนด</span><strong>{overdueCount.toLocaleString("th-TH")}</strong></article>
     </section>
     {reversedRange && <p className="rental-history-error" role="alert">วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น</p>}
     <section className="rental-history-panel" aria-labelledby="rental-list-title">
       <div className="rental-history-panel-head"><div><span className="rental-history-eyebrow">ALL RENTALS</span><h2 id="rental-list-title">รายการเช่าทั้งหมด</h2></div><span>{total.toLocaleString("th-TH")} รายการ</span></div>
       <form className="rental-history-filters" action="/admin/rentals" method="get">
         <label className="rental-history-search"><span>ค้นหา</span><input name="q" type="search" defaultValue={q} placeholder="เลขรายการ ชื่อลูกค้า หรือเบอร์โทร" maxLength={100} /></label>
-        <label><span>สถานะ</span><select name="status" defaultValue={status || "all"}><option value="all">ทุกสถานะ</option><option value="รอชำระเงิน">รอชำระเงิน</option><option value="รอจัดส่ง">รอจัดส่ง</option><option value="เกินกำหนดส่ง">เกินกำหนดส่ง</option></select></label>
+        <label><span>สถานะ</span><select name="status" defaultValue={status || "all"}><option value="all">ทุกสถานะ</option><option value="รอชำระเงิน">รอชำระเงิน</option><option value="รอจัดส่ง">รอจัดส่ง</option><option value="คืนสินค้าเลยกำหนด">คืนสินค้าเลยกำหนด</option></select></label>
         <label><span>ลงข้อมูลตั้งแต่</span><input type="date" name="from" defaultValue={from} /></label>
         <label><span>ถึงวันที่</span><input type="date" name="to" defaultValue={to} /></label>
         <button type="submit">ค้นหารายการ</button>

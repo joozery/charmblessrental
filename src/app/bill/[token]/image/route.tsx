@@ -40,7 +40,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     </div>
     <div style={{ display: "flex", gap: 14 }}>
       {card("ข้อมูลลูกค้า", [field("ชื่อ–นามสกุลผู้เช่า", doc.name), field("เบอร์โทรศัพท์", doc.phone), field("ที่อยู่สำหรับจัดส่ง", doc.address || "รับเองที่ร้าน")], 1.25)}
-      {card("ข้อมูลการเช่า", [field("วันที่จอง", dateLabel(doc.createdAt)), field("วันใช้งาน", `${dateLabel(doc.start)} – ${dateLabel(doc.end)}`), field("ระยะเวลาเช่า", `${doc.days} วัน`), field("กำหนดคืน", dateLabel(doc.end))], 1)}
+      {card("ข้อมูลการเช่า", [field("วันที่จอง", dateLabel(doc.createdAt)), field("วันใช้งาน", `${dateLabel(doc.start)} – ${dateLabel(doc.end)}`), field("ระยะเวลาเช่า", `${doc.days} วัน`), field("กำหนดคืน", dateLabel(returnDay(doc)))], 1)}
     </div>
     {card("รายการสินค้าเช่า", doc.items.map((item, index) => <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "4px 0", borderBottom: index < doc.items.length - 1 ? `1px solid ${soft}` : "none" }}>
       <span style={{ display: "flex", width: 28, fontSize: 20, color: "#7a6f78" }}>{index + 1}</span>
@@ -52,7 +52,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
       {card("สรุปยอดค่าเช่า", [sum("ค่าเช่ารวม", money(quote.rental)), sum("เงินมัดจำ", money(quote.deposit)), sum("ค่าจัดส่ง", money(quote.shipping)), sum("ยอดรวมสุทธิ", `${money(total)} บาท`, true)], 1)}
       {card("ช่องทางชำระเงิน", [qr && <img key="qr" src={qr} width={150} height={150} style={{ alignSelf: "center", objectFit: "contain" }} alt="" />, field("ธนาคาร", quote.bank || "-"), field("เลขที่บัญชี", quote.accountNumber || "-"), field("ชื่อบัญชี", quote.accountName || "-")], 1)}
     </div>
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "#fff7e8", border: "1px solid #f3d79b", fontSize: 20 }}><span style={{ fontWeight: 700 }}>ส่งคืนภายในวันที่ {dateLabel(returnDay(doc))} ก่อน 18:00 น.</span><span style={{ fontSize: 17, color: "#7a6f78" }}>โอนตามยอดสุทธิ แล้วส่งสลิปในแชทนี้ได้เลยค่ะ</span></div>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "#fff7e8", border: "1px solid #f3d79b", fontSize: 20 }}><span style={{ fontWeight: 700 }}>ส่งคืนภายในวันที่ {dateLabel(returnDay(doc))} ก่อน 14:00 น.</span></div>
   </div>, { width: W, height, fonts: [
     { name: "Noto Sans Thai", data: font_400, weight: 400, style: "normal" }, { name: "Noto Sans Thai", data: font_700, weight: 700, style: "normal" },
     { name: "Noto Latin", data: font_latin_400, weight: 400, style: "normal" }, { name: "Noto Latin", data: font_latin_700, weight: 700, style: "normal" },
