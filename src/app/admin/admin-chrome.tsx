@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DropdownMenu } from "radix-ui";
 import type { Permission } from "@/lib/permissions";
 
-export default function AdminChrome({ user, counts, children }: {
+export default function AdminChrome({ user, counts, logo = "", children }: {
+  logo?: string;
   user: { name: string; email?: string; username: string; role: "owner" | "admin"; permissions: Permission[] };
-  counts: { products: number; admins: number; bookings: number; refunds: number; late: number; clashes?: number; slips?: number };
+  counts: { products: number; admins: number; bookings: number; refunds: number; late: number; clashes?: number; slips?: number; toShip?: number; shipLate?: number };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -31,6 +32,7 @@ export default function AdminChrome({ user, counts, children }: {
     { href: "/admin", title: "ภาพรวม", description: "แดชบอร์ดร้าน", icon: "home" as const, count: null as number | null },
     { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
     { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, alerts: [{ label: "เลยคืน", title: "เลยกำหนดคืน", count: counts.late, danger: true }, { label: "สลิป", title: "สลิปรอตรวจ", count: counts.slips || 0, danger: true }, { label: "มัดจำ", title: "รอคืนมัดจำ", count: counts.refunds, danger: false }], permission: "bookings" as Permission },
+    { href: "/admin/to-ship", title: "รอจัดส่ง", description: "ลูกค้าชำระแล้ว รอร้านจัดส่ง", icon: "delivery" as const, count: counts.toShip ?? null, alerts: [{ label: "ด่วน", title: "ถึงวันส่งหรือเลยกำหนดส่ง", count: counts.shipLate || 0, danger: true }], permission: "shipping" as Permission },
     { href: "/admin/customers", title: "ลูกค้าและเครดิต", description: "ประวัติลูกค้า LINE และเครดิตส่วนลด", icon: "users" as const, count: null as number | null, permission: "bookings" as Permission },
     { href: "/admin/discounts", title: "ส่วนลดและโค้ด", description: "สร้างโค้ดส่วนลดสำหรับจัดทำบิล", icon: "sliders" as const, count: null as number | null, permission: "pricing" as Permission },
     { href: "/admin/preparation", title: "เตรียมสินค้า", description: "ตรวจสภาพ ซัก ซ่อม และยืนยันพร้อมให้เช่า", icon: "box" as const, count: null as number | null, permission: "shipping" as Permission },
@@ -47,7 +49,7 @@ export default function AdminChrome({ user, counts, children }: {
     ...(user.role === "owner" ? [{ href: "/admin/admins", title: "จัดการแอดมิน", description: "ทีมงานและสิทธิ์ใช้งาน", icon: "users" as const, count: counts.admins }] : []),
   ].filter(item => allowed(item.permission));
   const navigationGroups = [
-    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings", "/admin/customers", "/admin/identity", "/admin/preparation"].includes(item.href)) },
+    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings", "/admin/to-ship", "/admin/customers", "/admin/identity", "/admin/preparation"].includes(item.href)) },
     { label: "จัดการร้าน", items: navigation.filter(item => ["/admin/finance", "/admin/commissions", "/admin/store-settings", "/admin/products", "/admin/rental-pricing", "/admin/discounts", "/admin/delivery-settings", "/admin/availability"].includes(item.href)) },
     { label: "เอกสารการเช่า", items: navigation.filter(item => item.href === "/admin/rental-document-settings") },
     { label: "ทีมงาน", items: navigation.filter(item => ["/admin/admins", "/admin/activity"].includes(item.href)) },
@@ -74,7 +76,7 @@ export default function AdminChrome({ user, counts, children }: {
   function go(href: string) { setMobileOpen(false); setCommandOpen(false); router.push(href); }
   function sidebar(mobile = false) {
     return <>
-      <div className="chrome-brand-row"><Link href="/admin" className="chrome-brand" aria-label="Charm Bless หลังบ้าน" onClick={() => setMobileOpen(false)}><span className="chrome-brand-symbol"><Icon name="spark" /></span><span className="chrome-brand-copy">charm bless<span>RENTAL MANAGEMENT</span></span></Link>{mobile && <Dialog.Close className="chrome-mobile-close" aria-label="ปิดเมนู"><Icon className="chrome-icon" name="close" /></Dialog.Close>}</div>
+      <div className="chrome-brand-row"><Link href="/admin" className="chrome-brand" aria-label="Charm Bless หลังบ้าน" onClick={() => setMobileOpen(false)}><span className={logo ? "chrome-brand-symbol has-logo" : "chrome-brand-symbol"}>{logo ? <img src={logo} alt="" /> : <Icon name="spark" />}</span><span className="chrome-brand-copy">charm bless<span>RENTAL MANAGEMENT</span></span></Link>{mobile && <Dialog.Close className="chrome-mobile-close" aria-label="ปิดเมนู"><Icon className="chrome-icon" name="close" /></Dialog.Close>}</div>
       <nav className="chrome-navigation" aria-label={mobile ? "เมนูหลังบ้านมือถือ" : "เมนูหลังบ้าน"}>{navigationGroups.map(group => <div className="chrome-nav-group" key={group.label}><span className="chrome-group-label">{group.label}</span>{group.items.map(item => {
         const active = item.href === "/admin" ? activePathname === "/admin" : activePathname.startsWith(item.href);
         return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active ? "chrome-nav-link is-active" : "chrome-nav-link"} aria-label={item.title} aria-current={active ? "page" : undefined} title={collapsed && !mobile ? item.title : undefined}><span className="chrome-nav-icon"><Icon className="chrome-icon" name={item.icon} /></span><span className="chrome-nav-copy"><strong>{item.title}</strong></span>{item.count !== null && <span className="chrome-nav-count">{item.count.toLocaleString("th-TH")}</span>}{"alerts" in item && item.alerts?.filter(alert => alert.count > 0).map(alert => <span key={alert.label} className={`chrome-nav-count is-alert${alert.danger ? " is-danger" : ""}`} title={`${alert.title} ${alert.count} รายการ`} aria-label={`${alert.title} ${alert.count} รายการ`}>{alert.label} {alert.count.toLocaleString("th-TH")}</span>)}{active && <span className="chrome-active-dot" />}</Link>;

@@ -142,3 +142,4 @@ body:has(.chrome-shell){padding-bottom:0;background:#f5f6f8}
 .chrome-sidebar::-webkit-scrollbar,.chrome-mobile-sidebar::-webkit-scrollbar{display:none}
 .chrome-nav-count.is-alert,.chrome-nav-link.is-active .chrome-nav-count.is-alert{width:auto;margin-left:4px;background:#fff1e0;color:#a1520c;box-shadow:none;white-space:nowrap}
 .chrome-nav-count.is-alert.is-danger,.chrome-nav-link.is-active .chrome-nav-count.is-alert.is-danger{background:#fee4e2;color:#b42318}
+.chrome-brand-symbol.has-logo{overflow:hidden;padding:0;background:#fff}.chrome-brand-symbol.has-logo>img{width:100%;height:100%;object-fit:contain}
