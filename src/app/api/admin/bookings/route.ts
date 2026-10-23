@@ -12,6 +12,7 @@ import { setUnitStatuses } from "@/lib/product-store";
 import { unitStatusLabels, type UnitStatus } from "@/lib/products";
 import { assignUnits, validUnitPicks } from "@/lib/rental-units";
 import { cleanCode, customerDiscount, discountCoupons, validCoupon } from "@/lib/discounts";
+import { claimBill } from "@/lib/bill-owner";
 const statuses = ["new", "contacted", "confirmed", "cancelled"];
 const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
     const quote = Object.fromEntries(quoteFields.map(key => [key, body.quote[key]])) as QuoteInput;
     quote.rentalBeforeDiscount = before; quote.discountPercent = percent; quote.discountAmount = discountAmount; quote.rental = Math.max(0, Math.round((before - discountAmount) * 100) / 100); quote.discountLabel = [loyalty.label, coupon?.label].filter(Boolean).join(" + "); quote.discountCode = coupon?.code || "";
     await bookings.updateOne({ _id: body.id }, { $set: { quote: { ...quote, updatedAt: new Date(), updatedBy: by } } });
+    await claimBill(db, booking._id, admin);
     const changes = diff(booking.quote, quote, quoteFields);
     if (changes.length) await log("booking.quote", booking.quote ? "แก้ไขราคาในใบสรุป" : "บันทึกราคาในใบสรุป", changes);
     if (coupon && booking.quote?.discountCode !== coupon.code) await discountCoupons(db).updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $set: { updatedAt: new Date() } });

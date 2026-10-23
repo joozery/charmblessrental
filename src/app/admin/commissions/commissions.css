@@ -1,0 +1,27 @@
+.commissions-page{display:grid;gap:16px}
+.commissions-header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.commissions-header h1{margin:4px 0}.commissions-header p{margin:0;max-width:620px;color:#667085;font-size:13px}
+.commissions-eyebrow{display:block;color:#79516c;font-size:10px;font-weight:650;letter-spacing:1.1px}
+.commissions-tabs{display:flex;gap:4px;padding:4px;border:1px solid #e4dde2;border-radius:10px;background:#fff}
+.commissions-tabs a{padding:7px 12px;border-radius:7px;color:#604a5b;font-size:13px;text-decoration:none}.commissions-tabs a.is-active{background:#79516c;color:#fff}
+.commissions-month{display:flex;align-items:center;gap:10px}.commissions-month a,.commissions-month>span{display:grid;place-items:center;width:32px;height:32px;border:1px solid #e4dde2;border-radius:8px;background:#fff;color:#604a5b}
+.commissions-month strong{min-width:130px;text-align:center;font-size:16px}.commissions-month small{color:#8a7f87;font-size:12px}
+.commissions-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.commissions-cards button{display:grid;gap:3px;padding:12px 14px;border:1px solid #e4dde2;border-radius:10px;background:#fff;color:#3b313e;font:inherit;text-align:left;cursor:pointer}
+.commissions-cards button span{color:#604a5b;font-size:13px;font-weight:600}.commissions-cards button strong{font-size:20px}.commissions-cards button small{color:#8a7f87;font-size:11px}
+.commissions-cards button.is-active{border-color:#79516c;box-shadow:0 0 0 2px #79516c33}.commissions-cards button.is-none span{color:#b54708}
+.commissions-panel{min-width:0;border:1px solid #dfe3e8;border-radius:10px;background:#fff}
+.commissions-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #eef0f3}
+.commissions-panel-head h2{margin:0;font-size:15px}.commissions-panel-head small{color:#8a7f87;font-weight:400}
+.commissions-panel-head button{height:32px;padding:0 12px;border:1px solid #d9cfd6;border-radius:7px;background:#fff;color:#604a5b;font:inherit;font-size:12px;cursor:pointer}
+.commissions-scroll{overflow-x:auto}
+.commissions-panel table{width:100%;min-width:860px;border-collapse:collapse;font-size:13px}
+.commissions-panel th,.commissions-panel td{padding:9px 12px;border-bottom:1px solid #f0f1f3;text-align:right;white-space:nowrap;vertical-align:top}
+.commissions-panel th:nth-child(-n+3),.commissions-panel td:nth-child(-n+3){text-align:left}
+.commissions-panel th{background:#faf8f9;color:#604a5b;font-size:12px;font-weight:600}
+.commissions-panel td small{display:block;color:#8a7f87;font-size:11px}.commissions-panel td a{color:#79516c;font-weight:600}
+.commissions-panel tfoot td{background:#faf8f9;font-weight:600}
+.commissions-panel select{height:30px;padding:0 6px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;font:inherit;font-size:12px}
+.commissions-muted{color:#8a7f87}.commissions-empty{margin:0;padding:24px;color:#8a7f87;text-align:center}
+.commissions-note{margin:0;padding:10px 14px;color:#8a7f87;font-size:12px}.commissions-error{margin:0;color:#b42318;font-size:13px}
+.commissions-month>span{visibility:hidden}
