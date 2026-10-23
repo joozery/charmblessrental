@@ -5,7 +5,7 @@ import { money } from "@/components/rental-document";
 import { Icon } from "@/components/ui/icon";
 import { slipStatusLabels, type SlipStatus } from "@/lib/payment-slips";
 
-type Slip = { _id: string; status: SlipStatus; reason: string; due: number; createdAt: string; transRef?: string; amount?: number; dateTime?: string; senderName?: string; receiverName?: string; reviewedByName?: string };
+type Slip = { _id: string; billToken?: string; status: SlipStatus; reason: string; due: number; createdAt: string; transRef?: string; amount?: number; dateTime?: string; senderName?: string; receiverName?: string; reviewedByName?: string };
 export type SlipPatch = { payment?: "paid"; paidAt?: string; slipReview?: undefined; deposit?: { amount: number; status: "held"; receivedAt: string; receivedByName: string } };
 const when = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
 
@@ -27,7 +27,7 @@ export default function SlipPanel({ bookingId, deposit, onChange }: { bookingId:
       if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
       setSlips(current => (current || []).map(slip => slip._id === id ? { ...slip, status: data.status, ...(decision === "reject" ? { reason } : {}), reviewedByName: "คุณ" } : slip));
       setRejecting(null);
-      onChange(decision === "accept" && data.paidAt ? { payment: "paid", paidAt: data.paidAt, slipReview: undefined, ...(deposit > 0 ? { deposit: { amount: deposit, status: "held", receivedAt: data.paidAt, receivedByName: "คุณ" } } : {}) } : { slipReview: undefined });
+      onChange(decision === "accept" && data.paidAt && data.payment === "paid" ? { payment: "paid", paidAt: data.paidAt, slipReview: undefined, ...(deposit > 0 ? { deposit: { amount: deposit, status: "held", receivedAt: data.paidAt, receivedByName: "คุณ" } } : {}) } : { slipReview: undefined });
     } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(""); }
   }
 

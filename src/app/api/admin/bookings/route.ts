@@ -18,7 +18,7 @@ const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
   if (body.action === "saveQuote") {
     if (booking.payment === "paid" && ["rental", "deposit", "shipping"].some(key => booking.quote?.[key] !== body.quote[key])) return Response.json({ error: "รายการนี้ยืนยันชำระแล้ว หากต้องแก้ยอดเงิน กรุณายกเลิกสถานะชำระก่อน" }, { status: 409 });
     const before = typeof body.quote.rentalBeforeDiscount === "number" ? body.quote.rentalBeforeDiscount : body.quote.rental;
-    const code = cleanCode(body.quote.discountCode), coupon = code ? await discountCoupons(db).findOne({ code }) : null;
+    const code = cleanCode(body.quote.discountCode || booking.discountCode), coupon = code ? await discountCoupons(db).findOne({ code }) : null;
     if (code && !validCoupon(coupon)) return Response.json({ error: "โค้ดส่วนลดไม่ถูกต้อง หมดอายุ หรือใช้ครบแล้ว" }, { status: 400 });
     const customer = booking.lineUserId ? await db.collection<{ _id: string; bookingCount?: number; completedCount?: number; reviewCount?: number }>("customers").findOne({ _id: booking.lineUserId }) : null;
     const loyalty = customerDiscount(customer?.completedCount ?? customer?.bookingCount ?? 0, customer?.reviewCount ?? 0);

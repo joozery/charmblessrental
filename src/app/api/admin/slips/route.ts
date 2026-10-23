@@ -3,8 +3,9 @@ import { audit } from "@/lib/audit";
 import { recordBookingPayment, thaiDay } from "@/lib/finance";
 import { database } from "@/lib/mongodb";
 import { paymentSlips } from "@/lib/payment-slips";
+import { activeExtensions, type Extension } from "@/lib/extension";
 
-type BookingDoc = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; quote?: { rental?: number; deposit?: number; shipping?: number } };
+type BookingDoc = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; quote?: { rental?: number; deposit?: number; shipping?: number }; extensions?: Extension[] };
 
 // The slips a customer attached to one bill, newest first, without the image bytes.
 export async function GET(request: Request) {
@@ -27,8 +28,9 @@ export async function POST(request: Request) {
   if (!slip) return Response.json({ error: "ไม่พบสลิปนี้" }, { status: 404 });
   if (slip.status !== "review") return Response.json({ error: "สลิปนี้ตรวจไปแล้ว" }, { status: 409 });
   const bookings = db.collection<BookingDoc>("bookingRequests");
-  const booking = await bookings.findOne({ _id: slip.bookingId }, { projection: { _id: 1, name: 1, status: 1, payment: 1, quote: 1 } });
+  const booking = await bookings.findOne({ _id: slip.bookingId }, { projection: { _id: 1, name: 1, status: 1, payment: 1, quote: 1, extensions: 1 } });
   if (!booking) return Response.json({ error: "ไม่พบคำขอจองของสลิปนี้" }, { status: 404 });
+  const extension = slip.billToken ? activeExtensions(booking.extensions).find(item => item.billToken === slip.billToken) : null;
   const reviewed = { reviewedAt: new Date(), reviewedByName: admin.name };
   if (body.decision === "reject") {
     await slips.updateOne({ _id: slip._id }, { $set: { status: "rejected", reason: body.reason.trim(), ...reviewed } });
@@ -37,9 +39,15 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, status: "rejected", payment: booking.payment || "unpaid" });
   }
   if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
-  if (!booking.quote) return Response.json({ error: "กรุณาบันทึกราคาในใบสรุปก่อนยืนยันชำระเงิน" }, { status: 409 });
+  if (!extension && !booking.quote) return Response.json({ error: "กรุณาบันทึกราคาในใบสรุปก่อนยืนยันชำระเงิน" }, { status: 409 });
   await slips.updateOne({ _id: slip._id }, { $set: { status: "accepted", ...reviewed } });
   const paidOn = thaiDay(slip.dateTime ? new Date(slip.dateTime) : slip.createdAt);
+  if (extension) {
+    const updated = await bookings.updateOne({ _id: booking._id, extensions: { $elemMatch: { id: extension.id, billToken: extension.billToken, status: "unpaid" } } }, { $set: { "extensions.$.status": "paid", "extensions.$.paidOn": new Date(`${paidOn}T12:00:00.000Z`), "extensions.$.paidByName": admin.name, updatedAt: new Date(), updatedBy: admin.email || admin.username }, $unset: { slipReview: "" } });
+    if (!updated.modifiedCount) return Response.json({ error: "บิลส่วนต่างนี้ชำระไปแล้วหรือถูกแก้ไข กรุณาโหลดหน้าใหม่" }, { status: 409 });
+    await audit(request, admin, { action: "booking.extension_payment_confirmed", targetType: "booking", targetId: booking._id, summary: `ยืนยันชำระบิลส่วนต่างจากสลิป${slip.transRef ? ` · อ้างอิง ${slip.transRef}` : ""} · ${extension.amount} บาท`, changes: [{ field: "extension.payment", before: "unpaid", after: "paid" }] });
+    return Response.json({ ok: true, status: "accepted", payment: "extension-paid", paidAt: `${paidOn}T12:00:00.000Z` });
+  }
   const flipped = await bookings.updateOne({ _id: booking._id, payment: { $ne: "paid" } }, { $set: { payment: "paid", paidAt: new Date(`${paidOn}T12:00:00.000Z`), updatedAt: new Date(), updatedBy: admin.email || admin.username }, $unset: { slipReview: "" } });
   if (flipped.modifiedCount) {
     const amounts = await recordBookingPayment(db, booking, admin, paidOn);

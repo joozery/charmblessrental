@@ -15,7 +15,7 @@ import { getStoreSettings } from "@/lib/store-settings";
 type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; shipment?: object; extensions?: Extension[]; lineUserId?: string; billToken?: string; quote?: { accountNumber?: string } };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
-const actions = { preview: "bookings", create: "bookings", cancel: "bookings", paid: "payments" } as const;
+const actions = { preview: "bookings", create: "bookings", cancel: "bookings", paid: "payments", updateAmount: "pricing" } as const;
 
 // What extending to `toEnd` means: the added days, the new return and ready days, any queue clash, and a suggested price.
 async function plan(db: Db, booking: BookingDoc, toEnd: string) {
@@ -94,6 +94,15 @@ export async function POST(request: Request) {
   const extension = (booking.extensions || []).find(item => item.id === body.extensionId);
   if (!extension) return Response.json({ error: "ไม่พบรายการเช่าต่อนี้" }, { status: 404 });
   if (extension.status !== "unpaid") return Response.json({ error: extension.status === "paid" ? "รายการนี้ชำระแล้ว" : "รายการนี้ถูกยกเลิกแล้ว" }, { status: 409 });
+
+  if (body.action === "updateAmount") {
+    if (typeof body.amount !== "number" || !Number.isFinite(body.amount) || body.amount <= 0 || body.amount > 1000000) return Response.json({ error: "กรุณากรอกยอดบิลที่ 2 ให้ถูกต้อง" }, { status: 400 });
+    const amount = Math.round(body.amount * 100) / 100, now = new Date();
+    const updated = await bookings.updateOne({ _id: booking._id, extensions: { $elemMatch: { id: extension.id, status: "unpaid" } } }, { $set: { "extensions.$.amount": amount, "extensions.$.updatedAt": now, "extensions.$.updatedByName": admin.name, updatedAt: now } });
+    if (!updated.modifiedCount) return Response.json({ error: "รายการนี้ถูกแก้ไขไปแล้ว กรุณาโหลดหน้าใหม่" }, { status: 409 });
+    await log("booking.extension_amount_updated", `แก้ยอดบิลส่วนต่าง ${money(extension.amount)} → ${money(amount)} บาท`, [{ field: "extension.amount", before: extension.amount, after: amount }]);
+    return Response.json({ extension: { ...extension, amount, updatedAt: now.toISOString(), updatedByName: admin.name } });
+  }
 
   if (body.action === "paid") {
     if (body.paidOn !== undefined && !validDay(body.paidOn)) return Response.json({ error: "วันที่ชำระไม่ถูกต้อง" }, { status: 400 });

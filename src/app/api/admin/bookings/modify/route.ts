@@ -14,7 +14,7 @@ import type { Extension } from "@/lib/extension";
 
 type InputItem = { id: number; quantity: number };
 type BookingItem = { id: number; name: string; sku: string; image: string; dailyRate: number | null; unitSku?: string; quantity?: number; depositPrice?: number; rentalPrice?: number | null };
-type Booking = { _id: string; status: string; payment?: "unpaid" | "paid"; lineUserId?: string; billToken?: string; start: string; end: string; days: number; method: string; returned?: object; shipment?: object; schedule?: ReturnType<typeof scheduleRecord>; items: BookingItem[]; quote?: { rental?: number; deposit?: number; shipping?: number }; extensions?: Extension[] };
+type Booking = { _id: string; status: string; payment?: "unpaid" | "paid"; lineUserId?: string; billToken?: string; start: string; end: string; days: number; method: string; returned?: object; shipment?: object; schedule?: ReturnType<typeof scheduleRecord>; items: BookingItem[]; quote?: { rental?: number; deposit?: number; shipping?: number; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string }; extensions?: Extension[] };
 const validDate = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 export async function POST(request: Request) {
@@ -48,13 +48,14 @@ export async function POST(request: Request) {
   const nextSkus = new Set(items.map(item => item.unitSku).filter((sku): sku is string => !!sku));
   const releasedSkus = booking.items.map(item => item.unitSku).filter((sku): sku is string => !!sku && !nextSkus.has(sku));
   if (releasedSkus.length) await setUnitStatuses(db, releasedSkus.map(sku => ({ sku, status: "available" as const })));
+  const discountPercent = booking.quote?.discountPercent || 0, discountAmount = Math.round(rental * discountPercent / 100 * 100) / 100, discountedRental = Math.max(0, Math.round((rental - discountAmount) * 100) / 100);
   if (booking.payment !== "paid") {
-    const quote = booking.quote ? { ...booking.quote, rental, deposit } : booking.quote;
-    await bookings.updateOne({ _id: booking._id }, { $set: { start, end, days, schedule, items, ...(quote ? { quote } : {}), estimatedTotal: rental + deposit + (booking.quote?.shipping || 0), updatedAt: now, updatedBy: auth.admin.email || auth.admin.username } });
+    const quote = booking.quote ? { ...booking.quote, rental: discountedRental, deposit, rentalBeforeDiscount: rental, discountAmount, discountPercent } : booking.quote;
+    await bookings.updateOne({ _id: booking._id }, { $set: { start, end, days, schedule, items, ...(quote ? { quote } : {}), estimatedTotal: discountedRental + deposit + (booking.quote?.shipping || 0), updatedAt: now, updatedBy: auth.admin.email || auth.admin.username } });
     await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: "แก้ไขสินค้าและวันเช่าก่อนชำระเงิน" });
     return Response.json({ ok: true, items, start, end, days, schedule, quote });
   }
-  const oldTotal = (booking.quote?.rental || 0) + (booking.quote?.deposit || 0), newTotal = rental + deposit, difference = Math.round((newTotal - oldTotal) * 100) / 100;
+  const oldTotal = (booking.quote?.rental || 0) + (booking.quote?.deposit || 0), newTotal = discountedRental + deposit, difference = Math.round((newTotal - oldTotal) * 100) / 100;
   if (difference < 0 && !booking.lineUserId) return Response.json({ error: "รายการนี้ยังไม่เชื่อม LINE จึงยังบันทึกเครดิตส่วนต่างไม่ได้" }, { status: 409 });
   const extension: Extension | undefined = difference > 0 ? { id: randomUUID(), fromEnd: booking.end, toEnd: end, addedDays: Math.max(0, days - booking.days), amount: difference, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken: randomBytes(18).toString("base64url"), dueAt: new Date(now.getTime() + 3600000), chargeType: "standard", note: "บิลส่วนต่างจากการแก้ไขสินค้า/วันเช่า" } : undefined;
   if (difference < 0 && booking.lineUserId) await grantCredit(db, { customerId: booking.lineUserId, amount: Math.abs(difference), reason: "ส่วนต่างจากการแก้ไขสินค้า/วันเช่า", bookingId: booking._id, billToken: booking.billToken, createdBy: auth.admin.email || auth.admin.username, createdByName: auth.admin.name });

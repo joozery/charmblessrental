@@ -298,3 +298,6 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-slip-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.bookings-slip-actions input{flex:1 1 180px;height:32px;padding:0 8px;border:1px solid #d0d5dd;border-radius:7px;font:inherit;font-size:12px}
 .bookings-slip-actions button{height:32px;padding:0 10px;border:1px solid #d9cfd6;border-radius:7px;background:#fff;color:#604a5b;font:inherit;font-size:12px;cursor:pointer}.bookings-slip-actions button.is-primary{border-color:#067647;background:#067647;color:#fff}.bookings-slip-actions button:disabled{opacity:.5;cursor:default}
 .bookings-row-slip{color:#b54708!important;font-weight:600}
+.rental-paper-total .rental-paper-discount-note{display:block;margin:0 12px 5px;color:#29252a;font-family:inherit;font-size:11px;font-weight:400;line-height:1.65}
+.bookings-extension-amount-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:8px 10px;border:1px solid #eadde4;border-radius:8px;background:#fff}.bookings-extension-amount-row button{padding:5px 10px;border:1px solid #d9cfd6;border-radius:7px;background:#fff;color:#604a5b;font:inherit;font-size:11px;cursor:pointer}.bookings-extension-amount .bookings-inline-form{margin-top:9px}
+.bookings-extension-discount{color:#a24d70!important;font-weight:600}

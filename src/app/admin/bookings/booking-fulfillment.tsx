@@ -13,6 +13,7 @@ import { identityFileLabel, verificationLabels, type BookingVerification } from 
 import type { RefundAccount } from "@/lib/refund-account";
 import { lastUseDay, type Extension, type LateReturn } from "@/lib/extension";
 import ExtensionPanel from "./extension-panel";
+import ExtensionAmountPanel from "./extension-amount-panel";
 import LateReturnPanel from "./late-return-panel";
 import type { NextRisk, QueueClash } from "@/lib/queue";
 
@@ -127,6 +128,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
     </div></div>}
     {row.status !== "cancelled" && <LateReturnPanel row={row} permissions={permissions} finePerDay={finePerDay} onChange={onChange} />}
     {row.status !== "cancelled" && <ExtensionPanel row={row} permissions={permissions} onChange={onChange} />}
+    {row.status !== "cancelled" && <ExtensionAmountPanel row={row} canEdit={permissions.includes("pricing")} onChange={extensions => onChange({ extensions })} />}
     {row.deposit && row.deposit.status !== "void" && <div className="bookings-detail-section bookings-deposit"><Icon name="shield" /><div>
       <h3>เงินมัดจำ</h3>
       <p className="bookings-deposit-head"><strong>{money(row.deposit.amount)} บาท</strong><span className={`bookings-deposit-badge is-${row.deposit.status}`}>{depositStatus[row.deposit.status]}</span></p>

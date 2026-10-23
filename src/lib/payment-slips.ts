@@ -5,7 +5,7 @@ import type { Binary, Db } from "mongodb";
 // marks the bill paid by itself; any other slip waits for the shop to look at it.
 export type SlipStatus = "verified" | "review" | "accepted" | "rejected";
 export type PaymentSlip = {
-  _id: string; bookingId: string; contentType: string; size: number; data: Binary; createdAt: Date;
+  _id: string; bookingId: string; billToken?: string; contentType: string; size: number; data: Binary; createdAt: Date;
   status: SlipStatus; reason: string; due: number;
   transRef?: string; amount?: number; dateTime?: string; senderName?: string; receiverName?: string; raw?: string;
   reviewedAt?: Date; reviewedByName?: string;
