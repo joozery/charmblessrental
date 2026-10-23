@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { currentAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
 import { productsByLegacyIds } from "@/lib/product-store";
+import { webRentals } from "@/lib/web-rentals";
 
 const validDay = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 
@@ -23,11 +24,14 @@ export async function GET(request: Request) {
   const productIds = [...new Set(items.map(item => item.productLegacyId).filter((id): id is string => typeof id === "string"))];
   const productByLegacy = await productsByLegacyIds(db, productIds);
   const rentalsById = new Map(rentals.map(rental => [rental.legacyId, rental]));
-  return NextResponse.json({ rentals: [...rentalsById.values()].map(rental => ({
+  // Website bookings shipping or due back in the range, alongside the imported ones.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const web = (await webRentals(db, today)).filter(rental => (rental.shipDate >= lower && rental.shipDate < upper) || (rental.returnDate >= lower && rental.returnDate < upper));
+  return NextResponse.json({ rentals: [...[...rentalsById.values()].map(rental => ({
     ...rental,
     items: items.filter(item => item.rentalId === rental.legacyId).map(item => {
       const product = productByLegacy.get(item.productLegacyId);
       return { productName: item.productName || product?.name, sku: item.sku || product?.sku, image: product?.imageStatus === "missing-source" ? undefined : product?.images?.[0] || product?.image || undefined };
     }),
-  })) }, { headers: { "Cache-Control": "private, no-store" } });
+  })), ...web] }, { headers: { "Cache-Control": "private, no-store" } });
 }
