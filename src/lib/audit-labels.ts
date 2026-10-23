@@ -15,6 +15,8 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "booking.customer_return": { label: "ลูกค้าแจ้งส่งคืน", group: "bookings" },
   "booking.refund_account": { label: "ลูกค้ากรอกบัญชีรับเงินมัดจำคืน", group: "bookings" },
   "booking.extended": { label: "ขยายวันเช่า", group: "bookings" },
+  "booking.late_return": { label: "ส่งคืนล่าช้า", group: "bookings" },
+  "booking.late_fine_paid": { label: "ยืนยันรับค่าปรับคืนช้า", group: "finance" },
   "booking.late_notice": { label: "ส่ง LINE ถามลูกค้าที่คืนช้า", group: "bookings" },
   "booking.extension_paid": { label: "ยืนยันรับค่าเช่าต่อ", group: "finance" },
   "booking.extension_cancelled": { label: "ยกเลิกการเช่าต่อ", group: "bookings" },

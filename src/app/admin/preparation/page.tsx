@@ -3,7 +3,7 @@ import { pageAdmin } from "@/lib/admin-auth";
 import { thaiDay } from "@/lib/finance";
 import { database } from "@/lib/mongodb";
 import { prepStatuses, unitsOf, type Product } from "@/lib/products";
-import { returnDay, type ScheduleRecord } from "@/lib/schedule";
+import { addDays, returnDay, type ScheduleRecord } from "@/lib/schedule";
 import PreparationBoard, { type PrepPiece } from "./preparation-board";
 import "./preparation.css";
 
@@ -25,7 +25,8 @@ async function Content() {
     const next = mine.filter(booking => booking.status === "confirmed" && !booking.shipment && booking.end >= today).sort((a, b) => a.start.localeCompare(b.start))[0];
     return {
       sku: unit.sku, status: unit.status, note: unit.note, productName: product.name, image: product.images?.[0] || "",
-      lastReturn: last ? { bookingId: last._id, at: new Date(last.returned!.at).toISOString(), condition: last.returned!.condition, note: last.returned!.note } : null,
+      // The gap after the last rental is the time set aside to clean and check the piece before it may ship again.
+      lastReturn: last ? { bookingId: last._id, at: new Date(last.returned!.at).toISOString(), condition: last.returned!.condition, note: last.returned!.note, gapEnd: last.schedule ? addDays(last.schedule.ready, -1) : "" } : null,
       out: out ? { bookingId: out._id, name: out.name, end: returnDay(out) } : null,
       next: next ? { bookingId: next._id, name: next.name, start: next.schedule?.ship ?? next.start } : null,
     };

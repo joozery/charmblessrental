@@ -4,6 +4,7 @@ import { database } from "@/lib/mongodb";
 import { audit } from "@/lib/audit";
 import { lineConfigured, pushLine } from "@/lib/line";
 import type { RefundAccount } from "@/lib/refund-account";
+import type { LateReturn } from "@/lib/extension";
 import { deposits, ledgerDate, transactions, validDay, type DepositRecord } from "@/lib/finance";
 import { R2_PUBLIC_URL } from "@/lib/product-images";
 
@@ -21,8 +22,8 @@ export async function POST(request: Request) {
   const deposit = await deposits(db).findOne({ _id: body.bookingId });
   if (!deposit || deposit.status === "void") return Response.json({ error: "ไม่พบเงินมัดจำของรายการนี้ ต้องยืนยันชำระเงินก่อน" }, { status: 404 });
   if (deposit.status !== "held") return Response.json({ error: "บันทึกการคืนเงินมัดจำของรายการนี้แล้ว" }, { status: 409 });
-  const bookings = db.collection<{ _id: string; returned?: unknown; lineUserId?: string; billToken?: string; refundAccount?: RefundAccount }>("bookingRequests");
-  const booking = await bookings.findOne({ _id: body.bookingId }, { projection: { returned: 1, lineUserId: 1, billToken: 1, refundAccount: 1 } });
+  const bookings = db.collection<{ _id: string; returned?: unknown; lineUserId?: string; billToken?: string; refundAccount?: RefundAccount; lateReturn?: LateReturn }>("bookingRequests");
+  const booking = await bookings.findOne({ _id: body.bookingId }, { projection: { returned: 1, lineUserId: 1, billToken: 1, refundAccount: 1, lateReturn: 1 } });
   if (!booking?.returned) return Response.json({ error: "กรุณาบันทึกรับคืนสินค้าก่อนคืนเงินมัดจำ" }, { status: 409 });
   const refund = Math.round(body.refund * 100) / 100, deducted = Math.round((deposit.amount - refund) * 100) / 100, reason = body.reason.trim();
   if (deducted < 0) return Response.json({ error: "ยอดคืนต้องไม่เกินเงินมัดจำที่รับไว้" }, { status: 400 });
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
   // The withheld part becomes shop income (fines); the refunded part never touches the income ledger.
   if (deducted > 0) await transactions(db).insertOne({ _id: randomUUID(), type: "income", category: "ค่าปรับ", amount: deducted, date: ledgerDate(body.date), note: `หักเงินมัดจำ ${deposit.bookingId}: ${reason}`.slice(0, 300), createdAt: now, createdBy: by, createdByName: admin.name, bookingId: deposit.bookingId, source: "deposit" });
   await audit(request, admin, { action: "deposit.refund", targetType: "booking", targetId: deposit.bookingId, summary: deducted ? `คืนเงินมัดจำ ${money(refund)} บาท หัก ${money(deducted)} บาท (${reason})` : `คืนเงินมัดจำเต็มจำนวน ${money(refund)} บาท`, changes: [{ field: "depositStatus", before: "held", after: status }, { field: "refundAmount", before: null, after: refund }, { field: "deducted", before: null, after: deducted }] });
+  // A late-return fine still owed is settled by what was withheld from the deposit (already booked as a fine above).
+  if (booking.lateReturn?.status === "unpaid" && deducted >= booking.lateReturn.fine) await bookings.updateOne({ _id: booking._id, "lateReturn.status": "unpaid" }, { $set: { "lateReturn.status": "deposit", "lateReturn.paidOn": body.date, "lateReturn.paidByName": admin.name } });
   // Tell the customer on LINE, with the transfer slip when there is one.
   let lineNotified = false;
   if (booking.lineUserId && lineConfigured()) {

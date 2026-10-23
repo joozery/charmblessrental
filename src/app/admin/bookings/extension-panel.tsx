@@ -9,7 +9,7 @@ import { addDays, type ScheduleRecord } from "@/lib/schedule";
 import type { FulfillmentRow } from "./booking-fulfillment";
 import QueueCalendar from "./queue-calendar";
 
-type Preview = { toEnd: string; added: number; schedule: ScheduleRecord; conflicts: { item: string; date: string; bookings: { id: string; name: string }[] }[]; suggested: number | null };
+type Preview = { toEnd: string; added: number; schedule: ScheduleRecord; conflicts: { item: string; date: string; bookings: { id: string; name: string }[] }[]; suggested: number | null; rule: string };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -79,7 +79,7 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
       <label>ใช้งานถึงวันที่ (เดิม {day(end)})<input type="date" min={addDays(end, 1)} value={form.toEnd} onChange={event => choose(event.target.value)} /></label>
       <label>ค่าเช่าต่อ (บาท)<input type="number" min="0" step="1" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value, touched: true })} placeholder={preview?.suggested === null ? "ไม่มีราคาตั้งไว้ กรอกเอง" : ""} /></label>
       {preview && <div className="is-wide bookings-extension-preview">
-        <p>+{preview.added} วัน · ลูกค้าคืนชุดภายใน <b>{day(preview.schedule.returnDate)}</b> · รับคิวใหม่ได้ {day(preview.schedule.ready)}{preview.suggested !== null && <> · ราคาแนะนำ {money(preview.suggested)} บาท</>}</p>
+        <p>+{preview.added} วัน · ลูกค้าคืนชุดภายใน <b>{day(preview.schedule.returnDate)}</b> · รับคิวใหม่ได้ {day(preview.schedule.ready)}{preview.suggested !== null && <> · ราคาแนะนำ {money(preview.suggested)} บาท</>}</p><p className="bookings-extension-rule">{preview.rule}</p>
         {preview.conflicts.length ? <div className="bookings-clash">
           <strong>⚠️ คิวซ้อนกับลูกค้าคนอื่น</strong>
           {preview.conflicts.map(clash => <p key={`${clash.item}-${clash.date}`}>{day(clash.date)} · {clash.item}{clash.bookings.map(other => <Link key={other.id} href={`/admin/bookings?id=${encodeURIComponent(other.id)}`}> {other.name || other.id} ({other.id})</Link>)}</p>)}

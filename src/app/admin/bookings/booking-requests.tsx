@@ -18,7 +18,7 @@ const thaiToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangk
 const statuses = [{ key: "new", label: "ใหม่" }, { key: "contacted", label: "ติดต่อแล้ว" }, { key: "confirmed", label: "ยืนยันแล้ว" }, { key: "cancelled", label: "ยกเลิก" }];
 const methodLabel = (value: string) => value === "pickup" ? "รับเองที่ร้าน" : value === "ems" ? "ไปรษณีย์ / EMS" : "แมสเซนเจอร์";
 
-export default function BookingRequests({ initial, store, permissions, selected, unitChoices }: { initial: RequestRow[]; store: StoreInfo; permissions: Permission[]; selected: string; unitChoices: Record<number, UnitChoice[]> }) {
+export default function BookingRequests({ initial, store, permissions, selected, unitChoices, finePerDay }: { initial: RequestRow[]; store: StoreInfo; permissions: Permission[]; selected: string; unitChoices: Record<number, UnitChoice[]>; finePerDay: number }) {
   const canPrice = permissions.includes("pricing"), canPay = permissions.includes("payments");
   const [payForm, setPayForm] = useState<{ id: string; paid: boolean; day: string; reason: string } | null>(null);
   const [rows, setRows] = useState(initial); const [filter, setFilter] = useState("all"); const [busy, setBusy] = useState<string | null>(null); const [error, setError] = useState("");
@@ -105,7 +105,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
             : <label className="is-wide">เหตุผลที่ยกเลิกสถานะชำระ<input value={payForm.reason} maxLength={300} onChange={event => setPayForm({ ...payForm, reason: event.target.value })} placeholder="เช่น กดยืนยันผิดรายการ / สลิปไม่ถูกต้อง" /></label>}
             <div><button type="button" disabled={busy === detail._id} onClick={() => setPayForm(null)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy === detail._id || (!payForm.paid && !payForm.reason.trim())} onClick={setPaid}>{payForm.paid ? "ยืนยันรับชำระ" : "ยืนยันยกเลิก"}</button></div></div>}
         </div></div>
-        <BookingFulfillment key={detail._id} row={detail} permissions={permissions} unitChoices={unitChoices} onChange={patch => setRows(current => current.map(item => item._id === detail._id ? { ...item, ...patch } as RequestRow : item))} />
+        <BookingFulfillment key={detail._id} row={detail} permissions={permissions} unitChoices={unitChoices} finePerDay={finePerDay} onChange={patch => setRows(current => current.map(item => item._id === detail._id ? { ...item, ...patch } as RequestRow : item))} />
         <div className="bookings-detail-actions"><Link href="/admin/availability" className="bookings-detail-primary"><Icon name="calendar" />ตรวจสอบคิวว่าง</Link><div><a href={"tel:" + detail.phone.replace(/[^+\d]/g, "")}><Icon name="chat" />โทรหาลูกค้า</a><button type="button" onClick={() => openQuote(detail)}><Icon name="booking" />ดูใบสรุป</button></div>{detail.status !== "cancelled" && <button type="button" className="bookings-detail-cancel" disabled={busy === detail._id} onClick={() => update(detail._id, "cancelled")}>ยกเลิกคำขอ</button>}</div>
         {detail.status === "new" && <p className="bookings-detail-warning"><Icon name="help" />ตรวจสอบคิวก่อนยืนยันคำขอ</p>}
       </> : <div className="bookings-detail-placeholder"><Icon name="booking" /><strong>เลือกรายการเพื่อดูรายละเอียด</strong></div>}</aside>

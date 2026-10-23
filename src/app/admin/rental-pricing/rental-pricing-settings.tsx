@@ -5,8 +5,35 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import PriceTiersEditor, { pricingFrom, rowsFrom } from "@/components/price-tiers-editor";
 import { priceFor, type ExtraDayRates, type RentalPricing } from "@/lib/pricing";
+import type { LateRates } from "@/lib/extension";
 
 type History = { days: number; count: number; average: number };
+// After the piece has gone out: extending is a flat rate per piece per day; returning late is a fine per piece per day.
+function LateRatesForm({ initial }: { initial: LateRates }) {
+  const [form, setForm] = useState({ afterShipPerDay: String(initial.afterShipPerDay), lateFinePerDay: String(initial.lateFinePerDay) });
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(""); setNotice("");
+    const rates = { afterShipPerDay: Number(form.afterShipPerDay), lateFinePerDay: Number(form.lateFinePerDay) };
+    if (!(rates.afterShipPerDay >= 0) || !(rates.lateFinePerDay >= 0) || form.afterShipPerDay.trim() === "" || form.lateFinePerDay.trim() === "") { setError("กรอกเป็นตัวเลขตั้งแต่ 0"); return; }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/rental-pricing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "late", rates }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      setNotice("บันทึกแล้ว");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); }
+  }
+  return <form className="rental-pricing-card delivery-form" onSubmit={save}>
+    <h2>เช่าต่อและคืนช้า</h2>
+    <p>ขยายวันก่อนส่งชุด คิดตามตารางราคาเช่า ส่วนหลังส่งชุดถึงลูกค้าแล้วใช้อัตราด้านล่าง (ต่อชุด ต่อวัน)</p>
+    <label>ขยายวันหลังส่งชุดแล้ว วันละ (บาท)<input type="number" min="0" step="1" value={form.afterShipPerDay} onChange={event => setForm({ ...form, afterShipPerDay: event.target.value })} /></label>
+    <label>ค่าปรับคืนช้า วันละ (บาท)<input type="number" min="0" step="1" value={form.lateFinePerDay} onChange={event => setForm({ ...form, lateFinePerDay: event.target.value })} /></label>
+    {error && <p className="admin-error" role="alert">{error}</p>}
+    {notice && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
+    <div className="rental-pricing-actions"><Button type="submit" variant="primary" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกอัตรา"}</Button></div>
+  </form>;
+}
 // Days beyond a product's longest package: one shop-wide rate, with overrides per category.
 function ExtraRates({ initial, categories }: { initial: ExtraDayRates; categories: string[] }) {
   const [perDay, setPerDay] = useState(initial.perDay == null ? "" : String(initial.perDay));
@@ -39,7 +66,7 @@ function ExtraRates({ initial, categories }: { initial: ExtraDayRates; categorie
   </form>;
 }
 
-export default function RentalPricingSettings({ initial, history, customCount, rates, categories }: { initial: RentalPricing; history: History[]; customCount: number; rates: ExtraDayRates; categories: string[] }) {
+export default function RentalPricingSettings({ initial, history, customCount, rates, lateRates, categories }: { initial: RentalPricing; history: History[]; customCount: number; rates: ExtraDayRates; lateRates: LateRates; categories: string[] }) {
   const [rows, setRows] = useState(rowsFrom(initial));
   const [extra, setExtra] = useState(initial.extraPerDay == null ? "" : String(initial.extraPerDay));
   const [busy, setBusy] = useState(false);
@@ -73,6 +100,7 @@ export default function RentalPricingSettings({ initial, history, customCount, r
       </form>
       <aside className="rental-pricing-side">
         <ExtraRates initial={rates} categories={categories} />
+        <LateRatesForm initial={lateRates} />
         <section className="rental-pricing-card"><h2>ตัวอย่างราคาที่ลูกค้าเห็น</h2>{preview?.tiers.length ? <table><tbody>{[1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14].map(days => { const price = priceFor(preview, days); return <tr key={days}><td>เช่า {days} วัน</td><td>{price == null ? "สอบถามร้าน" : `฿${price.toLocaleString("th-TH")}`}</td></tr>; })}</tbody></table> : <p>ยังไม่ได้ตั้งราคา หน้าร้านจะแสดง “สอบถามราคา”</p>}</section>
         {!!history.length && <section className="rental-pricing-card"><h2>อ้างอิงจากประวัติเช่าเดิม</h2><p>ราคาเฉลี่ยต่อชุดที่ลูกค้าเคยจ่าย (ไม่ได้ตั้งค่าให้อัตโนมัติ)</p><table><tbody>{history.map(row => <tr key={row.days}><td>{row.days} วัน <small>{row.count.toLocaleString("th-TH")} ครั้ง</small></td><td>~฿{row.average.toLocaleString("th-TH")}</td></tr>)}</tbody></table></section>}
       </aside>

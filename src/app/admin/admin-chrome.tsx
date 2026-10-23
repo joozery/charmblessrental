@@ -9,7 +9,7 @@ import type { Permission } from "@/lib/permissions";
 
 export default function AdminChrome({ user, counts, children }: {
   user: { name: string; email?: string; username: string; role: "owner" | "admin"; permissions: Permission[] };
-  counts: { products: number; admins: number; bookings: number; refunds: number; late: number };
+  counts: { products: number; admins: number; bookings: number; refunds: number; late: number; clashes: number };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -29,6 +29,7 @@ export default function AdminChrome({ user, counts, children }: {
     { href: "/admin", title: "ภาพรวม", description: "แดชบอร์ดร้าน", icon: "home" as const, count: null as number | null },
     { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
     { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, alerts: [{ label: "เลยคืน", title: "เลยกำหนดคืน", count: counts.late, danger: true }, { label: "มัดจำ", title: "รอคืนมัดจำ", count: counts.refunds, danger: false }], permission: "bookings" as Permission },
+    { href: "/admin/clashes", title: "คิวทับซ้อน", description: "คำขอที่จองชุดเดียวกันทับวันกัน", icon: "calendar" as const, count: null as number | null, alerts: [{ label: "ซ้อน", title: "คิวทับซ้อน", count: counts.clashes, danger: true }], permission: "bookings" as Permission },
     { href: "/admin/preparation", title: "เตรียมสินค้า", description: "ตรวจสภาพ ซัก ซ่อม และยืนยันพร้อมให้เช่า", icon: "box" as const, count: null as number | null, permission: "shipping" as Permission },
     { href: "/admin/identity", title: "ยืนยันตัวตน", description: "ลูกค้าที่ไม่วางเงินมัดจำ", icon: "users" as const, count: null as number | null, permission: "identity" as Permission },
     { href: "/admin/finance", title: "สรุปการเงิน", description: "ยอดเช่า ยอดชำระ และเงินมัดจำ", icon: "payment" as const, count: null as number | null, permission: "finance" as Permission },

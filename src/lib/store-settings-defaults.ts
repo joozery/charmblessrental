@@ -3,6 +3,7 @@ import { defaultMessenger } from "@/lib/delivery";
 import { defaultFreeShipping, defaultShippingOptions } from "@/lib/shipping";
 import { defaultSchedule } from "@/lib/schedule";
 import { defaultVerification } from "@/lib/identity";
+import { defaultLateRates } from "@/lib/extension";
 
 export const defaultStoreSettings: StoreSettings = {
   logoImage: "/exam/logo.jpg",
@@ -31,6 +32,7 @@ export const defaultStoreSettings: StoreSettings = {
   freeShipping: defaultFreeShipping,
   schedule: defaultSchedule,
   verification: defaultVerification,
+  lateRates: defaultLateRates,
   rentalDocument: { deposit: 0, bank: "", accountName: "", accountNumber: "", qrImage: "", returnAddress: "", returnPhone: "", returnMethod: "ไปรษณีย์ / Flash / KEX" },
   rentalRules: [
     "ทางร้านจะจัดส่งล่วงหน้าให้ 3 วัน เช่น แจ้งเช่า 5–10/5 ทางร้านจะจัดส่งวันที่ 2/5 คืนวันที่ 11/5 ก่อน 14:00",

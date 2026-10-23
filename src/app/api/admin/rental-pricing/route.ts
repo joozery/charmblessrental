@@ -4,6 +4,7 @@ import { audit } from "@/lib/audit";
 import { database } from "@/lib/mongodb";
 import { cleanPricing, validExtraRates, validPricing, type ExtraDayRates } from "@/lib/pricing";
 import { getStoreSettings, type StoreSettings } from "@/lib/store-settings";
+import { validLateRates, type LateRates } from "@/lib/extension";
 
 const label = (pricing: StoreSettings["rentalPricing"]) => pricing.tiers.map(tier => `${tier.days} วัน ${tier.price}`).join(", ") + (pricing.extraPerDay == null ? "" : ` · เกินวันละ ${pricing.extraPerDay}`) || "ไม่ได้ตั้ง";
 export async function POST(request: Request) {
@@ -21,6 +22,17 @@ export async function POST(request: Request) {
     await (await database()).collection<{ _id: string }>("storeSettings").updateOne({ _id: "main" }, { $set: { extraDayRates: rates } }, { upsert: true });
     revalidateTag("catalog", { expire: 0 });
     if (show(before) !== show(rates)) await audit(request, auth.admin, { action: "settings.rental_pricing", targetType: "settings", targetId: "extraDayRates", summary: `แก้ไขค่าเช่าส่วนเกิน · ${show(rates)}`, changes: [{ field: "extraDayRates", before: show(before), after: show(rates) }] });
+    return Response.json({ rates });
+  }
+  // Once the piece is with the customer: extending per day, and the fine per day for returning late.
+  if (body && typeof body === "object" && (body as { action?: string }).action === "late") {
+    const value = (body as { rates?: unknown }).rates;
+    if (!validLateRates(value)) return Response.json({ error: "ตรวจสอบอัตราอีกครั้ง" }, { status: 400 });
+    const rates: LateRates = { afterShipPerDay: Math.round(value.afterShipPerDay), lateFinePerDay: Math.round(value.lateFinePerDay) };
+    const before = (await getStoreSettings()).lateRates, show = (item: LateRates) => `เช่าต่อหลังส่งวันละ ${item.afterShipPerDay} · ค่าปรับคืนช้าวันละ ${item.lateFinePerDay}`;
+    await (await database()).collection<{ _id: string }>("storeSettings").updateOne({ _id: "main" }, { $set: { lateRates: rates } }, { upsert: true });
+    revalidateTag("catalog", { expire: 0 });
+    if (show(before) !== show(rates)) await audit(request, auth.admin, { action: "settings.rental_pricing", targetType: "settings", targetId: "lateRates", summary: `แก้ไขอัตราเช่าต่อ/ค่าปรับ · ${show(rates)}`, changes: [{ field: "lateRates", before: show(before), after: show(rates) }] });
     return Response.json({ rates });
   }
   if (!validPricing(body)) return Response.json({ error: "ตรวจสอบจำนวนวันและราคาอีกครั้ง" }, { status: 400 });

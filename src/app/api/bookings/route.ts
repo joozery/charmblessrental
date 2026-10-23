@@ -50,8 +50,8 @@ export async function POST(request: Request) {
     const full = (await getQueue(db, product.id, range.from, range.to)).find(day => day.remaining < 1);
     if (full) return Response.json({ error: `${product.thai || product.name} ไม่ว่างวันที่ ${new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${full.date}T00:00:00Z`))} (มีคนจองไว้แล้ว รวมวันจัดส่งและวันพักชุด) กรุณาเลือกวันอื่น` }, { status: 409 });
   }
-  // Optional at booking: where the deposit goes back; the customer can also give it later from the bill link.
-  const refundAccount = body.depositMode !== "identity" && body.refundAccount !== undefined ? cleanRefundAccount(body.refundAccount) : undefined;
+  // Required for deposit bookings: where the deposit goes back (the customer can still change it from the bill link).
+  const refundAccount = body.depositMode !== "identity" ? cleanRefundAccount(body.refundAccount) : undefined;
   if (refundAccount === null) return Response.json({ error: refundAccountError }, { status: 400 });
   const verification: BookingVerification | undefined = body.depositMode === "identity" ? { mode: "identity", status: "pending", profileId: normalizePhone(body.phone) } : undefined;
   const requestId = `BR-${body.start.replaceAll("-", "")}-${randomUUID().slice(0, 6).toUpperCase()}`;

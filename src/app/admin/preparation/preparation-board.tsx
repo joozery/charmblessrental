@@ -9,7 +9,7 @@ import { unitStatusLabels, type UnitStatus } from "@/lib/products";
 
 export type PrepPiece = {
   sku: string; status: UnitStatus; note: string; productName: string; image: string;
-  lastReturn: { bookingId: string; at: string; condition: string; note: string } | null;
+  lastReturn: { bookingId: string; at: string; condition: string; note: string; gapEnd: string } | null;
   out: { bookingId: string; name: string; end: string } | null;
   next: { bookingId: string; name: string; start: string } | null;
 };
@@ -54,6 +54,8 @@ export default function PreparationBoard({ initial, today }: { initial: PrepPiec
           {piece.next && <p className={`prep-next${wait !== null && wait <= 2 ? " is-urgent" : ""}`}><Icon name="calendar" />คิวถัดไป <Link href={`/admin/bookings?id=${encodeURIComponent(piece.next.bookingId)}`}>{piece.next.bookingId}</Link> · {piece.next.name} · ต้องส่ง {day(piece.next.start)}{wait !== null && (wait <= 0 ? " (วันนี้)" : ` (อีก ${wait} วัน)`)}</p>}
           {piece.out && <p className="prep-meta">อยู่กับลูกค้า <Link href={`/admin/bookings?id=${encodeURIComponent(piece.out.bookingId)}`}>{piece.out.bookingId}</Link> · {piece.out.name} · กำหนดคืน {day(piece.out.end)}</p>}
           {piece.lastReturn && <p className="prep-meta">รับคืนจาก <Link href={`/admin/bookings?id=${encodeURIComponent(piece.lastReturn.bookingId)}`}>{piece.lastReturn.bookingId}</Link> · {day(piece.lastReturn.at)} · {conditionLabels[piece.lastReturn.condition] || piece.lastReturn.condition}{piece.lastReturn.note ? ` · ${piece.lastReturn.note}` : ""}</p>}
+          {piece.lastReturn?.gapEnd && piece.lastReturn.gapEnd >= today && <p className="prep-meta">ช่วงพักชุด (Gap) ถึง {day(piece.lastReturn.gapEnd)}{piece.next && piece.next.start <= piece.lastReturn.gapEnd ? <b className="prep-gap-clash"> · คิวถัดไปต้องส่งก่อน Gap หมด</b> : ""}</p>}
+          {piece.next && piece.status !== "available" && wait !== null && wait <= 1 && <p className="prep-gap-clash">⚠️ ต้องพร้อมให้เช่าภายใน{wait <= 0 ? "วันนี้" : "พรุ่งนี้"} เพื่อส่งให้คิวถัดไป</p>}
           {piece.note && <p className="prep-meta">หมายเหตุ: {piece.note}</p>}
           {prepMoves[piece.status] && <div className="prep-actions">
             <input aria-label={`หมายเหตุ ${piece.sku}`} maxLength={500} placeholder="หมายเหตุ (ถ้ามี) เช่น คราบที่แขนเสื้อ" value={notes[piece.sku] || ""} onChange={event => setNotes(current => ({ ...current, [piece.sku]: event.target.value }))} />

@@ -17,3 +17,13 @@ export const lastUseDay = (booking: { end: string; extensions?: Extension[] | nu
 export const extendedDays = (booking: { extensions?: Extension[] | null }) => activeExtensions(booking.extensions).reduce((sum, item) => sum + item.addedDays, 0);
 // Return day and gap slide by the days added; shipping stays where it was.
 export const shiftSchedule = (schedule: ScheduleRecord, days: number): ScheduleRecord => ({ ...schedule, returnDate: addDays(schedule.returnDate, days), ready: addDays(schedule.ready, days) });
+
+// Charges once the piece is already with the customer: extending costs a flat rate per piece per day,
+// and keeping it past the return day without arranging it first is a fine per piece per day.
+export type LateRates = { afterShipPerDay: number; lateFinePerDay: number };
+export const defaultLateRates: LateRates = { afterShipPerDay: 50, lateFinePerDay: 100 };
+export const validLateRates = (value: unknown): value is LateRates => { const v = value as LateRates | null; const amount = (item: unknown) => typeof item === "number" && Number.isFinite(item) && item >= 0 && item <= 100000; return !!v && amount(v.afterShipPerDay) && amount(v.lateFinePerDay); };
+export type LateReturnStatus = "unpaid" | "paid" | "deposit";
+// Recorded with "ส่งคืนล่าช้า": the day the customer actually sent it back and the fine for the days past due.
+export type LateReturn = { dueDate: string; actualDate: string; days: number; fine: number; note: string; status: LateReturnStatus; createdAt: string | Date; createdByName: string; paidOn?: string; paidByName?: string };
+export const lateReturnLabels: Record<LateReturnStatus, string> = { unpaid: "รอชำระค่าปรับ", paid: "ชำระค่าปรับแล้ว", deposit: "หักจากเงินมัดจำแล้ว" };

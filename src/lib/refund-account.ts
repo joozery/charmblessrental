@@ -2,7 +2,6 @@
 export type RefundAccount = { bank: string; accountName: string; accountNumber: string };
 export const refundBanks = ["กสิกรไทย", "ไทยพาณิชย์", "กรุงเทพ", "กรุงไทย", "กรุงศรีอยุธยา", "ทหารไทยธนชาต (ttb)", "ออมสิน", "ธ.ก.ส.", "ยูโอบี", "ซีไอเอ็มบี ไทย", "เกียรตินาคินภัทร", "แลนด์ แอนด์ เฮ้าส์", "อาคารสงเคราะห์", "พร้อมเพย์"];
 export const emptyRefundAccount: RefundAccount = { bank: "", accountName: "", accountNumber: "" };
-export const refundAccountStarted = (value: RefundAccount) => !!(value.bank || value.accountName.trim() || value.accountNumber.trim());
 // Account numbers are 10–15 digits; a PromptPay number is a 10-digit phone or a 13-digit ID.
 export function cleanRefundAccount(value: unknown): RefundAccount | null {
   const v = value as RefundAccount | null;

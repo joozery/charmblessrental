@@ -25,3 +25,4 @@ body:has(.prep-page),body:has(.prep-page) .chrome-shell,body:has(.prep-page) .ch
 .prep-actions button:disabled{opacity:.6;cursor:default}
 .prep-empty{display:grid;justify-items:center;gap:6px;padding:48px 16px;border:1px dashed #d0d5dd;border-radius:10px;background:#fff;color:#667085;font-size:13px;text-align:center}.prep-empty strong{color:#344054;font-size:15px}
 @media(max-width:640px){.chrome-shell .prep-page{padding:18px 16px}.prep-card{gap:10px;padding:12px}.prep-card>img,.prep-noimage{width:56px;height:76px}.prep-actions button{flex:1 1 100%}}
+.prep-gap-clash{color:#b42318;font-weight:700;font-size:12px}

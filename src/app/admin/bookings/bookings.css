@@ -280,3 +280,6 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-late-alert{margin:8px 0 4px;padding:8px 10px;border-radius:8px;background:#fef3f2;color:#b42318;font-size:12px;font-weight:700}
 .bookings-risk-swap{color:#067647}
 .bookings-inbox-stats button.has-danger strong{color:#b42318}
+.bookings-extension-rule{color:#667085}
+.bookings-late-return{margin-top:6px}.bookings-fulfillment-wait.is-late{color:#b42318;font-weight:600}.bookings-fulfillment-wait button.is-danger{border-color:#d92d20;background:#d92d20;color:#fff}
+.bookings-late-card{display:grid;gap:3px;margin:8px 0;padding:9px 11px;border:1px solid #f4b7b0;border-radius:9px;background:#fef3f2;font-size:12px}.bookings-late-card.is-paid,.bookings-late-card.is-deposit{border-color:#d1e9da;background:#f3faf6}.bookings-late-card p{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0}.bookings-late-card small{color:#475467}

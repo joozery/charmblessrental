@@ -13,7 +13,7 @@ import { addDays, planFor, returnMethods, countUseDays, type ReturnMethod } from
 import { useToday } from "@/lib/use-today";
 import RentalTimeline from "./rental-timeline";
 import { identityAllowed } from "@/lib/identity";
-import { cleanRefundAccount, emptyRefundAccount, refundAccountError, refundAccountStarted, refundBanks } from "@/lib/refund-account";
+import { cleanRefundAccount, emptyRefundAccount, refundAccountError, refundBanks } from "@/lib/refund-account";
 
 export type BookingItem = { id: number; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; category?: string; unavailable?: boolean };
 
@@ -116,7 +116,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
     if (at === 2) {
       if (!name.trim()) return "กรุณากรอกชื่อ";
       if (!validPhone(phone)) return "กรอกเบอร์มือถือไทย 10 หลัก หรือเบอร์ต่างประเทศที่ขึ้นต้นด้วย +";
-      if (mode === "deposit" && refundAccountStarted(refundAccount) && !cleanRefundAccount(refundAccount)) return refundAccountError;
+      if (mode === "deposit" && !cleanRefundAccount(refundAccount)) return refundAccountError;
       if (!accepted) return "กรุณาติ๊กยอมรับกฎการเช่าและการใช้ข้อมูลติดต่อ";
     }
     return "";
@@ -130,7 +130,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   async function sendRequest() {
     setSubmitting(true); setError("");
     try {
-      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id })), start, end, name, phone, method, returnMethod, depositMode: mode, ...(mode === "deposit" && refundAccountStarted(refundAccount) ? { refundAccount } : {}), address, pin, note, acceptPrivacy: accepted }) });
+      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id })), start, end, name, phone, method, returnMethod, depositMode: mode, ...(mode === "deposit" ? { refundAccount } : {}), address, pin, note, acceptPrivacy: accepted }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่");
       saveContact({ name: name.trim(), phone: phone.trim(), address: address.trim(), pin: pin.trim(), method, returnMethod });
@@ -181,11 +181,11 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
       <label className={`booking-method ${mode === "deposit" ? "selected" : ""}`}><input type="radio" name="deposit" checked={mode === "deposit"} onChange={() => setDepositMode("deposit")} /><span><strong>วางเงินมัดจำ</strong><small>ร้านแจ้งยอดในบิล ได้คืนหลังคืนชุด</small></span></label>
       <label className={`booking-method ${mode === "identity" ? "selected" : ""}`}><input type="radio" name="deposit" checked={mode === "identity"} onChange={() => setDepositMode("identity")} /><span><strong>ไม่วางเงินมัดจำ · ยืนยันตัวตนแทน</strong><small>{settings.verification.note}</small></span></label>
     </div>{mode === "identity" && <p className="booking-help">หลังส่งคำขอ ร้านจะส่งลิงก์ให้ยืนยันตัวตนทาง LINE ต้องส่งเอกสารก่อนวันจัดส่ง ข้อมูลใช้เพื่อการเช่านี้เท่านั้น และลบอัตโนมัติหลังจบการเช่า {settings.verification.deleteAfterDays} วัน</p>}</fieldset>}
-    {mode === "deposit" && <fieldset><legend>บัญชีรับเงินมัดจำคืน (ไม่บังคับ)</legend><div className="booking-refund-account">
+    {mode === "deposit" && <fieldset><legend>บัญชีรับเงินมัดจำคืน *</legend><div className="booking-refund-account">
       <label>ธนาคาร<select value={refundAccount.bank} onChange={e => setRefundAccount({ ...refundAccount, bank: e.target.value })}><option value="">เลือกธนาคาร</option>{refundBanks.map(bank => <option key={bank}>{bank}</option>)}</select></label>
       <label>ชื่อบัญชี<input maxLength={120} value={refundAccount.accountName} onChange={e => setRefundAccount({ ...refundAccount, accountName: e.target.value })} placeholder="ชื่อ-นามสกุลเจ้าของบัญชี" /></label>
       <label>เลขบัญชี / พร้อมเพย์<input inputMode="numeric" maxLength={20} value={refundAccount.accountNumber} onChange={e => setRefundAccount({ ...refundAccount, accountNumber: e.target.value })} placeholder="xxx-x-xxxxx-x" /></label>
-    </div><p className="booking-help">ร้านโอนเงินมัดจำคืนเข้าบัญชีนี้หลังได้รับชุดคืน ยังไม่สะดวกกรอกตอนนี้ กรอกภายหลังในลิงก์บิลได้</p></fieldset>}
+    </div><p className="booking-help">ร้านโอนเงินมัดจำคืนเข้าบัญชีนี้หลังได้รับชุดคืนและตรวจสภาพแล้ว แก้ไขภายหลังได้ในลิงก์บิล</p></fieldset>}
     <label>โน้ตถึงร้าน (ไม่บังคับ)<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={2000} placeholder="เช่น งานรับปริญญา / สอบถามเพิ่มเติม…" /></label>
     <dl className="booking-summary">{[["วันใช้งาน", `${shortDate(start)} – ${shortDate(end)} · ${days} วัน`, 0], ["รับชุด", `${methodLabel}${plan ? ` · ร้าน${method === "pickup" ? "เตรียมไว้" : "ส่ง"} ${shortDate(plan.ship)}` : ""}`, 1], ["คืนชุด", `${returnMethods.find(item => item.key === returnMethod)?.label}${plan ? ` · ภายใน ${shortDate(plan.returnDate)}` : ""}`, 1], ...(method !== "pickup" ? [["ที่อยู่", address, 1]] : [])].map(([label, value, at]) => <div key={label as string}><dt>{label}</dt><dd>{value}</dd><button type="button" onClick={() => goTo(at as number)}>แก้ไข</button></div>)}</dl>
     <details className="booking-rules"><summary>กติกาของร้าน และการใช้ข้อมูลติดต่อ</summary><RentalRules rules={settings.rentalRules} /><p>ร้านบันทึกชื่อ เบอร์โทร ที่อยู่จัดส่ง (ถ้ามี) และรายละเอียดคำขอ เพื่อประสานงานการเช่าและติดต่อกลับเท่านั้น</p></details>

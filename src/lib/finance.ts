@@ -4,7 +4,7 @@ import type { Db } from "mongodb";
 export type FinanceTransaction = {
   _id: string; type: "income" | "expense"; category: string; amount: number; date: Date; note: string;
   createdAt: Date; createdBy: string; createdByName?: string;
-  bookingId?: string; source?: "manual" | "booking" | "deposit" | "extension";
+  bookingId?: string; source?: "manual" | "booking" | "deposit" | "extension" | "late";
   voided?: { at: Date; by: string; byName: string; reason: string };
 };
 export type DepositRefund = { amount: number; deducted: number; reason: string; date: Date; evidence: string[]; at: Date; by: string; byName: string };

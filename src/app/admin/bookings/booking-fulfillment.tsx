@@ -11,8 +11,9 @@ import type { UnitChoice } from "@/lib/rental-units";
 import { returnDay, returnMethods, type ScheduleRecord } from "@/lib/schedule";
 import { identityFileLabel, verificationLabels, type BookingVerification } from "@/lib/identity";
 import type { RefundAccount } from "@/lib/refund-account";
-import { lastUseDay, type Extension } from "@/lib/extension";
+import { lastUseDay, type Extension, type LateReturn } from "@/lib/extension";
 import ExtensionPanel from "./extension-panel";
+import LateReturnPanel from "./late-return-panel";
 import type { NextRisk, QueueClash } from "@/lib/queue";
 
 export type Shipment = { carrier: string; trackingNumber: string; shippedAt: string; byName: string };
@@ -20,7 +21,7 @@ export type Returned = { at: string; condition: string; note: string; byName: st
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string; via?: "line" | "bill" };
 export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
-export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; clashes?: QueueClash[]; lateDays?: number; risks?: NextRisk[]; lateNoticeSentAt?: string; lineLinked?: boolean };
+export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; clashes?: QueueClash[]; lateDays?: number; risks?: NextRisk[]; lateNoticeSentAt?: string; lineLinked?: boolean; lateReturn?: LateReturn };
 // Returned to the shop while its deposit is still held: the refund is the step left to do.
 export const awaitingRefund = (row: FulfillmentRow) => row.status !== "cancelled" && !!row.returned && row.deposit?.status === "held";
 type Log = { _id: string; at: string; action: string; summary: string; actorName: string; actorEmail: string; changes: { field: string; before: unknown; after: unknown }[] };
@@ -54,7 +55,7 @@ function IdentityReview({ row, canReview, onChange }: { row: FulfillmentRow; can
     {verification.status !== "approved" && <p className="bookings-fulfillment-meta">จัดส่งได้หลังยืนยันตัวตนผ่าน · ในใบสรุปตั้งเงินมัดจำเป็น 0 ให้อัตโนมัติ</p>}
     {!canReview ? <p className="bookings-fulfillment-meta">บัญชีนี้ไม่มีสิทธิ์ดูเอกสารยืนยันตัวตน</p> : verification.status !== "pending" && <>
       {!data ? <button type="button" className="bookings-timeline-load" disabled={busy} onClick={load}>{busy ? "กำลังโหลด…" : "ดูเอกสาร (การเปิดดูจะถูกบันทึก)"}</button> : <div className="bookings-identity-data">
-        {data.profile ? <dl><div><dt>ชื่อ-นามสกุล</dt><dd>{data.profile.fullName}</dd></div><div><dt>ที่อยู่</dt><dd>{data.profile.address}</dd></div><div><dt>เบอร์สำรอง</dt><dd>{data.profile.backupPhone}</dd></div>{data.profile.social && <div><dt>IG / FB</dt><dd>{data.profile.social}</dd></div>}</dl> : <p>ไม่พบข้อมูลลูกค้า</p>}
+        {data.profile ? <dl><div><dt>ชื่อ-นามสกุล</dt><dd>{data.profile.fullName}</dd></div>{data.profile.address && <div><dt>ที่อยู่ (จากคำขอ)</dt><dd>{data.profile.address}</dd></div>}{data.profile.backupPhone && <div><dt>เบอร์สำรอง</dt><dd>{data.profile.backupPhone}</dd></div>}{data.profile.social && <div><dt>IG / FB</dt><dd>{data.profile.social}</dd></div>}</dl> : <p>ไม่พบข้อมูลลูกค้า</p>}
         <div className="bookings-identity-files">{data.files.length ? data.files.map(file => <a key={file._id} href={`/api/admin/identity/file/${file._id}`} target="_blank" rel="noopener noreferrer"><img src={`/api/admin/identity/file/${file._id}`} alt={identityFileLabel(file.kind)} /><span>{identityFileLabel(file.kind)}</span></a>) : <p>ไม่มีไฟล์ (อาจถูกลบตามกำหนดแล้ว)</p>}</div>
       </div>}
       {verification.status === "submitted" && data && (asking ? <div className="bookings-inline-form"><label className="is-wide">บอกลูกค้าว่าต้องแก้อะไร<input value={reason} maxLength={300} onChange={event => setReason(event.target.value)} placeholder="เช่น รูปบัตรไม่ชัด / ชื่อไม่ตรงกับบัตร" /></label><div><button type="button" disabled={busy} onClick={() => setAsking(false)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || !reason.trim()} onClick={() => review(false)}>ส่งให้ลูกค้าแก้</button></div></div>
@@ -64,7 +65,7 @@ function IdentityReview({ row, canReview, onChange }: { row: FulfillmentRow; can
   </div></div>;
 }
 
-export default function BookingFulfillment({ row, permissions, unitChoices, onChange }: { row: FulfillmentRow; permissions: Permission[]; unitChoices: Record<number, UnitChoice[]>; onChange: (patch: Partial<FulfillmentRow>) => void }) {
+export default function BookingFulfillment({ row, permissions, unitChoices, finePerDay, onChange }: { row: FulfillmentRow; permissions: Permission[]; unitChoices: Record<number, UnitChoice[]>; finePerDay: number; onChange: (patch: Partial<FulfillmentRow>) => void }) {
   const canShip = permissions.includes("shipping"), canRefund = permissions.includes("deposits"), canReview = permissions.includes("identity");
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [shipForm, setShipForm] = useState<{ carrier: string; trackingNumber: string; units: string[] } | null>(null);
@@ -121,6 +122,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, onCh
       {row.shipment && (row.returned ? <p className="bookings-fulfillment-done"><Icon name="success" />รับคืนแล้ว · {conditions.find(item => item.key === row.returned!.condition)?.label}<small>{stamp(row.returned.at)} · {row.returned.byName}{row.returned.note ? ` · ${row.returned.note}` : ""}</small></p>
         : !returnForm ? <p className="bookings-fulfillment-wait">ยังไม่ได้รับคืนสินค้า{canShip && <button type="button" disabled={busy} onClick={() => setReturnForm({ condition: "good", note: "", units: defaults })}>ยืนยันรับสินค้าคืน</button>}</p>
         : <div className="bookings-inline-form">{unitPicker(returnForm.units, units => setReturnForm({ ...returnForm, units }), true)}<label>สภาพสินค้า<select value={returnForm.condition} onChange={event => setReturnForm({ ...returnForm, condition: event.target.value })}>{conditions.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><label>หมายเหตุ<input value={returnForm.note} maxLength={500} onChange={event => setReturnForm({ ...returnForm, note: event.target.value })} placeholder="เช่น มีคราบที่ชายกระโปรง" /></label><div><button type="button" disabled={busy} onClick={() => setReturnForm(null)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy} onClick={receive}>{busy ? "กำลังบันทึก…" : "ยืนยันรับคืน"}</button></div></div>)}
+      <LateReturnPanel row={row} permissions={permissions} finePerDay={finePerDay} onChange={onChange} />
     </div></div>}
     {row.status !== "cancelled" && <ExtensionPanel row={row} permissions={permissions} onChange={onChange} />}
     {row.deposit && row.deposit.status !== "void" && <div className="bookings-detail-section bookings-deposit"><Icon name="shield" /><div>
@@ -132,7 +134,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, onCh
         : row.deposit.status === "held" && <p className="bookings-deposit-meta">ลูกค้ายังไม่ได้กรอกบัญชีรับเงินคืน (กรอกได้ในลิงก์บิล)</p>}
       {row.deposit.refund && <div className="bookings-deposit-refund"><p>คืน <b>{money(row.deposit.refund.amount)}</b> บาท{row.deposit.refund.deducted > 0 && <> · หัก <b>{money(row.deposit.refund.deducted)}</b> บาท</>} · {day(row.deposit.refund.date)}</p>{row.deposit.refund.reason && <p>เหตุผล: {row.deposit.refund.reason}</p>}<p className="bookings-deposit-meta">บันทึกโดย {row.deposit.refund.byName} · {stamp(row.deposit.refund.at)}</p>{!!row.deposit.refund.evidence.length && <div className="bookings-evidence">{row.deposit.refund.evidence.map((url, index) => <a key={url} href={url} target="_blank" rel="noopener noreferrer">หลักฐาน {index + 1}</a>)}</div>}</div>}
       {row.deposit.status === "held" && canRefund && (!row.returned ? <p className="bookings-fulfillment-wait">คืนเงินมัดจำได้หลังบันทึกรับคืนสินค้า</p>
-        : !refundForm ? <p className="bookings-fulfillment-wait">รอคืนเงินมัดจำ<button type="button" disabled={busy} onClick={() => setRefundForm({ refund: String(row.deposit!.amount), date: todayKey(), reason: "", evidence: [] })}>ยืนยันโอนเงินมัดจำคืน</button></p>
+        : !refundForm ? <p className="bookings-fulfillment-wait">รอคืนเงินมัดจำ<button type="button" disabled={busy} onClick={() => { const fine = row.lateReturn?.status === "unpaid" ? Math.min(row.lateReturn.fine, row.deposit!.amount) : 0; setRefundForm({ refund: String(row.deposit!.amount - fine), date: todayKey(), reason: fine ? `ค่าปรับคืนช้า ${row.lateReturn!.days} วัน` : "", evidence: [] }); }}>ยืนยันโอนเงินมัดจำคืน</button></p>
         : <div className="bookings-inline-form"><label>ยอดคืน (บาท)<input type="number" min="0" max={row.deposit.amount} step="0.01" value={refundForm.refund} onChange={event => setRefundForm({ ...refundForm, refund: event.target.value })} /></label><label>วันที่คืน<input type="date" value={refundForm.date} max={todayKey()} onChange={event => setRefundForm({ ...refundForm, date: event.target.value })} /></label>
           {deducted > 0 && <label className="is-wide">เหตุผลที่หัก {money(deducted)} บาท<input value={refundForm.reason} maxLength={500} required onChange={event => setRefundForm({ ...refundForm, reason: event.target.value })} placeholder="เช่น ค่าซักคราบ / ส่งคืนล่าช้า 1 วัน" /></label>}
           <label className="is-wide">หลักฐานการโอนคืน{Number(refundForm.refund) > 0 ? " (จำเป็น)" : ""}<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={busy || refundForm.evidence.length >= 5} onChange={event => { void upload(event.target.files); event.target.value = ""; }} /></label>

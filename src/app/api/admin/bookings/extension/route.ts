@@ -12,7 +12,7 @@ import type { Product } from "@/lib/products";
 import { blockRange, countUseDays, type ScheduleRecord } from "@/lib/schedule";
 import { getStoreSettings } from "@/lib/store-settings";
 
-type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; extensions?: Extension[]; lineUserId?: string; billToken?: string; quote?: { accountNumber?: string } };
+type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; extensions?: Extension[]; shipment?: object; lineUserId?: string; billToken?: string; quote?: { accountNumber?: string } };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const actions = { preview: "bookings", create: "bookings", cancel: "bookings", paid: "payments" } as const;
@@ -33,13 +33,15 @@ async function plan(db: Db, booking: BookingDoc, toEnd: string) {
     const item = booking.items.find(row => row.id === id)!;
     for (const row of full) conflicts.push({ item: item.sku || item.name, date: row.date, bookings: others.filter(other => other.items.some(entry => entry.id === id) && blockRange(other).from <= row.date && row.date < blockRange(other).to).map(other => ({ id: other._id, name: other.name || "" })) });
   }
-  // Suggested price: what the longer rental costs minus what the current length costs, per piece.
+  // Suggested price. Before shipping: what the longer rental costs minus the current length, per piece (the shop's table).
+  // Once the piece is with the customer: the shop's flat rate per piece per day.
   const settings = await getStoreSettings();
+  if (booking.shipment) return { fromEnd, toEnd, added, schedule, conflicts, suggested: added * settings.lateRates.afterShipPerDay * booking.items.length, rule: `ส่งชุดแล้ว คิดวันละ ${settings.lateRates.afterShipPerDay} บาท × ${booking.items.length} ชุด` };
   const products = await db.collection<Product>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, customPricing: 1, dailyRate: 1, category: 1 } }).toArray();
   const before = booking.days + extendedDays(booking), after = before + added;
   const parts = booking.items.map(item => { const product = products.find(row => row.id === item.id); const pricing = product ? effectivePricing(product, settings.rentalPricing, settings.extraDayRates) : null; const was = priceFor(pricing, before), now = priceFor(pricing, after); return was === null || now === null ? null : Math.max(0, now - was); });
   const suggested = parts.every(part => part !== null) ? parts.reduce<number>((sum, part) => sum + (part || 0), 0) : null;
-  return { fromEnd, toEnd, added, schedule, conflicts, suggested };
+  return { fromEnd, toEnd, added, schedule, conflicts, suggested, rule: "ยังไม่ส่งชุด คิดตามตารางราคาเช่า (ราคาวันใหม่ − ราคาเดิม)" };
 }
 
 async function notify(request: Request, db: Db, booking: BookingDoc, text: (link: string) => string) {
