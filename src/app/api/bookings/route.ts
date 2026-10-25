@@ -4,7 +4,7 @@ import { sameOrigin } from "@/lib/admin-auth";
 import { audit } from "@/lib/audit";
 import type { Product } from "@/lib/products";
 import { getStoreSettings } from "@/lib/store-settings";
-import { effectivePricing, priceFor } from "@/lib/pricing";
+import { depositFor, effectivePricing, priceFor } from "@/lib/pricing";
 import { quoteDelivery } from "@/lib/delivery-quote";
 import type { LatLng } from "@/lib/delivery";
 import { shippingFor } from "@/lib/shipping";
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const db = await database();
   const discountCode = cleanCode(body.discountCode);
   if (discountCode && !validCoupon(await discountCoupons(db).findOne({ code: discountCode }))) return Response.json({ error: "โค้ดส่วนลดไม่ถูกต้อง หมดอายุ หรือใช้ครบจำนวนแล้ว" }, { status: 400 });
-  const products = await db.collection<Product>("products").find({ id: { $in: ids }, active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, name: 1, thai: 1, sku: 1, dailyRate: 1, customPricing: 1, category: 1, shippingFee: 1, gapDays: 1, images: 1, image: 1, stock: 1 } }).toArray();
+  const products = await db.collection<Product>("products").find({ id: { $in: ids }, active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, name: 1, thai: 1, sku: 1, dailyRate: 1, customPricing: 1, category: 1, deposit: 1, shippingFee: 1, gapDays: 1, images: 1, image: 1, stock: 1 } }).toArray();
   if (products.length !== ids.length) return Response.json({ error: "มีสินค้าที่ไม่พร้อมให้เช่าแล้ว กรุณาโหลดหน้าร้านใหม่" }, { status: 409 });
   const settings = await getStoreSettings();
   // start and end are the first and last days of use (both counted); the plan adds shipping ahead, the return day and the gap.
@@ -44,7 +44,8 @@ export async function POST(request: Request) {
   if (!shipping) return Response.json({ error: "วิธีจัดส่งนี้ปิดให้บริการแล้ว กรุณาเลือกวิธีอื่น" }, { status: 400 });
   const deliveryFee = shipping.fee ?? 0;
   const prices = new Map(products.map(product => [product.id, priceFor(effectivePricing(product, settings.rentalPricing, settings.extraDayRates), days)]));
-  const estimatedTotal = [...prices.values()].every(price => price !== null) ? [...prices.values()].reduce<number>((sum, price) => sum + (price || 0), 0) + deliveryFee : null;
+  const deposits = body.depositMode === "identity" ? 0 : products.reduce((sum, product) => sum + depositFor(product, settings.categoryDeposits), 0);
+  const estimatedTotal = [...prices.values()].every(price => price !== null) ? [...prices.values()].reduce<number>((sum, price) => sum + (price || 0), 0) + deposits + deliveryFee : null;
   // Renting without a deposit: the shop's rules decide, and the customer then sends ID documents from the bill link.
   if (body.depositMode === "identity" && !identityAllowed(settings.verification, estimatedTotal === null ? null : estimatedTotal - deliveryFee, products.map(product => product.category))) return Response.json({ error: "รายการนี้ต้องวางเงินมัดจำ กรุณาเลือกแบบวางเงินมัดจำ" }, { status: 400 });
   // Requests now hold the queue for a while, so two customers can no longer ask for the same piece on the same days.
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
   await db.collection<BookingRecord>("bookingRequests").insertOne({
     _id: requestId, status: "new", name: body.name.trim(), phone: body.phone.trim(), address: body.method === "pickup" ? "" : body.address.trim(), pin: body.pin?.trim() || "", note: body.note?.trim() || "", ...(discountCode ? { discountCode } : {}),
     method: body.method, start: body.start, end: body.end, days, schedule, ...(verification ? { verification } : {}), ...(refundAccount ? { refundAccount: { ...refundAccount, updatedAt: new Date() } } : {}), deliveryFee, estimatedTotal, shipping: { label: shipping.label, base: shipping.base, discount: shipping.discount }, ...(delivery ? { delivery } : {}),
-    items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, stock: product.stock ?? 1, schedule: scheduleRecord(planFor(settings, body.start, body.end, body.method, returnMethod, product.gapDays ?? settings.schedule.gap[returnMethod]), returnMethod) })),
+    items: products.map(product => ({ id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, depositPrice: body.depositMode === "identity" ? 0 : depositFor(product, settings.categoryDeposits), stock: product.stock ?? 1, schedule: scheduleRecord(planFor(settings, body.start, body.end, body.method, returnMethod, product.gapDays ?? settings.schedule.gap[returnMethod]), returnMethod) })),
     createdAt: new Date(), updatedAt: new Date(), billToken: randomBytes(18).toString("base64url"), payment: "unpaid",
   });
   // The first line of the request's history; later steps are logged by the admin, LINE and bill routes.

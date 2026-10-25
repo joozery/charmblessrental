@@ -4,7 +4,7 @@ import type { RentalDocumentDefaults } from "@/lib/store-settings";
 
 export type Quote = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string };
 export type StoreInfo = { logoImage: string; lineUrl: string; instagramUrl: string; rentalRules: string[]; rentalDocument: RentalDocumentDefaults };
-export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; schedule?: ScheduleRecord | null; verification?: { mode: "identity"; status: string } | null; deliveryFee: number; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null }[]; createdAt: string };
+export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; schedule?: ScheduleRecord | null; verification?: { mode: "identity"; status: string } | null; deliveryFee: number; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; deposit?: number | null; depositPrice?: number | null; quantity?: number }[]; createdAt: string };
 // Price for the whole rental: the package price saved with the booking, else the old per-day rate × days.
 export const itemPrice = (item: DocRow["items"][number], days: number) => item.rentalPrice ?? (item.dailyRate === null ? null : item.dailyRate * days);
 export const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
@@ -24,7 +24,7 @@ export function shownPrices(row: DocRow, quote: Pick<Quote, "rental" | "rentalBe
     left -= share; return share;
   });
 }
-const blankQuote = (row: DocRow, defaults: RentalDocumentDefaults): Quote => ({ rental: row.items.every(item => itemPrice(item, row.days) !== null) ? row.items.reduce((sum, item) => sum + (itemPrice(item, row.days) || 0), 0) : 0, shipping: row.deliveryFee || 0, ...defaults, ...(row.verification?.mode === "identity" ? { deposit: 0 } : {}) });
+const blankQuote = (row: DocRow, defaults: RentalDocumentDefaults): Quote => ({ ...defaults, rental: row.items.every(item => itemPrice(item, row.days) !== null) ? row.items.reduce((sum, item) => sum + (itemPrice(item, row.days) || 0), 0) : 0, deposit: row.items.reduce((sum, item) => sum + (item.deposit ?? item.depositPrice ?? 0) * (item.quantity ?? 1), 0), shipping: row.deliveryFee || 0, ...(row.verification?.mode === "identity" ? { deposit: 0 } : {}) });
 export function quoteForRow(row: DocRow, defaults: RentalDocumentDefaults): Quote {
   const quote = { ...blankQuote(row, defaults), ...row.quote };
   for (const key of ["bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod"] as const) {

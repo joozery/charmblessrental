@@ -20,6 +20,7 @@ import { deposits } from "@/lib/finance";
 import type { RefundAccount } from "@/lib/refund-account";
 import { activeExtensions, extendedDays, extensionLabels, lastUseDay, type Extension } from "@/lib/extension";
 import { verificationLabels, type BookingVerification } from "@/lib/identity";
+import { depositFor } from "@/lib/pricing";
 import "@/app/admin/bookings/bookings.css";
 import "./bill.css";
 
@@ -37,22 +38,26 @@ async function Content({ params }: PageProps) {
   await connection();
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) notFound();
-  const row = await (await database()).collection<BillDoc>("bookingRequests").findOne({ $or: [{ billToken: token }, { "extensions.billToken": token }] }, { projection: { _id: 1, billToken: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
+  const db = await database();
+  const row = await db.collection<BillDoc>("bookingRequests").findOne({ $or: [{ billToken: token }, { "extensions.billToken": token }] }, { projection: { _id: 1, billToken: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
   if (!row) notFound();
   const stage = rentalStage(row), pickup = row.method === "pickup";
   const skus = row.items.map(item => item.unitSku).filter((sku): sku is string => !!sku);
   const preparing = stage === "paid" || (stage === "pending" && row.status === "confirmed");
   const unitStatus = new Map<string, UnitStatus>();
-  if (preparing && skus.length) for (const product of await (await database()).collection<Product>("products").find({ "units.sku": { $in: skus } }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, legacyId: 1, units: 1 } }).toArray()) for (const unit of unitsOf(product)) if (skus.includes(unit.sku)) unitStatus.set(unit.sku, unit.status);
+  if (preparing && skus.length) for (const product of await db.collection<Product>("products").find({ "units.sku": { $in: skus } }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, legacyId: 1, units: 1 } }).toArray()) for (const unit of unitsOf(product)) if (skus.includes(unit.sku)) unitStatus.set(unit.sku, unit.status);
   const settings = await getStoreSettings();
+  const productIds = row.items.map(item => item.id);
+  const depositProducts = await db.collection<Product>("products").find({ id: { $in: productIds } }, { projection: { _id: 0, id: 1, deposit: 1, category: 1 } }).toArray();
+  const depositByProduct = new Map(depositProducts.map(product => [product.id, depositFor(product, settings.categoryDeposits)]));
   const { shipment, customerReturn, returned, verification, refundAccount, extensions, ...rest } = row;
   const extended = activeExtensions(extensions), unpaidExtension = extended.find(item => item.status === "unpaid");
   const extensionBill = extended.find(item => item.billToken === token);
   // Deposit customers say where the deposit goes back, and see when the shop has sent it.
   const askRefund = !verification && row.status !== "cancelled" && (!row.quote || (row.quote.deposit || 0) > 0);
-  const deposit = askRefund ? await deposits(await database()).findOne({ _id: String(row._id) }) : null;
+  const deposit = askRefund ? await deposits(db).findOne({ _id: String(row._id) }) : null;
   const refunded = deposit?.refund && deposit.status !== "held" && deposit.status !== "void" ? deposit.refund : null;
-  const doc: DocRow = { ...rest, verification: verification || null, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
+  const doc: DocRow = { ...rest, items: rest.items.map(item => ({ ...item, deposit: item.deposit ?? item.depositPrice ?? depositByProduct.get(item.id) ?? 0 })), verification: verification || null, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
   const store = { logoImage: settings.logoImage, lineUrl: settings.lineUrl, instagramUrl: settings.instagramUrl, rentalRules: settings.rentalRules, rentalDocument: settings.rentalDocument };
   const quote = quoteForRow(doc, settings.rentalDocument);
   const paid = extensionBill ? extensionBill.status === "paid" : row.payment === "paid";
