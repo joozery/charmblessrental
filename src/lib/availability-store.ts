@@ -5,7 +5,7 @@ import type { QueueBooking, QueueClash } from "./queue";
 import { unitsOf, type Product } from "./products";
 
 type Capacity = { productId: number; date: string; capacity: number };
-type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; unitSku?: string; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
+type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
 
 // Who holds a piece. Firmly: a confirmed booking, a paid one, or one whose ID documents wait for the shop's review.
 // For a while: a new request has this long to pay from when it got its turn (`holdUntil`); after that it loses the
@@ -33,7 +33,7 @@ export async function getReservationCounts(db: Db, productId: number, from: stri
   for (const booking of bookings) {
     const matching = booking.items.filter(item => item.id === productId);
     const active = matching.filter(item => !item.unitSku || !readyUnits.has(item.unitSku));
-    const count = active.length;
+    const count = active.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
     if (!count) continue;
     const range = active[0]?.schedule ? blockRange({ ...booking, schedule: active[0].schedule }) : blockRange(booking);
     for (let date = range.from; date < range.to; date = addDays(date, 1)) {
@@ -58,13 +58,14 @@ export async function getQueue(db: Db, productId: number, from: string, to: stri
   return days;
 }
 
-type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
+type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
 // Every booking or hold that takes this piece out of the queue in [from, to), with the days of each step (admin calendars).
 export async function queueBookings(db: Db, productId: number, from: string, to: string): Promise<QueueBooking[]> {
   const rows = await db.collection<QueueDoc>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray();
   return rows.map(row => {
     const item = row.items.find(entry => entry.id === productId), range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row);
-    return { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to };
+    const matching = row.items.filter(entry => entry.id === productId), unitSkus = matching.map(entry => entry.unitSku).filter((sku): sku is string => !!sku), unassignedCount = matching.reduce((sum, entry) => sum + Math.max(0, (entry.quantity ?? 1) - (entry.unitSku ? 1 : 0)), 0);
+    return { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to, unitSkus, unassignedCount };
   });
 }
 

@@ -6,6 +6,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { Dialog } from "radix-ui";
 import { categoryLabels, prepStatuses, unitStatusLabels, unitsOf, type Product, type ProductUnit, type UnitStatus } from "@/lib/products";
 import PriceTiersEditor, { pricingFrom, rowsFrom, type TierRow } from "@/components/price-tiers-editor";
@@ -141,7 +142,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
             <td className="inventory-money">{p.customPricing?.tiers.length || p.dailyRate != null ? <span className="inventory-price"><strong>{p.customPricing?.tiers.length ? `${startingTier(p.customPricing)!.days} วัน ${money(startingTier(p.customPricing)!.price)}` : `วันละ ${money(p.dailyRate)}`}</strong><small>ราคาเฉพาะ</small></span> : <span className="inventory-price"><small>ตามตารางร้าน</small></span>}</td><td><span className={`inventory-status ${p.active === false ? "is-hidden" : ""}`}>{p.active === false ? "ซ่อน" : "แสดง"}</span></td>
             <td className="inventory-money">{money(p.cost)}</td><td className="inventory-money">{money(p.legacyRevenue)}</td><td className={`inventory-money ${(p.legacyProfit ?? 0) < 0 ? "inventory-loss" : "inventory-profit"}`}>{money(p.legacyProfit)}</td>
             <td className="inventory-notes">{p.notes || p.description || "—"}</td>
-            <td><span className="inventory-actions"><Button variant="outline" size="sm" aria-label={`เติมสต๊อก ${p.name}`} onClick={() => { setError(""); setNotice(""); setRestock({ product: p, count: 1, cost: null, note: "" }); }}><Icon name="plus" />เติมสต๊อก</Button><Button variant="outline" size="sm" aria-label={`แก้ไข ${p.name}`} onClick={() => edit(p)}>แก้ไข</Button></span></td>
+            <td><span className="inventory-actions"><Link href={`/admin/availability?productId=${p.id}`} className="inventory-calendar-link">ปฏิทินเช่า</Link><Button variant="outline" size="sm" aria-label={`เติมสต๊อก ${p.name}`} onClick={() => { setError(""); setNotice(""); setRestock({ product: p, count: 1, cost: null, note: "" }); }}><Icon name="plus" />เติมสต๊อก</Button><Button variant="outline" size="sm" aria-label={`แก้ไข ${p.name}`} onClick={() => edit(p)}>แก้ไข</Button></span></td>
           </tr>; })}</tbody>
         </table>{!shown.length && <div className="admin-empty"><strong>ไม่พบสินค้า</strong><p>ลองเปลี่ยนคำค้นหาหรือตัวกรอง</p><Button onClick={() => { setQuery(""); setCategory("all"); setStockFilter("all"); setPage(0); }}>ล้างตัวกรอง</Button></div>}</div>
         <div className="admin-table-footer"><span>แสดง {paginated.length} จาก {shown.length} รายการ</span><span className="admin-pagination"><Button variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><Icon name="arrowLeft" />ก่อนหน้า</Button>หน้า {currentPage + 1} / {pageCount}<Button variant="outline" size="sm" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>ถัดไป<Icon name="arrowRight" /></Button></span></div>

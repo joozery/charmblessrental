@@ -12,8 +12,8 @@ type Mode = "stock" | "closed" | "custom";
 const shortDay = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
 
 // One piece's month: who has it each day, what is still free, and the days the shop closes or limits by hand.
-export default function AvailabilityManager({ products, initialMonth, today }: { products: Product[]; initialMonth: string; today: string }) {
-  const [productId, setProductId] = useState(products[0]?.id || 0);
+export default function AvailabilityManager({ products, initialProductId, initialMonth, today }: { products: Product[]; initialProductId?: number; initialMonth: string; today: string }) {
+  const [productId, setProductId] = useState(initialProductId || products[0]?.id || 0);
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState(initialMonth);
   const [data, setData] = useState<MonthData | null>(null);
@@ -73,7 +73,7 @@ export default function AvailabilityManager({ products, initialMonth, today }: {
                 <b>{Number(day.slice(8))}</b>
                 {loaded && <small>{clash ? "⚠️ คิวซ้อน" : override === 0 ? "ปิดรับ" : left === 0 ? "เต็ม" : `ว่าง ${left}`}{override !== undefined && override > 0 ? ` (ตั้ง ${override})` : ""}</small>}
               </button>
-              {entries.map(({ booking, role }) => <Link key={booking.id} href={`/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip is-${role}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${booking.name} · ${queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{booking.name || booking.id.slice(-6)}</Link>)}
+              {entries.map(({ booking, role }) => { const pieces = [...(booking.unitSkus || []), ...(booking.unassignedCount ? [`ยังไม่ระบุชิ้น ${booking.unassignedCount} ชิ้น`] : [])].join(", ") || "ยังไม่ระบุชิ้น"; return <Link key={booking.id} href={`/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip is-${role}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${pieces} · ${booking.name} · ${queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{pieces} · {booking.name || booking.id.slice(-6)}</Link>; })}
             </div>;
           })}
         </div>

@@ -1,5 +1,5 @@
 // Client-safe: one booking's place in a piece's queue, and which step of it falls on a given day (admin calendars).
-export type QueueBooking = { id: string; name: string; confirmed: boolean; ship: string; start: string; end: string; returnDate: string; ready: string };
+export type QueueBooking = { id: string; name: string; confirmed: boolean; ship: string; start: string; end: string; returnDate: string; ready: string; unitSkus?: string[]; unassignedCount?: number };
 // A day where more bookings hold a piece than the shop owns, and the other bookings on it.
 export type QueueClash = { date: string; item: string; with: { id: string; name: string }[] };
 // A late (or about to be late) rental and the next booking waiting for the same piece; `swap` lists other pieces free for it.

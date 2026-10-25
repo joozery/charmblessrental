@@ -91,6 +91,7 @@ body:has(.inventory-page),body:has(.inventory-page) .chrome-shell,body:has(.inve
 .inventory-unit-codes{display:block;max-width:260px;margin-top:3px;overflow:hidden;color:#667085;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
 .inventory-stock{display:flex;flex-direction:column;line-height:1.4}.inventory-stock strong{color:#111827;font-weight:600}.inventory-stock small{color:#667085;font-size:11px}
 .inventory-actions{display:inline-flex;gap:6px}.inventory-actions svg{width:13px;height:13px}
+.inventory-calendar-link{display:inline-flex;align-items:center;min-height:32px;padding:6px 9px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#344054;font-size:12px;font-weight:500;text-decoration:none;white-space:nowrap}.inventory-calendar-link:hover{background:#f3f4f6;border-color:#98a2b3;color:#111827}
 .inventory-next-codes{margin:0;padding:10px 12px;border-radius:8px;background:#f8f9fb;color:#475467;font-size:12px;line-height:1.6}.inventory-next-codes strong{color:#111827;font-weight:600;overflow-wrap:anywhere}
 .inventory-gallery{display:flex;flex-direction:column;gap:8px;font-size:12px}.inventory-gallery>div{display:flex;flex-wrap:wrap;gap:8px}
 .inventory-gallery figure{position:relative;margin:0}.inventory-gallery figure img{width:84px;height:108px;object-fit:cover;border:1px solid #e4e7ec;border-radius:7px;background:#f5f6f8}
