@@ -28,6 +28,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
   const [query, setQuery] = useState(""); const [period, setPeriod] = useState("all"); const [cutoff, setCutoff] = useState("");
   const [page, setPage] = useState(1);
   const [quoteRow, setQuoteRow] = useState<RequestRow | null>(null); const [quote, setQuote] = useState<Quote | null>(null); const [savingQuote, setSavingQuote] = useState(false);
+  const [deleteRow, setDeleteRow] = useState<RequestRow | null>(null);
   const refunds = rows.filter(awaitingRefund).length, late = rows.filter(row => row.lateDays).length, clash = rows.filter(row => row.risks?.length || row.clashes?.length).length;
   const visible = rows.filter(row => (filter === "all" || (filter === "refund" ? awaitingRefund(row) : filter === "late" ? !!row.lateDays : filter === "clash" ? !!(row.risks?.length || row.clashes?.length) : row.status === filter)) && (!cutoff || row.createdAt >= cutoff) && (!query.trim() || [row._id, row.name, row.phone, ...row.items.flatMap(item => [item.name, item.sku])].some(value => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))));
   const pageSize = 20, pageCount = Math.max(1, Math.ceil(visible.length / pageSize)), currentPage = Math.min(page, pageCount), pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -64,6 +65,17 @@ export default function BookingRequests({ initial, store, permissions, selected,
   }
   function openQuote(row: RequestRow) { const initial = quoteForRow(row, store.rentalDocument); setQuoteRow(row); setQuote({ ...initial, discountCode: initial.discountCode || row.discountCode || "" }); }
   async function update(id: string, status: string) { setBusy(id); setError(""); try { const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "อัปเดตสถานะไม่สำเร็จ"); setRows(current => current.map(row => row._id === id ? { ...row, status, ...(data.items ? { items: data.items } : {}) } : row)); } catch (cause) { setError(cause instanceof Error ? cause.message : "อัปเดตสถานะไม่สำเร็จ"); } finally { setBusy(null); } }
+  async function deleteBooking() {
+    if (!deleteRow) return;
+    const id = deleteRow._id;
+    setBusy(id); setError("");
+    try {
+      await post({ id, action: "delete" });
+      setRows(current => current.filter(row => row._id !== id));
+      setDetailId(current => current === id ? null : current);
+      setDeleteRow(null);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "ลบคำขอไม่สำเร็จ"); } finally { setBusy(null); }
+  }
   async function saveQuote() { if (!quoteRow || !quote) return false; if (!canPrice) return true; setSavingQuote(true); setError(""); try { const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: quoteRow._id, action: "saveQuote", quote }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "บันทึกใบสรุปไม่สำเร็จ"); setQuote(data.quote || quote); setRows(current => current.map(row => row._id === quoteRow._id ? { ...row, quote: data.quote || quote } : row)); return true; } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกใบสรุปไม่สำเร็จ"); return false; } finally { setSavingQuote(false); } }
   async function printQuote() { if (await saveQuote()) window.print(); }
   async function downloadPng() {
@@ -87,6 +99,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
   }
 
   return <main className="admin-main bookings-page">
+    <Dialog.Root open={!!deleteRow} onOpenChange={open => { if (!open && !busy) setDeleteRow(null); }}><Dialog.Portal><Dialog.Overlay className="admin-dialog-overlay"/><Dialog.Content className="admin-dialog booking-delete-dialog"><Dialog.Title>ยืนยันการลบคำขอ</Dialog.Title><Dialog.Description>ต้องการลบคำขอ {deleteRow?._id} ใช่หรือไม่? รายการที่ลบแล้วจะไม่สามารถกู้คืนได้</Dialog.Description><div className="booking-delete-actions"><button type="button" onClick={() => setDeleteRow(null)} disabled={!!busy}>ยกเลิก</button><button type="button" className="is-danger" onClick={deleteBooking} disabled={!!busy}>{busy ? "กำลังลบ…" : "ยืนยันลบ"}</button></div></Dialog.Content></Dialog.Portal></Dialog.Root>
     <header className="bookings-inbox-header">
       <div><span className="bookings-eyebrow">BOOKING INBOX</span><h1>คำขอจองจากหน้าร้าน</h1><p>คำขอใหม่ยังไม่ใช่การยืนยันจอง กรุณาตรวจสอบคิวและติดต่อยืนยันกับลูกค้า</p></div><Link href="/admin/bookings/new" className="bookings-new-button">+ สร้างรายการใหม่</Link>
       <div className="bookings-inbox-stats" aria-label="จำนวนคำขอตามสถานะ"><button type="button" className={filter === "all" ? "is-active" : ""} onClick={() => setFilter("all")}><span>ทั้งหมด</span><strong>{rows.length.toLocaleString("th-TH")}</strong><small>รายการ</small></button>{statuses.map(status => <button type="button" key={status.key} className={filter === status.key ? "is-active is-" + status.key : "is-" + status.key} onClick={() => setFilter(status.key)}><span>{status.label}</span><strong>{rows.filter(row => row.status === status.key).length.toLocaleString("th-TH")}</strong><small>รายการ</small></button>)}<button type="button" className={filter === "refund" ? "is-active is-refund" : refunds ? "is-refund has-alert" : "is-refund"} onClick={() => setFilter("refund")}><span>รอคืนมัดจำ</span><strong>{refunds.toLocaleString("th-TH")}</strong><small>รายการ</small></button><button type="button" className={filter === "late" ? "is-active is-late" : late ? "is-late has-danger" : "is-late"} onClick={() => setFilter("late")}><span>คืนช้า</span><strong>{late.toLocaleString("th-TH")}</strong><small>รายการ</small></button><button type="button" className={filter === "clash" ? "is-active is-late" : clash ? "is-late has-danger" : "is-late"} onClick={() => setFilter("clash")}><span>กระทบคิว</span><strong>{clash.toLocaleString("th-TH")}</strong><small>รายการ</small></button></div>
@@ -126,7 +139,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
         {canPay && <SlipPanel key={`slips-${detail._id}`} bookingId={detail._id} deposit={detail.quote?.deposit || 0} onChange={patch => setRows(current => current.map(item => item._id === detail._id ? { ...item, ...patch } : item))} />}
         {!detail.shipment && <BookingModifyPanel key={`modify-${detail._id}`} row={detail} onChange={patch => setRows(current => current.map(item => item._id === detail._id ? { ...item, ...patch } as RequestRow : item))} />}
         <BookingFulfillment key={detail._id} row={detail} permissions={permissions} unitChoices={unitChoices} finePerDay={finePerDay} onChange={patch => setRows(current => current.map(item => item._id === detail._id ? { ...item, ...patch } as RequestRow : item))} />
-        <div className="bookings-detail-actions"><Link href="/admin/availability" className="bookings-detail-primary"><Icon name="calendar" />ตรวจสอบคิวว่าง</Link><div><a href={"tel:" + detail.phone.replace(/[^+\d]/g, "")}><Icon name="chat" />โทรหาลูกค้า</a><button type="button" onClick={() => openQuote(detail)}><Icon name="booking" />ดูใบสรุป</button></div>{detail.status !== "cancelled" && <button type="button" className="bookings-detail-cancel" disabled={busy === detail._id} onClick={() => update(detail._id, "cancelled")}>ยกเลิกคำขอ</button>}</div>
+        <div className="bookings-detail-actions"><Link href="/admin/availability" className="bookings-detail-primary"><Icon name="calendar" />ตรวจสอบคิวว่าง</Link><div><a href={"tel:" + detail.phone.replace(/[^+\d]/g, "")}><Icon name="chat" />โทรหาลูกค้า</a><button type="button" onClick={() => openQuote(detail)}><Icon name="booking" />ดูใบสรุป</button></div>{detail.status !== "cancelled" ? <button type="button" className="bookings-detail-cancel" disabled={busy === detail._id} onClick={() => update(detail._id, "cancelled")}>ยกเลิกคำขอ</button> : <button type="button" className="bookings-detail-delete" disabled={busy === detail._id} onClick={() => setDeleteRow(detail)}>ลบคำขอนี้</button>}</div>
         {detail.status === "new" && <p className="bookings-detail-warning"><Icon name="help" />ตรวจสอบคิวก่อนยืนยันคำขอ</p>}
       </> : <div className="bookings-detail-placeholder"><Icon name="booking" /><strong>เลือกรายการเพื่อดูรายละเอียด</strong></div>}</aside>
     </div>

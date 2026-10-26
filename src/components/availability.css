@@ -1,4 +1,5 @@
 .calendar-grid button.availability-available { background: #eef9f3; border-color: #b9e6cd; color: #23764a; }
+.calendar-grid button small { display: block; margin-top: 2px; font-size: 9px; line-height: 1.1; font-weight: 600; text-decoration: none; }
 .calendar-grid button.availability-limited { background: #fff8e8; border-color: #f2dda1; color: #9c711d; }
 .calendar-grid button.availability-full { background: #fff0f2; border-color: #f1c7ce; color: #bc4760; text-decoration: line-through; }
 .calendar-grid button.availability-unknown { background: #faf8fa; border-style: dashed; border-color: #e3d9e1; color: #a2909f; }

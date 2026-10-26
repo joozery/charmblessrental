@@ -14,12 +14,12 @@ import { startingTier } from "@/lib/pricing";
 
 type Draft = {
   id?: number; name: string; category: string; description: string; images: string[];
-  color: string; size: string; dailyRate: number | null; deposit: number | null; shippingFee: number | null; gapDays: number | null; active: boolean;
+  color: string; size: string; dailyRate: number | null; deposit: number | null; depositRequired: boolean; shippingFee: number | null; gapDays: number | null; active: boolean;
   pieces: number; cost: number | null;
   custom: boolean; tierRows: TierRow[]; extra: string;
 };
 type Restock = { product: Product; count: number; cost: number | null; note: string };
-const empty: Draft = { name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, shippingFee: null, gapDays: null, active: true, pieces: 1, cost: null, custom: false, tierRows: rowsFrom(null), extra: "" };
+const empty: Draft = { name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, depositRequired: false, shippingFee: null, gapDays: null, active: true, pieces: 1, cost: null, custom: false, tierRows: rowsFrom(null), extra: "" };
 const money = (value?: number | null) => value == null ? "—" : value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const numeric = (input: HTMLInputElement) => Number.isNaN(input.valueAsNumber) ? null : input.valueAsNumber;
 const nextCodes = (product: Product, count: number) => {
@@ -69,7 +69,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
   }
   function edit(product?: Product) {
     setError(""); setNotice(""); setUnitEdits({});
-    setDraft(product ? { id: product.id, name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: null, deposit: product.deposit ?? null, shippingFee: product.shippingFee ?? null, gapDays: product.gapDays ?? null, active: product.active !== false, pieces: 0, cost: null, ...customFields(product) } : { ...empty });
+    setDraft(product ? { id: product.id, name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: null, deposit: product.deposit ?? null, depositRequired: product.depositRequired === true, shippingFee: product.shippingFee ?? null, gapDays: product.gapDays ?? null, active: product.active !== false, pieces: 0, cost: null, ...customFields(product) } : { ...empty });
   }
   async function upload(file?: File) {
     if (!file || !draft) return;
@@ -115,6 +115,17 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
     } catch (e) { setError(e instanceof Error ? e.message : "บันทึกชิ้นไม่สำเร็จ"); }
     finally { setBusy(false); }
   }
+  async function removeProduct(product: Product) {
+    if (product.active !== false || !window.confirm(`ยืนยันการลบสินค้า “${product.name}” หรือไม่?\n\nการลบจะทำได้เมื่อสินค้าถูกซ่อนและไม่มีคำขอจองที่ยังใช้งานอยู่`)) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/admin/products", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: product.id }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "ลบสินค้าไม่สำเร็จ");
+      done(result as { products: Product[] }, `ลบสินค้า ${product.name} เรียบร้อยแล้ว`);
+    } catch (e) { setError(e instanceof Error ? e.message : "ลบสินค้าไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  }
 
   return <>
     <main className="admin-main inventory-page">
@@ -142,7 +153,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
             <td className="inventory-money">{p.customPricing?.tiers.length || p.dailyRate != null ? <span className="inventory-price"><strong>{p.customPricing?.tiers.length ? `${startingTier(p.customPricing)!.days} วัน ${money(startingTier(p.customPricing)!.price)}` : `วันละ ${money(p.dailyRate)}`}</strong><small>ราคาเฉพาะ</small></span> : <span className="inventory-price"><small>ตามตารางร้าน</small></span>}</td><td><span className={`inventory-status ${p.active === false ? "is-hidden" : ""}`}>{p.active === false ? "ซ่อน" : "แสดง"}</span></td>
             <td className="inventory-money">{money(p.cost)}</td><td className="inventory-money">{money(p.legacyRevenue)}</td><td className={`inventory-money ${(p.legacyProfit ?? 0) < 0 ? "inventory-loss" : "inventory-profit"}`}>{money(p.legacyProfit)}</td>
             <td className="inventory-notes">{p.notes || p.description || "—"}</td>
-            <td><span className="inventory-actions"><Link href={`/admin/availability?productId=${p.id}`} className="inventory-calendar-link">ปฏิทินเช่า</Link><Button variant="outline" size="sm" aria-label={`เติมสต๊อก ${p.name}`} onClick={() => { setError(""); setNotice(""); setRestock({ product: p, count: 1, cost: null, note: "" }); }}><Icon name="plus" />เติมสต๊อก</Button><Button variant="outline" size="sm" aria-label={`แก้ไข ${p.name}`} onClick={() => edit(p)}>แก้ไข</Button></span></td>
+            <td><span className="inventory-actions"><Link href={`/admin/availability?productId=${p.id}`} className="inventory-calendar-link">ปฏิทินเช่า</Link><Button variant="outline" size="sm" aria-label={`เติมสต๊อก ${p.name}`} onClick={() => { setError(""); setNotice(""); setRestock({ product: p, count: 1, cost: null, note: "" }); }}><Icon name="plus" />เติมสต๊อก</Button><Button variant="outline" size="sm" aria-label={`แก้ไข ${p.name}`} onClick={() => edit(p)}>แก้ไข</Button>{p.active === false && <Button variant="outline" size="sm" aria-label={`ลบสินค้า ${p.name}`} onClick={() => void removeProduct(p)}>ลบสินค้า</Button>}</span></td>
           </tr>; })}</tbody>
         </table>{!shown.length && <div className="admin-empty"><strong>ไม่พบสินค้า</strong><p>ลองเปลี่ยนคำค้นหาหรือตัวกรอง</p><Button onClick={() => { setQuery(""); setCategory("all"); setStockFilter("all"); setPage(0); }}>ล้างตัวกรอง</Button></div>}</div>
         <div className="admin-table-footer"><span>แสดง {paginated.length} จาก {shown.length} รายการ</span><span className="admin-pagination"><Button variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><Icon name="arrowLeft" />ก่อนหน้า</Button>หน้า {currentPage + 1} / {pageCount}<Button variant="outline" size="sm" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>ถัดไป<Icon name="arrowRight" /></Button></span></div>
@@ -162,6 +173,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       {!draft.id && <><label>จำนวนชิ้นเริ่มต้น<Input type="number" min="1" max="50" step="1" required value={draft.pieces} onChange={e => setDraft({ ...draft, pieces: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })} /></label>
       <label>ต้นทุนต่อชิ้น (บาท)<Input type="number" min="0" step="0.01" value={draft.cost ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, cost: numeric(e.target) })} /></label></>}
       <label>เงินมัดจำ (บาท)<Input type="number" min="0" step="0.01" value={draft.deposit ?? ""} placeholder="ไม่ระบุ" onChange={e => setDraft({ ...draft, deposit: numeric(e.target) })} /></label>
+      <label className="admin-form-full flex flex-row items-center gap-2"><Input type="checkbox" checked={draft.depositRequired} onChange={e => setDraft({ ...draft, depositRequired: e.target.checked })} />สินค้านี้ต้องมีมัดจำเสมอ <small className="inventory-help">เปิดแล้วลูกค้าจะไม่สามารถเลือกยืนยันตัวตนแทนมัดจำได้</small></label>
       <label>ค่าส่งพัสดุเฉพาะสินค้า (บาท)<Input type="number" min="0" step="1" value={draft.shippingFee ?? ""} placeholder="ใช้ค่าส่งปกติ" onChange={e => { const value = numeric(e.target); setDraft({ ...draft, shippingFee: value === null ? null : Math.round(value) }); }} /><small className="inventory-help">ของชิ้นใหญ่ เช่น The North Face 80 บาท · ใช้เป็นค่าส่งขั้นต่ำของคำขอที่มีสินค้านี้</small></label>
       <label>Gap พักชุดของสินค้านี้ (วัน)<Input type="number" min="0" max="14" step="1" value={draft.gapDays ?? ""} placeholder="เว้นว่าง = ค่าเริ่มต้น 2 วัน" onChange={e => { const value = numeric(e.target); setDraft({ ...draft, gapDays: value === null ? null : Math.max(0, Math.min(14, Math.round(value))) }); }} /><small className="inventory-help">ใส่ 0 ได้ = ไม่เพิ่มวันพักชุด หากเว้นว่างจะใช้ค่าตามวิธีคืนของร้าน</small></label>
       <div className="admin-form-full inventory-pricing"><label className="flex flex-row items-center gap-2"><Input type="checkbox" checked={draft.custom} onChange={e => setDraft({ ...draft, custom: e.target.checked })} />ตั้งราคาเฉพาะสินค้านี้ (ไม่ใช้ตารางราคาของร้าน)</label>{draft.custom ? <PriceTiersEditor extraHint="เว้นว่าง = ใช้ค่าส่วนเกินของร้าน (ตามหมวด)" rows={draft.tierRows} extra={draft.extra} onChange={(tierRows, extra) => setDraft({ ...draft, tierRows, extra })} /> : <small>ใช้ราคาตามตาราง <a href="/admin/rental-pricing" target="_blank" rel="noopener noreferrer">ราคาเช่ามาตรฐานของร้าน</a></small>}</div>

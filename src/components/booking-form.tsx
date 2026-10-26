@@ -14,8 +14,9 @@ import { useToday } from "@/lib/use-today";
 import RentalTimeline from "./rental-timeline";
 import { identityAllowed } from "@/lib/identity";
 import { cleanRefundAccount, emptyRefundAccount, refundAccountError, refundBanks } from "@/lib/refund-account";
+import { useProducts } from "@/components/products-provider";
 
-export type BookingItem = { id: number; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; category?: string; unavailable?: boolean };
+export type BookingItem = { id: number; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; category?: string; depositRequired?: boolean; unavailable?: boolean };
 
 // Days of use, both ends counted: 19–28 Nov is 10 days.
 export const rentalDays = countUseDays;
@@ -39,6 +40,7 @@ const shortDate = (value: string) => {
 };
 
 export default function BookingForm({ items, initialStart = "", initialEnd = "", initialReturn, initialMethod, trigger, onRemove }: { items: BookingItem[]; initialStart?: string; initialEnd?: string; initialReturn?: ReturnMethod; initialMethod?: string; trigger?: ReactNode; onRemove?: (id: number) => void }) {
+  const products = useProducts();
   const [step, setStep] = useState(0);
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
@@ -94,7 +96,8 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const plan = days > 0 ? planFor(settings, start, end, method, returnMethod) : null;
   const todayKey = useToday();
   const tooSoon = !!plan && !!todayKey && plan.ship < todayKey;
-  const canSkipDeposit = identityAllowed(settings.verification, rentalTotal, items.map(item => item.category || ""));
+  const requiresDeposit = items.some(item => item.depositRequired || products.find(product => product.id === item.id)?.depositRequired === true);
+  const canSkipDeposit = identityAllowed(settings.verification, rentalTotal, items.map(item => item.category || ""), requiresDeposit);
   const mode = canSkipDeposit ? depositMode : "deposit";
   const carriers = enabledOptions(settings);
   const free = freeEligible(settings, items.length);

@@ -7,6 +7,7 @@ import { defaultLateRates } from "@/lib/extension";
 
 export const defaultStoreSettings: StoreSettings = {
   logoImage: "/exam/logo.jpg",
+  faviconImage: "/exam/logo.jpg",
   heroImage: "/herocover/cover.png",
   heroTitle: "ลุคที่ใช่\nพร้อมให้คุณเช่า",
   heroSubtitle: "ชุดออกงาน เสื้อกันหนาว รองเท้า และอีกมากมาย\nให้ทุกโอกาสพิเศษของคุณ…ง่ายขึ้น",

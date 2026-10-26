@@ -53,8 +53,8 @@ export async function getQueue(db: Db, productId: number, from: string, to: stri
     db.collection<{ id: number; stock?: number }>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1 } }),
   ]);
   const set = new Map(capacities.map(day => [day.date, day.capacity]));
-  const stock = product?.stock ?? 0, days: { date: string; remaining: number; over: number; waitable: boolean }[] = [];
-  for (let date = from; date < to; date = addDays(date, 1)) { const reserved = reservations.get(date) || 0, capacity = set.get(date) ?? stock; days.push({ date, remaining: Math.max(0, capacity - reserved), over: Math.max(0, reserved - stock), waitable: reserved >= capacity && capacity - (firm.get(date) || 0) >= 1 }); }
+  const stock = product?.stock ?? 0, days: { date: string; capacity: number; remaining: number; over: number; waitable: boolean }[] = [];
+  for (let date = from; date < to; date = addDays(date, 1)) { const reserved = reservations.get(date) || 0, capacity = set.get(date) ?? stock; days.push({ date, capacity, remaining: Math.max(0, capacity - reserved), over: Math.max(0, reserved - stock), waitable: reserved >= capacity && capacity - (firm.get(date) || 0) >= 1 }); }
   return days;
 }
 

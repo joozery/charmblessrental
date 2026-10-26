@@ -34,7 +34,7 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "deposit.refund": { label: "คืนเงินมัดจำ", group: "finance" },
   "finance.create": { label: "บันทึกรายรับ–รายจ่าย", group: "finance" },
   "finance.void": { label: "ยกเลิกรายการเงิน", group: "finance" },
-  "product.create": { label: "เพิ่มสินค้า", group: "products" },
+  "product.create": { label: "เพิ่มสินค้า", group: "products" }, "product.delete": { label: "ลบสินค้า", group: "products" },
   "product.update": { label: "แก้ไขสินค้า", group: "products" },
   "product.price": { label: "แก้ไขราคาสินค้า", group: "products" },
   "product.restock": { label: "เติมสต๊อก", group: "products" },
@@ -56,7 +56,7 @@ export const fieldLabels: Record<string, string> = {
   bank: "ธนาคาร", accountName: "ชื่อบัญชี", accountNumber: "เลขบัญชี", qrImage: "รูป QR", returnAddress: "ที่อยู่ส่งคืน", returnPhone: "เบอร์ร้าน", returnMethod: "วิธีส่งคืน",
   start: "วันเริ่มใช้งาน", items: "ชุด", end: "วันใช้งานวันสุดท้าย", returnDate: "กำหนดคืน", carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", lineName: "ชื่อ LINE", condition: "สภาพสินค้า", note: "หมายเหตุ", units: "ชิ้นสินค้า",
   depositStatus: "สถานะเงินมัดจำ", refundAmount: "ยอดคืน", deducted: "ยอดหัก", amount: "จำนวนเงิน", category: "หมวดหมู่", date: "วันที่", voided: "เหตุผลที่ยกเลิก",
-  name: "ชื่อ", sku: "รหัสสินค้า", color: "สี", size: "ไซซ์", dailyRate: "ราคาเช่า", cost: "ต้นทุน", stock: "จำนวน", active: "แสดงหน้าร้าน", description: "รายละเอียด", images: "รูปสินค้า",
+  name: "ชื่อ", sku: "รหัสสินค้า", color: "สี", size: "ไซซ์", dailyRate: "ราคาเช่า", depositRequired: "ต้องมีมัดจำเสมอ", cost: "ต้นทุน", stock: "จำนวน", active: "แสดงหน้าร้าน", description: "รายละเอียด", images: "รูปสินค้า",
   email: "อีเมล", permissions: "สิทธิ์", password: "รหัสผ่าน", emsFee: "ค่าส่ง EMS", rentalPricing: "ตารางราคาเช่า", extraDayRates: "ค่าเช่าส่วนเกิน", shippingOptions: "ขนส่ง", shippingFee: "ค่าส่งเฉพาะสินค้า", customPricing: "ราคาเฉพาะสินค้า", enabled: "เปิดใช้", origin: "ตำแหน่งร้าน", originLabel: "ชื่อจุดรับส่ง", baseFee: "ค่าเริ่มต้น", includedKm: "รวมระยะแรก (กม.)", perKm: "กม.ละ", maxKm: "ส่งไกลสุด (กม.)", inBill: "รวมในบิล",
 };
 export const valueLabels: Record<string, string> = {

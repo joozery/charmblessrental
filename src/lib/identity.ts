@@ -21,8 +21,8 @@ export type IdentityFileKind = typeof identityFileKinds[number]["key"];
 export const identityFileLabel = (kind: string) => identityFileKinds.find(item => item.key === kind)?.label ?? "เซลฟี่คู่บัตรประชาชน";
 export const normalizePhone = (value: string) => value.replace(/\D/g, "").replace(/^66/, "0");
 // Shop rules: optional ceiling on the rental total and categories that always need a deposit (e.g. cameras).
-export function identityAllowed(settings: VerificationSettings, rentalTotal: number | null, categories: string[]) {
-  if (!settings.enabled) return false;
+export function identityAllowed(settings: VerificationSettings, rentalTotal: number | null, categories: string[], depositRequired = false) {
+  if (!settings.enabled || depositRequired) return false;
   if (settings.maxRental !== null && (rentalTotal === null || rentalTotal > settings.maxRental)) return false;
   return !categories.some(category => settings.excludedCategories.includes(category));
 }

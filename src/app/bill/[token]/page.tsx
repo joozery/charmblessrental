@@ -26,7 +26,7 @@ import "./bill.css";
 
 export const metadata = { title: "ใบรายละเอียดการเช่า | Charm Bless", robots: { index: false, follow: false } };
 type BillDoc = Omit<DocRow, "createdAt" | "items"> & {
-  status: string; payment?: "unpaid" | "paid"; billToken: string; createdAt: Date; method?: string; items: (DocRow["items"][number] & { unitSku?: string })[];
+  status: string; payment?: "unpaid" | "paid"; billToken: string; createdAt: Date; method?: string; waitlist?: { since: Date }; items: (DocRow["items"][number] & { unitSku?: string })[];
   verification?: BookingVerification; refundAccount?: RefundAccount; extensions?: Extension[]; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returned?: { at: Date };
 };
 // What the next customer sees while their reserved piece is still being prepared.
@@ -39,7 +39,7 @@ async function Content({ params }: PageProps) {
   const { token } = await params;
   if (!/^[\w-]{20,40}$/.test(token)) notFound();
   const db = await database();
-  const row = await db.collection<BillDoc>("bookingRequests").findOne({ $or: [{ billToken: token }, { "extensions.billToken": token }] }, { projection: { _id: 1, billToken: 1, status: 1, payment: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
+  const row = await db.collection<BillDoc>("bookingRequests").findOne({ $or: [{ billToken: token }, { "extensions.billToken": token }] }, { projection: { _id: 1, billToken: 1, status: 1, payment: 1, waitlist: 1, name: 1, phone: 1, address: 1, start: 1, end: 1, days: 1, deliveryFee: 1, quote: 1, items: 1, createdAt: 1, method: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, "shipment.carrier": 1, "shipment.trackingNumber": 1, "shipment.shippedAt": 1, "customerReturn.carrier": 1, "customerReturn.trackingNumber": 1, "customerReturn.at": 1, "returned.at": 1 } });
   if (!row) notFound();
   const stage = rentalStage(row), pickup = row.method === "pickup";
   const skus = row.items.map(item => item.unitSku).filter((sku): sku is string => !!sku);
@@ -54,28 +54,29 @@ async function Content({ params }: PageProps) {
   const extended = activeExtensions(extensions), unpaidExtension = extended.find(item => item.status === "unpaid");
   const extensionBill = extended.find(item => item.billToken === token);
   // Deposit customers say where the deposit goes back, and see when the shop has sent it.
-  const askRefund = !verification && row.status !== "cancelled" && (!row.quote || (row.quote.deposit || 0) > 0);
+  const askRefund = !row.waitlist && !verification && row.status !== "cancelled" && (!row.quote || (row.quote.deposit || 0) > 0);
   const deposit = askRefund ? await deposits(db).findOne({ _id: String(row._id) }) : null;
   const refunded = deposit?.refund && deposit.status !== "held" && deposit.status !== "void" ? deposit.refund : null;
   const doc: DocRow = { ...rest, items: rest.items.map(item => ({ ...item, deposit: item.deposit ?? item.depositPrice ?? depositByProduct.get(item.id) ?? 0 })), verification: verification || null, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
   const store = { logoImage: settings.logoImage, lineUrl: settings.lineUrl, instagramUrl: settings.instagramUrl, rentalRules: settings.rentalRules, rentalDocument: settings.rentalDocument };
   const quote = quoteForRow(doc, settings.rentalDocument);
-  const paid = extensionBill ? extensionBill.status === "paid" : row.payment === "paid";
+  const paid = row.waitlist ? true : extensionBill ? extensionBill.status === "paid" : row.payment === "paid";
   // When the shop has read its QR, each unpaid bill shows a QR with its own amount, so the customer's app fills it in.
   const head = await headers(), host = head.get("host") || "";
   const origin = `${head.get("x-forwarded-proto") || (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https")}://${host}`;
   const qrFor = (billToken: string | undefined, amount: number) => billToken && amount > 0 && billQrPayload(settings.rentalDocument, row.quote, amount) ? `${origin}/bill/${billToken}/qr?v=${amount}` : "";
-  const mainQr = !paid && row.quote && row.status !== "cancelled" ? qrFor(row.billToken, billDue(row.quote)) : "";
+  const mainQr = !paid && !row.waitlist && row.quote && row.status !== "cancelled" ? qrFor(row.billToken, billDue(row.quote)) : "";
   const billAmount = extensionBill ? extensionBill.amount : billDue(row.quote);
-  const billQr = !paid && row.status !== "cancelled" ? qrFor(extensionBill ? token : row.billToken, billAmount) : "";
+  const billQr = !paid && !row.waitlist && row.status !== "cancelled" ? qrFor(extensionBill ? token : row.billToken, billAmount) : "";
   const shownQuote = mainQr ? { ...quote, qrImage: mainQr } : quote;
   // Customers attach the transfer slip here when the shop has Slip2Go set up; otherwise they send it on LINE.
-  const slipCheck = !paid && !!row.quote && row.status !== "cancelled" && slip2goConfigured();
+  const slipCheck = !paid && !row.waitlist && !!row.quote && row.status !== "cancelled" && slip2goConfigured();
   const lastSlip = slipCheck ? await (await paymentSlips(await database())).findOne(extensionBill ? { bookingId: String(row._id), billToken: token } : { bookingId: String(row._id), $or: [{ billToken: token }, { billToken: { $exists: false } }] }, { projection: { status: 1, reason: 1 }, sort: { createdAt: -1 } }) : null;
   const slipState: SlipState = lastSlip && (lastSlip.status === "review" || lastSlip.status === "rejected" || lastSlip.status === "checking") ? { status: lastSlip.status, reason: lastSlip.reason } : null;
   return <main className="bill-page">
     <header className="bill-head"><div><span>CHARM BLESS RENTAL</span><h1>{extensionBill ? "ใบเรียกเก็บค่าเช่า/ค่าปรับเพิ่มเติม" : "ใบรายละเอียดการเช่า"}</h1><p>เลขที่คำขอ {doc._id}</p></div>{row.status !== "cancelled" && row.quote && <strong className={extensionBill ? `bill-status${extensionBill.status === "paid" ? " is-paid" : ""}` : paid ? "bill-status is-paid" : "bill-status"}>{extensionBill ? extensionLabels[extensionBill.status] : paid ? "ชำระเงินแล้ว" : "รอชำระเงิน"}</strong>}</header>
     {extensionBill && <section className="bill-track bill-extension" aria-label="บิลค่าใช้จ่ายเพิ่มเติม"><strong>{extensionBill.chargeType === "penalty" ? "บิลค่าปรับ / ยอดเรียกเก็บเพิ่ม" : extensionBill.lateDays ? "ค่าปรับส่งคืนล่าช้า" : "ค่าเช่าต่อ"}</strong>{extensionBill.note && <p>รายละเอียด: {extensionBill.note}</p>}<p>{extensionBill.chargeType === "penalty" ? "ยอดที่ต้องชำระ" : <>ใช้งานถึงวันที่ <b>{dateLabel(extensionBill.toEnd)}</b> · {extensionBill.lateDays ? `${extensionBill.lateDays} วัน × 100 บาท = ` : ""}</>} <b>{money(extensionBill.amount)} บาท</b></p>{extensionBill.status === "unpaid" && <div className="bill-extension-pay">{qrFor(extensionBill.billToken, extensionBill.amount) && <img src={qrFor(extensionBill.billToken, extensionBill.amount)} alt="QR ชำระเงิน" />}<p>กรุณาชำระภายใน 1 ชั่วโมง<br />ธนาคาร {quote.bank} · เลขบัญชี <b>{quote.accountNumber}</b><br />ชื่อบัญชี {quote.accountName}<br />{slipCheck ? "แนบสลิปในช่องด้านล่าง ระบบจะตรวจสอบให้อัตโนมัติ" : `ส่งสลิปทาง LINE พร้อมเลขที่คำขอ ${doc._id}`}</p></div>}</section>}
+    {row.waitlist && row.status !== "cancelled" && <section className="bill-track bill-queue-waiting"><strong>⏳ อยู่ในคิวสำรอง</strong><p>คำขอนี้ยังชำระเงินไม่ได้ เพราะมีลูกค้าก่อนหน้าอยู่ในช่วงเวลานี้ หากคิวก่อนหน้าหมดเวลา ระบบจะแจ้งให้ทราบและเปิดสิทธิ์ชำระเงินภายใน 1 ชั่วโมง</p></section>}
     {row.status !== "cancelled" && verification && !returned && <div className={`bill-track bill-identity is-${verification.status}`}><strong>ยืนยันตัวตนแทนเงินมัดจำ · {verificationLabels[verification.status]}</strong>
             {verification.status === "approved" ? <p>✅ เรียบร้อยแล้ว ไม่ต้องวางเงินมัดจำ{verification.reused ? " (ใช้ข้อมูลยืนยันตัวตนเดิม)" : ""}</p>
               : verification.status === "submitted" ? <p>ร้านได้รับเอกสารแล้ว กำลังตรวจ จะแจ้งผลทาง LINE ค่ะ</p>

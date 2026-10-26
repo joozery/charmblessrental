@@ -9,11 +9,11 @@ export async function getProducts(): Promise<Product[]> {
 // No request-time API calls, so it is safe inside a "use cache" scope.
 export async function readProducts(): Promise<Product[]> {
   const collection = (await database()).collection<Product>("products");
-  const stored = await collection.find({}, { projection: { _id: 0 } }).sort({ id: 1 }).toArray();
+  const stored = await collection.find({ deletedAt: { $exists: false } }, { projection: { _id: 0 } }).sort({ id: 1 }).toArray();
   return stored;
 }
 
-export type ProductFields = Pick<Product, "name" | "thai" | "category" | "tag" | "color" | "size" | "dailyRate" | "deposit" | "description" | "notes" | "images" | "active" | "customPricing" | "shippingFee" | "gapDays">;
+export type ProductFields = Pick<Product, "name" | "thai" | "category" | "tag" | "color" | "size" | "dailyRate" | "deposit" | "depositRequired" | "description" | "notes" | "images" | "active" | "customPricing" | "shippingFee" | "gapDays">;
 const products = (db: Db) => db.collection<Product>("products");
 const round = (value: number) => Math.round(value * 100) / 100;
 const total = (values: (number | null | undefined)[]) => values.some(value => typeof value === "number") ? round(values.reduce<number>((sum, value) => sum + (value || 0), 0)) : null;

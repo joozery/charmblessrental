@@ -10,7 +10,7 @@ export type StoreStep = { title: string; description: string };
 // (the shop may receive into one bank on the 1st–15th and another on the 16th–31st).
 export type RentalDocumentDefaults = { deposit: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; accounts: ShopAccount[]; qrPayload?: string };
 export type StoreSettings = {
-  logoImage: string; heroImage: string; heroTitle: string; heroSubtitle: string; promotionImage: string;
+  logoImage: string; faviconImage: string; heroImage: string; heroTitle: string; heroSubtitle: string; promotionImage: string;
   howTitle: string; howSteps: StoreStep[]; contactTitle: string; contactDescription: string;
   footerTagline: string; lineUrl: string; instagramUrl: string; facebookUrl: string;
   shippingText: string; emsFee: number; rentalRules: string[]; rentalDocument: RentalDocumentDefaults; rentalPricing: RentalPricing; extraDayRates: ExtraDayRates; messenger: MessengerSettings; shippingOptions: ShippingOption[]; freeShipping: FreeShipping; schedule: ScheduleSettings; verification: VerificationSettings; lateRates: LateRates; categoryDeposits: CategoryDeposits;

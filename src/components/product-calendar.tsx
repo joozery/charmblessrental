@@ -18,6 +18,7 @@ export default function ProductCalendar({ productId, value, onChange }: { produc
   const [picked, setMonth] = useState<Date | null>(null);
   const month = picked ?? new Date(`${(today || "2000-01-01").slice(0, 7)}-01T00:00:00Z`);
   const [left, setLeft] = useState<Record<string, number>>({});
+  const [capacity, setCapacity] = useState<Record<string, number>>({});
   const [waitable, setWaitable] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState(false);
   // Fetch the month before and after too, so a rental crossing a month boundary is checked in full.
@@ -25,8 +26,8 @@ export default function ProductCalendar({ productId, value, onChange }: { produc
     if (!today) return;
     const controller = new AbortController();
     fetch(`/api/availability?productId=${productId}&month=${monthKey(shiftMonth(month, -1))}&months=3`, { signal: controller.signal, cache: "no-store" })
-      .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error); return data.days as { date: string; remaining: number; waitable?: boolean }[]; })
-      .then(days => { setLeft(Object.fromEntries(days.map(day => [day.date, day.remaining]))); setWaitable(Object.fromEntries(days.map(day => [day.date, !!day.waitable]))); setLoaded(true); })
+      .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error); return data.days as { date: string; capacity: number; remaining: number; waitable?: boolean }[]; })
+      .then(days => { setLeft(Object.fromEntries(days.map(day => [day.date, day.remaining]))); setCapacity(Object.fromEntries(days.map(day => [day.date, day.capacity]))); setWaitable(Object.fromEntries(days.map(day => [day.date, !!day.waitable]))); setLoaded(true); })
       .catch(error => { if (error.name !== "AbortError") setLoaded(true); });
     return () => controller.abort();
   }, [productId, today, monthKey(month)]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -66,7 +67,7 @@ export default function ProductCalendar({ productId, value, onChange }: { produc
         const past = day < today, role = plan ? dayRole(plan, day) : null, state = status(day);
         return <button key={day} type="button" disabled={past} onClick={() => pick(day)} aria-pressed={day === value.start || day === value.end}
           aria-label={`${index + 1} ${label} ${past ? "ผ่านไปแล้ว" : role ? dayRoleLabels[role] : state === "full" ? "เต็ม" : state === "waitlist" ? "มีคนจองไว้ชั่วคราว จองคิวสำรองได้" : "ว่าง"}`}
-          className={`availability-${past ? "past" : state}${role ? ` role-${role}` : ""}${role && role !== "ready" && state === "full" ? " is-conflict" : ""}${day === value.start || day === value.end ? " selected" : ""}`}>{index + 1}</button>;
+          className={`availability-${past ? "past" : state}${role ? ` role-${role}` : ""}${role && role !== "ready" && state === "full" ? " is-conflict" : ""}${day === value.start || day === value.end ? " selected" : ""}`}><b>{index + 1}</b>{!past && state !== "unknown" && <small>{left[day]} / {capacity[day]}</small>}</button>;
       })}
     </div>
     <div className="calendar-legend"><span className="legend-role-ship">● จัดส่ง</span><span className="legend-role-use">● ใช้งาน</span><span className="legend-role-return">● ส่งคืน</span><span className="legend-role-gap">● Gap</span><span className="legend-role-ready">● รับคิวใหม่ได้</span><span className="availability-legend-waitlist">● มีคนจองไว้ชั่วคราว</span><span className="availability-legend-full">● เต็ม</span></div>

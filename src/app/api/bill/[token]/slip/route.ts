@@ -9,7 +9,7 @@ import { checkSlip, slip2goConfigured } from "@/lib/slip2go";
 import { settleSlip } from "@/lib/slip-settle";
 import { activeExtensions, type Extension } from "@/lib/extension";
 
-type BookingDoc = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; quote?: { rental?: number; deposit?: number; shipping?: number }; extensions?: Extension[] };
+type BookingDoc = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; waitlist?: { since: Date }; quote?: { rental?: number; deposit?: number; shipping?: number }; extensions?: Extension[] };
 const maxBytes = 5 * 1024 * 1024, triesPerDay = 6;
 
 // The customer attaches a transfer slip on the bill. Slip2Go reads it; a slip for at least the bill total, paid to
@@ -26,9 +26,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/bill/[token
 
   const db = await database();
   const bookings = db.collection<BookingDoc>("bookingRequests");
-  const booking = await bookings.findOne({ $or: [{ billToken: token }, { "extensions.billToken": token }] }, { projection: { _id: 1, name: 1, status: 1, payment: 1, quote: 1, extensions: 1 } });
+  const booking = await bookings.findOne({ $or: [{ billToken: token }, { "extensions.billToken": token }] }, { projection: { _id: 1, name: 1, status: 1, payment: 1, waitlist: 1, quote: 1, extensions: 1 } });
   if (!booking) return Response.json({ error: "ไม่พบรายการเช่านี้" }, { status: 404 });
   if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
+  if (booking.waitlist) return Response.json({ error: "คิวนี้ยังรออยู่ ยังไม่สามารถชำระเงินได้" }, { status: 409 });
   if (!booking.quote) return Response.json({ error: "ร้านยังไม่ได้ส่งยอดชำระ กรุณารอบิลจากร้านก่อน" }, { status: 409 });
   const extension = activeExtensions(booking.extensions).find(item => item.billToken === token);
   if (extension ? extension.status === "paid" : booking.payment === "paid") return Response.json({ error: "รายการนี้ชำระเงินแล้ว" }, { status: 409 });

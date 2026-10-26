@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import { Noto_Sans_Thai } from "next/font/google";
+import { getStoreSettings } from "@/lib/store-settings";
+import { Suspense } from "react";
 import "./catalog.css";
 import "@/components/booking.css";
 import "@/components/cover.css";
@@ -26,6 +29,13 @@ export const metadata: Metadata = {
   description: "Charmbless Rental — Next.js, Radix UI and Tailwind CSS",
 };
 
+async function DynamicFavicon() {
+  await connection();
+  const settings = await getStoreSettings();
+  const icon = settings.faviconImage || settings.logoImage;
+  return <><link rel="icon" href={icon} /><link rel="shortcut icon" href={icon} /><link rel="apple-touch-icon" href={icon} /></>;
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
@@ -33,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       data-scroll-behavior="smooth"
       className={`${notoSansThai.variable} ${notoSansThai.className} h-full antialiased`}
     >
+      <head><Suspense fallback={<link rel="icon" href="/exam/logo.jpg" />}><DynamicFavicon /></Suspense></head>
       <body className="min-h-full flex flex-col font-sans" style={{ position: "relative" }}>{children}</body>
     </html>
   );

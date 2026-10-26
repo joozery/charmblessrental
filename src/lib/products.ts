@@ -2,7 +2,7 @@ import { effectivePricing, type ExtraDayRates, type RentalPricing } from "./pric
 export type Product = {
   id: number; name: string; thai: string; category: string; color: string;
   dailyRate: number | null; image: string; images: string[]; tag: string; description: string;
-  active?: boolean; stock?: number; size?: string; deposit?: number | null;
+  active?: boolean; stock?: number; size?: string; deposit?: number | null; depositRequired?: boolean; deletedAt?: Date | string;
   legacyId?: string; sku?: string; cost?: number | null; legacyRevenue?: number | null;
   legacyProfit?: number | null; inventoryStatus?: string; notes?: string; imageStatus?: string;
   units?: ProductUnit[];
@@ -34,5 +34,5 @@ export const categoryLabels: Record<string, string> = {
 export function publicProduct(p: Product, shopPricing?: RentalPricing | null, extras?: ExtraDayRates): Product {
   return { id: p.id, name: p.name, thai: p.thai, category: p.category, color: p.color, dailyRate: p.dailyRate,
     image: p.image, images: p.images, tag: p.tag, description: p.description, active: p.active, stock: p.stock,
-    size: p.size, deposit: p.deposit, sku: p.sku, shippingFee: p.shippingFee ?? null, pricing: effectivePricing(p, shopPricing, extras) };
+    size: p.size, deposit: p.deposit, depositRequired: p.depositRequired === true, sku: p.sku, shippingFee: p.shippingFee ?? null, pricing: effectivePricing(p, shopPricing, extras) };
 }

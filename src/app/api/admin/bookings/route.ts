@@ -27,7 +27,7 @@ const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "num
 type QuoteInput = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string };
 const validQuote = (quote: unknown): quote is QuoteInput => { if (!quote || typeof quote !== "object") return false; const value = quote as Record<string, unknown>; return ["rental", "deposit", "shipping"].every(key => typeof value[key] === "number" && Number.isFinite(value[key]) && (value[key] as number) >= 0) && ["bank", "accountName", "accountNumber", "returnAddress", "returnPhone", "returnMethod"].every(key => typeof value[key] === "string" && (value[key] as string).length <= 500) && typeof value.qrImage === "string" && value.qrImage.length <= 2000; };
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim().length <= max;
-const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping" };
+const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping", delete: "bookings" };
 const quoteFields = ["rental", "deposit", "shipping", "bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod", "rentalBeforeDiscount", "discountAmount", "discountPercent", "discountLabel", "discountCode"];
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
@@ -41,6 +41,13 @@ export async function POST(request: Request) {
   const booking = await bookings.findOne({ _id: body.id });
   if (!booking) return Response.json({ error: "ไม่พบคำขอจองนี้" }, { status: 404 });
   const log = (action: string, summary: string, changes = [] as ReturnType<typeof diff>) => audit(request, admin, { action, targetType: "booking", targetId: booking._id, summary, changes });
+  if (body.action === "delete") {
+    if (booking.status !== "cancelled") return Response.json({ error: "ลบได้เฉพาะคำขอที่ยกเลิกแล้วเท่านั้น" }, { status: 409 });
+    const deleted = await bookings.deleteOne({ _id: booking._id, status: "cancelled" });
+    if (!deleted.deletedCount) return Response.json({ error: "รายการนี้ถูกลบไปแล้ว กรุณาโหลดหน้าใหม่" }, { status: 409 });
+    await log("booking.deleted", "ลบคำขอที่ยกเลิกแล้วออกจากระบบ");
+    return Response.json({ ok: true, id: booking._id });
+  }
   if (body.action === "billLink") {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken, payment: booking.payment || "unpaid" } });
