@@ -3,6 +3,7 @@ import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 import { lastUseDay, type Extension } from "./extension";
 import type { QueueBooking, QueueClash } from "./queue";
 import { unitsOf, type Product } from "./products";
+import { legacyHolds } from "./legacy-rentals";
 
 type Capacity = { productId: number; date: string; capacity: number };
 type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
@@ -24,9 +25,10 @@ export const blockingFilter = (from: string, to: string, firmOnly = false) => ({
 ] });
 
 export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string, firmOnly = false) {
-  const [bookings, product] = await Promise.all([
+  const [bookings, product, imported] = await Promise.all([
     db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to, firmOnly), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray(),
     db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, units: 1, sku: 1, active: 1 } }),
+    legacyHolds(db, from, to, productId),
   ]);
   const readyUnits = new Set(unitsOf(product || { id: productId, name: "", thai: "", category: "", color: "", dailyRate: null, image: "", images: [], tag: "", description: "" }).filter(unit => unit.status === "available").map(unit => unit.sku));
   const result = new Map<string, number>();
@@ -39,6 +41,11 @@ export async function getReservationCounts(db: Db, productId: number, from: stri
     for (let date = range.from; date < range.to; date = addDays(date, 1)) {
       if (date >= from && date < to) result.set(date, (result.get(date) || 0) + count);
     }
+  }
+  // Rentals from the old sheet hold their piece the same way; an unpaid one counts only as a hold.
+  for (const hold of imported) {
+    if (firmOnly && !hold.firm) continue;
+    for (let date = hold.ship < from ? from : hold.ship; date < hold.ready && date < to; date = addDays(date, 1)) result.set(date, (result.get(date) || 0) + 1);
   }
   return result;
 }
@@ -61,12 +68,23 @@ export async function getQueue(db: Db, productId: number, from: string, to: stri
 type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
 // Every booking or hold that takes this piece out of the queue in [from, to), with the days of each step (admin calendars).
 export async function queueBookings(db: Db, productId: number, from: string, to: string): Promise<QueueBooking[]> {
-  const rows = await db.collection<QueueDoc>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray();
-  return rows.map(row => {
+  const [rows, imported] = await Promise.all([
+    db.collection<QueueDoc>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray(),
+    legacyHolds(db, from, to, productId),
+  ]);
+  const web = rows.map(row => {
     const item = row.items.find(entry => entry.id === productId), range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row);
     const matching = row.items.filter(entry => entry.id === productId), unitSkus = matching.map(entry => entry.unitSku).filter((sku): sku is string => !!sku), unassignedCount = matching.reduce((sum, entry) => sum + Math.max(0, (entry.quantity ?? 1) - (entry.unitSku ? 1 : 0)), 0);
     return { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to, unitSkus, unassignedCount };
   });
+  // One entry per old-sheet rental, with every piece of this product it holds.
+  const old = new Map<string, QueueBooking>();
+  for (const hold of imported) {
+    const seen = old.get(hold.id);
+    old.set(hold.id, seen ? { ...seen, unitSkus: [...(seen.unitSkus || []), ...(hold.unitSkus || [])], unassignedCount: (seen.unassignedCount || 0) + (hold.unassignedCount || 0) }
+      : { id: hold.id, name: hold.name, confirmed: hold.confirmed, ship: hold.ship, start: hold.start, end: hold.end, returnDate: hold.returnDate, ready: hold.ready, unitSkus: hold.unitSkus, unassignedCount: hold.unassignedCount, href: hold.href });
+  }
+  return [...web, ...old.values()].sort((a, b) => a.start.localeCompare(b.start));
 }
 
 type ClashRow = { _id: string; name?: string; status: string; createdAt?: Date | string; start: string; end: string; schedule?: ScheduleRecord | null; returned?: unknown; verification?: { status: string } | null; items: { id: number; name: string; sku: string }[] };

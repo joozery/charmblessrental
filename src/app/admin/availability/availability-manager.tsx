@@ -73,7 +73,7 @@ export default function AvailabilityManager({ products, initialProductId, initia
                 <b>{Number(day.slice(8))}</b>
                 {loaded && <small>{clash ? "⚠️ คิวซ้อน" : override === 0 ? "ปิดรับ" : left === 0 ? "เต็ม" : `ว่าง ${left}`}{override !== undefined && override > 0 ? ` (ตั้ง ${override})` : ""}</small>}
               </button>
-              {entries.map(({ booking, role }) => { const pieces = [...(booking.unitSkus || []), ...(booking.unassignedCount ? [`ยังไม่ระบุชิ้น ${booking.unassignedCount} ชิ้น`] : [])].join(", ") || "ยังไม่ระบุชิ้น"; return <Link key={booking.id} href={`/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip is-${role}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${pieces} · ${booking.name} · ${queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{pieces} · {booking.name || booking.id.slice(-6)}</Link>; })}
+              {entries.map(({ booking, role }) => { const pieces = [...(booking.unitSkus || []), ...(booking.unassignedCount ? [`ยังไม่ระบุชิ้น ${booking.unassignedCount} ชิ้น`] : [])].join(", ") || "ยังไม่ระบุชิ้น"; return <Link key={booking.id} href={booking.href ?? `/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip is-${role}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${pieces} · ${booking.name} · ${queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{pieces} · {booking.name || booking.id.slice(-6)}</Link>; })}
             </div>;
           })}
         </div>

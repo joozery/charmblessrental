@@ -7,7 +7,8 @@ import { headers } from "next/headers";
 import { promoteWaitlist } from "@/lib/waitlist";
 import { can, permissionsOf } from "@/lib/permissions";
 import { getStoreSettings } from "@/lib/store-settings";
-import { toShipFilter } from "@/lib/to-ship";
+import { legacyToShipFilter, toShipFilter } from "@/lib/to-ship";
+import { legacyShipFrom } from "@/lib/legacy-rentals";
 import AdminChrome from "./admin-chrome";
 import "./admin.css";
 import "./admin-chrome.css";
@@ -36,8 +37,9 @@ async function Workspace({ children }: { children: React.ReactNode }) {
     // Slips Slip2Go could not pass, waiting for someone who can confirm payments.
     can(admin, "payments") ? db.collection("bookingRequests").countDocuments({ slipReview: { $exists: true }, payment: { $ne: "paid" }, status: { $ne: "cancelled" } }) : Promise.resolve(0),
     // Paid and waiting to go out: all of them, and those whose ship day is today or already past.
-    can(admin, "shipping") ? db.collection("bookingRequests").countDocuments(toShipFilter) : Promise.resolve(0),
-    can(admin, "shipping") ? db.collection("bookingRequests").countDocuments({ ...toShipFilter, $or: [{ "schedule.ship": { $lte: today } }, { schedule: { $exists: false }, start: { $lte: today } }] }) : Promise.resolve(0),
+    // Old-sheet rentals due from legacyShipFrom go out from the same page.
+    can(admin, "shipping") ? Promise.all([db.collection("bookingRequests").countDocuments(toShipFilter), db.collection("rentals").countDocuments(legacyToShipFilter(legacyShipFrom))]).then(([web, old]) => web + old) : Promise.resolve(0),
+    can(admin, "shipping") ? Promise.all([db.collection("bookingRequests").countDocuments({ ...toShipFilter, $or: [{ "schedule.ship": { $lte: today } }, { schedule: { $exists: false }, start: { $lte: today } }] }), db.collection("rentals").countDocuments({ ...legacyToShipFilter(legacyShipFrom), shipDate: { $gte: new Date(`${legacyShipFrom}T00:00:00.000Z`), $lte: new Date(`${today}T00:00:00.000Z`) } })]).then(([web, old]) => web + old) : Promise.resolve(0),
   ]);
   // The shop logo replaces the star in the sidebar header once one is uploaded in store settings.
   const logoImage = (await getStoreSettings()).logoImage || "", logo = /^(https?:\/\/|\/[^/])/.test(logoImage) ? logoImage : "";

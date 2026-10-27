@@ -14,12 +14,13 @@ import { assignUnits, validUnitPicks } from "@/lib/rental-units";
 import { cleanCode, customerDiscount, discountCoupons, validCoupon } from "@/lib/discounts";
 import { claimBill } from "@/lib/bill-owner";
 import { requestOrigin } from "@/lib/request-origin";
+import { legacyRentalCount } from "@/lib/legacy-rentals";
 const statuses = ["new", "contacted", "confirmed", "cancelled"];
 const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -94,7 +95,8 @@ export async function POST(request: Request) {
     const code = cleanCode(body.quote.discountCode || booking.discountCode), coupon = code ? await discountCoupons(db).findOne({ code }) : null;
     if (code && !validCoupon(coupon)) return Response.json({ error: "โค้ดส่วนลดไม่ถูกต้อง หมดอายุ หรือใช้ครบแล้ว" }, { status: 400 });
     const customer = booking.lineUserId ? await db.collection<{ _id: string; bookingCount?: number; completedCount?: number; reviewCount?: number }>("customers").findOne({ _id: booking.lineUserId }) : null;
-    const loyalty = customerDiscount(customer?.completedCount ?? customer?.bookingCount ?? 0, customer?.reviewCount ?? 0);
+    // Rentals through the old sheet count too, matched by the phone number on this booking.
+    const loyalty = customerDiscount((customer?.completedCount ?? customer?.bookingCount ?? 0) + await legacyRentalCount(db, booking.phone), customer?.reviewCount ?? 0);
     const percent = Math.min(100, (coupon?.percent || 0) + loyalty.percent), discountAmount = Math.round(before * percent / 100 * 100) / 100;
     const quote = Object.fromEntries(quoteFields.map(key => [key, body.quote[key]])) as QuoteInput;
     quote.rentalBeforeDiscount = before; quote.discountPercent = percent; quote.discountAmount = discountAmount; quote.rental = Math.max(0, Math.round((before - discountAmount) * 100) / 100); quote.discountLabel = [loyalty.label, coupon?.label].filter(Boolean).join(" + "); quote.discountCode = coupon?.code || "";

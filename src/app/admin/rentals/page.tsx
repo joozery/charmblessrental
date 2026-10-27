@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { pageAdmin } from "@/lib/admin-auth";
+import type { LegacyRental } from "@/lib/legacy-rentals";
+import { can } from "@/lib/permissions";
 import { database } from "@/lib/mongodb";
 import { productsByLegacyIds } from "@/lib/product-store";
 import RentalHistory from "./rental-history";
@@ -13,7 +15,7 @@ type Rental = {
   shipDate?: Date | string | null; returnDate?: Date | string | null; rentalDateText?: string; days?: number | null;
   rentalTotal?: number | null; deposit?: number | null; shipping?: number | null; total?: number | null; bankId?: string;
   paidAt?: Date | string | null; slips?: string[]; carrier?: string; notes?: string; detailUrl?: string; enteredBy?: string;
-};
+} & Pick<LegacyRental, "shipment" | "returned" | "cancelled">;
 type RentalItem = { rentalId: string; productLegacyId?: string; sku?: string; productName?: string; agreedPrice?: number | null; notes?: string };
 type Query = { q?: string | string[]; status?: string | string[]; from?: string | string[]; to?: string | string[]; page?: string | string[] };
 type SearchParams = Promise<Query>;
@@ -22,7 +24,7 @@ const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Numbe
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 async function Content({ searchParams }: { searchParams: SearchParams }) {
-  await pageAdmin("rentals");
+  const admin = await pageAdmin("rentals");
   const query = await searchParams;
   const q = one(query.q).trim().slice(0, 100);
   const status = one(query.status);
@@ -67,7 +69,10 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
     itemsByRental.set(item.rentalId, list);
   }
   const serializeDate = (value?: Date | string | null) => { if (!value) return ""; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString(); };
-  const records = rentals.map(rental => ({ ...rental, legacyStatus: rental.legacyStatus === "เกินกำหนดส่ง" ? "คืนสินค้าเลยกำหนด" : rental.legacyStatus, enteredAt: serializeDate(rental.enteredAt), shipDate: serializeDate(rental.shipDate), returnDate: serializeDate(rental.returnDate), paidAt: serializeDate(rental.paidAt), items: itemsByRental.get(rental.legacyId) || [] }));
+  const records = rentals.map(({ shipment, returned, cancelled, ...rental }) => ({ ...rental, legacyStatus: rental.legacyStatus === "เกินกำหนดส่ง" ? "คืนสินค้าเลยกำหนด" : rental.legacyStatus, enteredAt: serializeDate(rental.enteredAt), shipDate: serializeDate(rental.shipDate), returnDate: serializeDate(rental.returnDate), paidAt: serializeDate(rental.paidAt), items: itemsByRental.get(rental.legacyId) || [],
+    shipment: shipment ? { carrier: shipment.carrier, trackingNumber: shipment.trackingNumber, at: serializeDate(shipment.shippedAt), byName: shipment.byName } : undefined,
+    returned: returned ? { condition: returned.condition, note: returned.note, at: serializeDate(returned.at), byName: returned.byName } : undefined,
+    cancelled: cancelled ? { reason: cancelled.reason, at: serializeDate(cancelled.at), byName: cancelled.byName } : undefined }));
   const buildHref = (next: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -79,7 +84,7 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
   };
 
   return <main className="admin-main rental-history-page">
-    <header className="rental-history-header"><div><span className="rental-history-eyebrow">RENTAL RECORDS</span><h1>ประวัติการเช่า</h1><p>ค้นหารายการย้อนหลังจากข้อมูลแท็บ “ข้อมูลการเช่า”</p></div><span className="rental-history-source"><span />ข้อมูลต้นฉบับในระบบ</span></header>
+    <header className="rental-history-header"><div><span className="rental-history-eyebrow">RENTAL RECORDS</span><h1>ประวัติการเช่า</h1><p>รายการจากแท็บ “ข้อมูลการเช่า” ในไฟล์เดิม รายการที่ยังไม่คืนจะกันคิวชุดไว้ จนกว่าจะบันทึกรับคืนหรือยกเลิกที่หน้านี้</p></div><span className="rental-history-source"><span />ข้อมูลต้นฉบับในระบบ</span></header>
     <section className="rental-history-stats" aria-label="สรุปจำนวนรายการเช่า">
       <article><span>รายการเช่าทั้งหมด</span><strong>{allCount.toLocaleString("th-TH")}</strong></article>
       <article className="is-pending"><span>รอชำระเงิน</span><strong>{pendingCount.toLocaleString("th-TH")}</strong></article>
@@ -91,13 +96,13 @@ async function Content({ searchParams }: { searchParams: SearchParams }) {
       <div className="rental-history-panel-head"><div><span className="rental-history-eyebrow">ALL RENTALS</span><h2 id="rental-list-title">รายการเช่าทั้งหมด</h2></div><span>{total.toLocaleString("th-TH")} รายการ</span></div>
       <form className="rental-history-filters" action="/admin/rentals" method="get">
         <label className="rental-history-search"><span>ค้นหา</span><input name="q" type="search" defaultValue={q} placeholder="เลขรายการ ชื่อลูกค้า หรือเบอร์โทร" maxLength={100} /></label>
-        <label><span>สถานะ</span><select name="status" defaultValue={status || "all"}><option value="all">ทุกสถานะ</option><option value="รอชำระเงิน">รอชำระเงิน</option><option value="รอจัดส่ง">รอจัดส่ง</option><option value="คืนสินค้าเลยกำหนด">คืนสินค้าเลยกำหนด</option></select></label>
+        <label><span>สถานะ</span><select name="status" defaultValue={status || "all"}><option value="all">ทุกสถานะ</option><option value="รอชำระเงิน">รอชำระเงิน</option><option value="รอจัดส่ง">รอจัดส่ง</option><option value="คืนสินค้าเลยกำหนด">คืนสินค้าเลยกำหนด</option><option value="จัดส่งแล้ว">จัดส่งแล้ว</option><option value="คืนสินค้าแล้ว">คืนสินค้าแล้ว</option><option value="ยกเลิก">ยกเลิก</option></select></label>
         <label><span>ลงข้อมูลตั้งแต่</span><input type="date" name="from" defaultValue={from} /></label>
         <label><span>ถึงวันที่</span><input type="date" name="to" defaultValue={to} /></label>
         <button type="submit">ค้นหารายการ</button>
         {(q || status || from || to) && <Link href="/admin/rentals">ล้างตัวกรอง</Link>}
       </form>
-      <RentalHistory records={records} />
+      <RentalHistory records={records} canShip={can(admin, "shipping")} canCancel={can(admin, "bookings")} />
       <footer className="rental-history-footer"><span>แสดง {rentals.length ? ((page - 1) * pageSize + 1).toLocaleString("th-TH") : "0"}–{Math.min(page * pageSize, total).toLocaleString("th-TH")} จาก {total.toLocaleString("th-TH")} รายการ</span><nav aria-label="เปลี่ยนหน้ารายการ">{page > 1 && <Link href={buildHref(page - 1)}>‹ ก่อนหน้า</Link>}<span>หน้า {page.toLocaleString("th-TH")} / {pageCount.toLocaleString("th-TH")}</span>{page < pageCount && <Link href={buildHref(page + 1)}>ถัดไป ›</Link>}</nav></footer>
     </section>
     <p className="rental-history-note">ค้นหาวันที่จาก “วันที่ลงข้อมูล” · รายละเอียดลูกค้าและไฟล์แนบจะแสดงเฉพาะแอดมินที่เข้าสู่ระบบ</p>

@@ -36,7 +36,7 @@ export default function QueueCalendar({ productId, label, highlight, preview, st
         const previewing = !!preview && day >= preview.from && day < preview.to;
         return <div key={day} className={`queue-day${remaining === 0 ? " is-full" : ""}${clash ? " is-clash" : ""}${previewing ? " is-preview" : ""}`}>
           <span className="queue-day-head"><b>{Number(day.slice(8))}</b>{remaining !== undefined && <small>{clash ? "⚠️ คิวซ้อน" : remaining > 0 ? `ว่าง ${remaining}` : "เต็ม"}</small>}</span>
-          {entries.map(({ booking, role }) => <Link key={booking.id} href={`/admin/bookings?id=${encodeURIComponent(booking.id)}`} onClick={onClose} className={`queue-chip is-${role}${booking.confirmed ? "" : " is-hold"}${booking.id === highlight ? " is-self" : ""}`} title={`${booking.id} · ${booking.name} · ${queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{booking.name || booking.id.slice(-6)}</Link>)}
+          {entries.map(({ booking, role }) => <Link key={booking.id} href={booking.href ?? `/admin/bookings?id=${encodeURIComponent(booking.id)}`} onClick={onClose} className={`queue-chip is-${role}${booking.confirmed ? "" : " is-hold"}${booking.id === highlight ? " is-self" : ""}`} title={`${booking.id} · ${booking.name} · ${queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{booking.name || booking.id.slice(-6)}</Link>)}
         </div>;
       })}
     </div>

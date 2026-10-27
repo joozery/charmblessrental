@@ -70,3 +70,12 @@ body:has(.rental-history-page),body:has(.rental-history-page) .chrome-shell,body
 .rental-history-dialog .admin-dialog-close{display:grid;place-items:center;width:30px;height:30px;border-radius:6px}.rental-history-dialog .admin-dialog-close svg{width:17px;height:17px}
 @media(max-width:900px){.rental-history-filters .rental-history-search{flex-basis:100%}.rental-history-filters .rental-history-search input{min-width:100%}}
 @media(max-width:650px){.chrome-shell .rental-history-page{padding:22px 14px}.rental-history-header{align-items:flex-start;flex-direction:column;gap:12px;margin-bottom:17px}.rental-history-header h1{font-size:24px}.rental-history-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.rental-history-stats article{min-height:75px;padding:12px}.rental-history-stats article>span{font-size:10px}.rental-history-stats strong{font-size:21px}.rental-history-panel-head{padding:15px 14px 12px}.rental-history-filters{padding:0 14px 14px}.rental-history-filters label{flex:1;min-width:calc(50% - 6px)}.rental-history-filters label input,.rental-history-filters label select{width:100%;min-width:0}.rental-history-filters .rental-history-search{flex-basis:100%}.rental-history-filters>button{flex:1}.rental-history-footer{align-items:flex-start;flex-direction:column;padding:12px 14px}.rental-history-footer nav{width:100%;justify-content:space-between}.rental-history-dialog{padding:21px 16px}.rental-dialog-grid{gap:9px 10px}}
+.rental-history-status.is-out{background:#eef4ff;color:#3538cd}
+.rental-history-status.is-done{background:#ecfdf3;color:#067647}
+.rental-dialog-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin-top:8px}
+.rental-dialog-form label{display:flex;flex:1;flex-direction:column;gap:5px;min-width:150px;color:#475467;font-size:10px;font-weight:550}
+.rental-dialog-form input,.rental-dialog-form select{height:36px;padding:7px 10px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#344054;font:inherit;font-size:11px}
+.rental-dialog-form button{height:36px;padding:0 14px;border:1px solid #ab285c;border-radius:6px;background:#ab285c;color:#fff;font:inherit;font-size:11px;font-weight:650;cursor:pointer}
+.rental-dialog-form button.is-danger{border-color:#d98389;background:#fff4f4;color:#b7434d}
+.rental-dialog-form button:disabled{opacity:.55;cursor:default}
+.rental-dialog-notice{margin:0 0 6px;color:#067647;font-size:11px}

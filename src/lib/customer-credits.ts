@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "mongodb";
+import { normalizePhone } from "./identity";
 
-export type CustomerRecord = { _id: string; lineUserId: string; lineName: string; name: string; phone: string; bookingCount: number; completedCount: number; creditBalance: number; createdAt: Date; updatedAt: Date };
+export type CustomerRecord = { _id: string; lineUserId: string; lineName: string; name: string; phone: string; bookingCount: number; completedCount: number; legacyCount?: number; creditBalance: number; createdAt: Date; updatedAt: Date };
 export type CreditEntry = { _id: string; customerId: string; amount: number; remaining: number; type: "grant" | "use" | "void" | "expire"; reason: string; bookingId?: string; billToken?: string; expiresAt?: Date; createdAt: Date; createdBy: string; createdByName: string };
 
 export const customers = (db: Db) => db.collection<CustomerRecord>("customers");
@@ -12,9 +13,12 @@ export async function syncCustomersFromBookings(db: Db) {
   const rows = await db.collection<{ lineUserId?: string; lineName?: string; name?: string; phone?: string; status?: string }>("bookingRequests").find({ lineUserId: { $exists: true, $type: "string" } }, { projection: { lineUserId: 1, lineName: 1, name: 1, phone: 1, status: 1 } }).toArray();
   const grouped = new Map<string, typeof rows>();
   for (const row of rows) if (row.lineUserId) grouped.set(row.lineUserId, [...(grouped.get(row.lineUserId) || []), row]);
+  // Rentals from the old sheet, by any phone number the customer has booked with (`phoneKey` on imported rentals).
+  const phones = new Map([...grouped].map(([id, bookings]) => [id, [...new Set(bookings.map(row => normalizePhone(row.phone || "")).filter(key => key.length >= 9))]]));
+  const legacy = new Map((await db.collection<{ _id: string; n: number }>("rentals").aggregate<{ _id: string; n: number }>([{ $match: { phoneKey: { $in: [...phones.values()].flat() }, legacyStatus: { $ne: "ยกเลิก" } } }, { $group: { _id: "$phoneKey", n: { $sum: 1 } } }]).toArray()).map(row => [row._id, row.n]));
   for (const [lineUserId, bookings] of grouped) {
-    const latest = bookings[bookings.length - 1];
-    await customers(db).updateOne({ _id: lineUserId }, { $set: { lineUserId, lineName: latest.lineName || "", name: latest.name || "", phone: latest.phone || "", bookingCount: bookings.length, completedCount: bookings.filter(row => row.status === "confirmed").length, updatedAt: new Date() }, $setOnInsert: { creditBalance: 0, createdAt: new Date() } }, { upsert: true });
+    const latest = bookings[bookings.length - 1], legacyCount = (phones.get(lineUserId) || []).reduce((sum, key) => sum + (legacy.get(key) || 0), 0);
+    await customers(db).updateOne({ _id: lineUserId }, { $set: { lineUserId, lineName: latest.lineName || "", name: latest.name || "", phone: latest.phone || "", bookingCount: bookings.length, completedCount: bookings.filter(row => row.status === "confirmed").length, legacyCount, updatedAt: new Date() }, $setOnInsert: { creditBalance: 0, createdAt: new Date() } }, { upsert: true });
   }
   return grouped.size;
 }

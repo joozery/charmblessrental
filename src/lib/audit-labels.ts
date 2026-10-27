@@ -13,6 +13,9 @@ export const actionLabels: Record<string, { label: string; group: string }> = {
   "booking.shipped": { label: "บันทึกเลขพัสดุ / ส่งมอบ", group: "bookings" },
   "booking.returned": { label: "รับคืนสินค้า", group: "bookings" },
   "booking.customer_return": { label: "ลูกค้าแจ้งส่งคืน", group: "bookings" },
+  "rental.shipped": { label: "จัดส่งรายการเช่าเดิม", group: "bookings" },
+  "rental.returned": { label: "รับคืนรายการเช่าเดิม", group: "bookings" },
+  "rental.cancelled": { label: "ยกเลิกรายการเช่าเดิม", group: "bookings" },
   "booking.refund_account": { label: "ลูกค้ากรอกบัญชีรับเงินมัดจำคืน", group: "bookings" },
   "booking.extended": { label: "ขยายวันเช่า", group: "bookings" },
   "booking.edited": { label: "แก้ไขการจอง", group: "bookings" },
@@ -52,7 +55,7 @@ export const actionGroups = [
   { key: "products", label: "สินค้า" }, { key: "settings", label: "ตั้งค่า" }, { key: "admins", label: "บัญชีแอดมิน" },
 ];
 export const fieldLabels: Record<string, string> = {
-  status: "สถานะ", payment: "การชำระเงิน", paidOn: "วันที่ชำระ", rental: "ค่าเช่า", deposit: "เงินมัดจำ", shipping: "ค่าจัดส่ง",
+  status: "สถานะ", legacyStatus: "สถานะ", payment: "การชำระเงิน", paidOn: "วันที่ชำระ", rental: "ค่าเช่า", deposit: "เงินมัดจำ", shipping: "ค่าจัดส่ง",
   bank: "ธนาคาร", accountName: "ชื่อบัญชี", accountNumber: "เลขบัญชี", qrImage: "รูป QR", returnAddress: "ที่อยู่ส่งคืน", returnPhone: "เบอร์ร้าน", returnMethod: "วิธีส่งคืน",
   start: "วันเริ่มใช้งาน", items: "ชุด", end: "วันใช้งานวันสุดท้าย", returnDate: "กำหนดคืน", carrier: "ขนส่ง", trackingNumber: "เลขพัสดุ", lineName: "ชื่อ LINE", condition: "สภาพสินค้า", note: "หมายเหตุ", units: "ชิ้นสินค้า",
   depositStatus: "สถานะเงินมัดจำ", refundAmount: "ยอดคืน", deducted: "ยอดหัก", amount: "จำนวนเงิน", category: "หมวดหมู่", date: "วันที่", voided: "เหตุผลที่ยกเลิก",
