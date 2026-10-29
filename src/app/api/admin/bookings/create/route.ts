@@ -35,7 +35,9 @@ export async function POST(request: Request) {
   if (rental === null) return Response.json({ error: "สินค้านี้ไม่มีราคาตามจำนวนวันที่เลือก กรุณาระบุค่าเช่าเอง" }, { status: 400 });
   const messengerQuote = body.method === "messenger" ? await quoteDelivery(db, settings.messenger, { pin: typeof body.pin === "string" ? body.pin.trim() : "", address: body.address.trim() }).catch(() => ({ error: "คำนวณค่าส่งแมสไม่สำเร็จ" })) : null;
   const messengerFee = messengerQuote && "fee" in messengerQuote ? messengerQuote.fee : null;
-  const shippingQuote = shippingFor(settings, body.method, products, settings.messenger.inBill ? messengerFee : null);
+  const shippingQuote = body.method === "messenger" && body.shippingMode === "manual" && typeof body.shipping === "number"
+    ? { label: "Messenger (manual)", base: body.shipping, discount: 0, fee: body.shipping }
+    : shippingFor(settings, body.method, products, settings.messenger.inBill ? messengerFee : null);
   const shipping = shippingQuote?.fee;
   if (shippingQuote === null || shipping === null || shipping === undefined) return Response.json({ error: "ไม่สามารถคำนวณค่าจัดส่งตามวิธีหน้าร้านได้ กรุณาตรวจสอบที่อยู่/หมุดหรือการตั้งค่าขนส่ง" }, { status: 400 });
   const deposit = body.depositMode === "identity" ? 0 : itemInputs.reduce((sum, item) => sum + (item.deposit || 0) * item.quantity, 0);

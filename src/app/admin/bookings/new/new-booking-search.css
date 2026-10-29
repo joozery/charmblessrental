@@ -1,0 +1,36 @@
+.new-booking-product-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 9px;
+  min-width: min(520px, 50%);
+}
+
+.new-booking-product-picker input[type="search"] {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.new-booking-product-picker select {
+  grid-column: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.new-booking-product-picker button {
+  grid-column: 2;
+  align-self: stretch;
+}
+
+@media (max-width: 760px) {
+  .new-booking-product-picker {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .new-booking-product-picker select,
+  .new-booking-product-picker button {
+    grid-column: 1;
+  }
+}
