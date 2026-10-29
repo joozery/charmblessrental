@@ -10,6 +10,7 @@ import { productsByLegacyIds } from "@/lib/product-store";
 import { legacyToShipFilter, toShipFilter } from "@/lib/to-ship";
 import ShipBoard, { type ShipRow } from "./ship-board";
 import "./to-ship.css";
+import "./to-ship-mobile.css";
 
 export const metadata = { title: "รายการที่ต้องส่ง | Charm Bless", robots: { index: false, follow: false } };
 type BookingDoc = {

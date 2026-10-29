@@ -1,0 +1,200 @@
+.to-ship-table-wrap {
+  overflow: visible;
+}
+
+.to-ship-table {
+  display: block;
+  min-width: 0;
+}
+
+.to-ship-table thead {
+  display: none;
+}
+
+.to-ship-table tbody,
+.to-ship-table tbody > tr:not(.to-ship-form-row) {
+  display: block;
+}
+
+.to-ship-table tbody > tr:not(.to-ship-form-row) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 26px;
+  margin: 0 0 14px;
+  padding: 16px 18px;
+  border: 1px solid #e4dde2;
+  border-left: 4px solid #c8bdc6;
+  border-radius: 12px;
+  background: #fff!important;
+  box-shadow: 0 3px 12px rgb(45 31 43 / 5%);
+}
+
+.to-ship-table tbody > tr.is-late { border-left-color: #d92d20; background: #fffafa!important; }
+.to-ship-table tbody > tr.is-today { border-left-color: #f79009; background: #fffdf7!important; }
+.to-ship-table tbody > tr.is-tomorrow { border-left-color: #6b8fc7; }
+
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 9px 0;
+  border: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td::before {
+  color: #8a7f87;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(1)::before { content: "กำหนดส่ง"; }
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(2)::before { content: "ออเดอร์"; }
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(3)::before { content: "ลูกค้า"; }
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(4)::before { content: "สินค้า"; }
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(5)::before { content: "ที่อยู่"; }
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(6)::before { content: "ขนส่ง"; }
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(7)::before { content: "สถานะ"; }
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(8)::before { content: "ดำเนินการ"; }
+
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(4),
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(5),
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(8) {
+  grid-column: 1 / -1;
+}
+
+.to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(5) .to-ship-address-cell {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.to-ship-product-list {
+  min-width: 0;
+}
+
+.to-ship-row-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.to-ship-row-actions button {
+  min-width: 220px;
+}
+
+.to-ship-table tbody > tr.to-ship-form-row {
+  display: block;
+  margin: -6px 0 14px;
+  border: 1px solid #d9c6d3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.to-ship-form-row > td {
+  display: block;
+  padding: 14px;
+  border: 0;
+}
+
+@media (max-width: 760px) {
+  .to-ship-page {
+    gap: 12px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .to-ship-toolbar input,
+  .to-ship-toolbar select,
+  .to-ship-toolbar button,
+  .to-ship-form input,
+  .to-ship-form button {
+    font-size: 16px;
+  }
+
+  .to-ship-header h1 {
+    font-size: 23px;
+    line-height: 1.35;
+  }
+
+  .to-ship-header p {
+    line-height: 1.7;
+  }
+
+  .to-ship-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid #e4dde2;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .to-ship-search {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .to-ship-date,
+  .to-ship-toolbar select,
+  .to-ship-toolbar > button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .to-ship-toolbar .to-ship-primary {
+    grid-column: 1 / -1;
+  }
+
+  .to-ship-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 0 5px;
+    scrollbar-width: thin;
+  }
+
+  .to-ship-tabs button {
+    flex: 0 0 auto;
+    min-height: 38px;
+  }
+
+  .to-ship-table tbody > tr:not(.to-ship-form-row) {
+    position: relative;
+    display: block;
+    margin: 0 0 10px;
+    padding: 9px 12px 12px;
+    border-radius: 12px;
+  }
+
+  .to-ship-row-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 7px;
+    width: 100%;
+  }
+
+  .to-ship-row-actions button,
+  .to-ship-row-actions a {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .to-ship-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .to-ship-form button {
+    width: 100%;
+  }
+}
