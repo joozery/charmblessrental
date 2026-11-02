@@ -1,21 +1,36 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const api = "https://api.line.me/v2/bot";
-export const lineConfigured = () => !!process.env.LINE_CHANNEL_SECRET && !!process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
-export function validLineSignature(body: string, signature: string | null) {
-  const secret = process.env.LINE_CHANNEL_SECRET;
+// The shop runs more than one LINE Official Account. Each booking remembers which one the customer linked through
+// (`lineOa`), and every message to that customer has to go out through the same account. "main" is the original
+// account and also reads the old LINE_CHANNEL_* variables; any other key "x" reads LINE_X_CHANNEL_*.
+export type LineOa = string;
+export const lineOas = (): LineOa[] => [...new Set(["main", ...(process.env.LINE_OAS || "").split(",").map(key => key.trim().toLowerCase()).filter(key => /^[a-z0-9_]+$/.test(key))])];
+export const isLineOa = (key: string) => lineOas().includes(key);
+const oaKey = (oa?: string | null) => (oa || "main").toLowerCase();
+function credentials(oa?: string | null) {
+  const key = oaKey(oa);
+  const names = (name: string) => key === "main" ? [`LINE_MAIN_${name}`, `LINE_${name}`] : [`LINE_${key.toUpperCase()}_${name}`];
+  const pick = (name: string) => names(name).map(env => process.env[env]).find(Boolean);
+  return { key, secret: pick("CHANNEL_SECRET"), token: pick("CHANNEL_ACCESS_TOKEN") };
+}
+export const lineConfigured = (oa?: string | null) => { const { key, secret, token } = credentials(oa); return isLineOa(key) && !!secret && !!token; };
+export const anyLineConfigured = () => lineOas().some(oa => lineConfigured(oa));
+
+export function validLineSignature(body: string, signature: string | null, oa?: string | null) {
+  const { secret } = credentials(oa);
   if (!secret || !signature) return false;
   const expected = createHmac("sha256", secret).update(body).digest();
   const given = Buffer.from(signature, "base64");
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
-async function call(path: string, init: RequestInit) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (!token) throw new Error("ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN");
+async function call(path: string, init: RequestInit, oa?: string | null) {
+  const { key, token } = credentials(oa);
+  if (!token) throw new Error(`ยังไม่ได้ตั้งค่า LINE access token ของ OA "${key}"`);
   const response = await fetch(`${api}${path}`, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init.headers }, signal: AbortSignal.timeout(10000) });
-  if (!response.ok) throw new Error(`LINE API ${response.status}: ${(await response.text().catch(() => "")).slice(0, 200)}`);
+  if (!response.ok) throw new Error(`LINE API (${key}) ${response.status}: ${(await response.text().catch(() => "")).slice(0, 200)}`);
   return response;
 }
 
@@ -165,8 +180,8 @@ const cardForText = (message: TextMessage): FlexMessage => {
 };
 
 const cardsFor = (messages: LineMessage[]) => messages.map(message => message.type === "text" ? cardForText(message) : message);
-export const replyLine = (replyToken: string, messages: LineMessage[]) => call("/message/reply", { method: "POST", body: JSON.stringify({ replyToken, messages: cardsFor(messages) }) });
-export const pushLine = (to: string, messages: LineMessage[]) => call("/message/push", { method: "POST", body: JSON.stringify({ to, messages: cardsFor(messages) }) });
-export async function lineProfileName(userId: string) {
-  try { return String((await (await call(`/profile/${encodeURIComponent(userId)}`, { method: "GET" })).json()).displayName || ""); } catch { return ""; }
+export const replyLine = (replyToken: string, messages: LineMessage[], oa?: string | null) => call("/message/reply", { method: "POST", body: JSON.stringify({ replyToken, messages: cardsFor(messages) }) }, oa);
+export const pushLine = (to: string, messages: LineMessage[], oa?: string | null) => call("/message/push", { method: "POST", body: JSON.stringify({ to, messages: cardsFor(messages) }) }, oa);
+export async function lineProfileName(userId: string, oa?: string | null) {
+  try { return String((await (await call(`/profile/${encodeURIComponent(userId)}`, { method: "GET" }, oa)).json()).displayName || ""); } catch { return ""; }
 }

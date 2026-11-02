@@ -13,7 +13,7 @@ import { blockRange, countUseDays, type ScheduleRecord } from "@/lib/schedule";
 import { getStoreSettings } from "@/lib/store-settings";
 import { requestOrigin } from "@/lib/request-origin";
 
-type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; shipment?: object; extensions?: Extension[]; lineUserId?: string; billToken?: string; quote?: { accountNumber?: string } };
+type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; shipment?: object; extensions?: Extension[]; lineUserId?: string; lineOa?: string; billToken?: string; quote?: { accountNumber?: string } };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const actions = { preview: "bookings", create: "bookings", cancel: "bookings", paid: "payments", updateAmount: "pricing" } as const;
@@ -51,10 +51,10 @@ async function plan(db: Db, booking: BookingDoc, toEnd: string) {
 }
 
 async function notify(request: Request, db: Db, booking: BookingDoc, text: (link: string) => string, token?: string) {
-  if (!booking.lineUserId || !lineConfigured()) return false;
+  if (!booking.lineUserId || !lineConfigured(booking.lineOa)) return false;
   const billToken = token || booking.billToken || randomBytes(18).toString("base64url");
   if (!token && !booking.billToken) await db.collection<BookingDoc>("bookingRequests").updateOne({ _id: booking._id }, { $set: { billToken } });
-  try { await pushLine(booking.lineUserId, [{ type: "text", text: text(`${requestOrigin(request)}/bill/${billToken}`) }]); return true; } catch (error) { console.error("LINE extension notice failed:", error); return false; }
+  try { await pushLine(booking.lineUserId, [{ type: "text", text: text(`${requestOrigin(request)}/bill/${billToken}`) }], booking.lineOa); return true; } catch (error) { console.error("LINE extension notice failed:", error); return false; }
 }
 
 export async function POST(request: Request) {

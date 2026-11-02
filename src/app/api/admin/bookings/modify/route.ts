@@ -15,7 +15,7 @@ import { requestOrigin } from "@/lib/request-origin";
 
 type InputItem = { id: number; quantity: number };
 type BookingItem = { id: number; name: string; sku: string; image: string; dailyRate: number | null; unitSku?: string; quantity?: number; depositPrice?: number; rentalPrice?: number | null };
-type Booking = { _id: string; status: string; name?: string; phone?: string; address?: string; pin?: string; note?: string; payment?: "unpaid" | "paid"; lineUserId?: string; billToken?: string; start: string; end: string; days: number; method: string; deliveryFee?: number; estimatedTotal?: number | null; returned?: object; shipment?: object; schedule?: ReturnType<typeof scheduleRecord>; items: BookingItem[]; quote?: { rental?: number; deposit?: number; shipping?: number; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string }; extensions?: Extension[] };
+type Booking = { _id: string; status: string; name?: string; phone?: string; address?: string; pin?: string; note?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineOa?: string; billToken?: string; start: string; end: string; days: number; method: string; deliveryFee?: number; estimatedTotal?: number | null; returned?: object; shipment?: object; schedule?: ReturnType<typeof scheduleRecord>; items: BookingItem[]; quote?: { rental?: number; deposit?: number; shipping?: number; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string }; extensions?: Extension[] };
 const validDate = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 export async function POST(request: Request) {
@@ -70,8 +70,8 @@ export async function POST(request: Request) {
   await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, deliveryFee: shipping, estimatedTotal: newTotal, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(extension ? { $push: { extensions: extension } } : {}) });
   await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: `แก้ไขสินค้า/วันเช่าหลังชำระเงิน · ส่วนต่าง ${difference} บาท` });
   let lineNotified = false;
-  if (extension?.billToken && booking.lineUserId && lineConfigured()) {
-    try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${difference.toLocaleString("th-TH")} บาท\nบิลใหม่ต้องชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${extension.billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE booking modification notice failed:", error); }
+  if (extension?.billToken && booking.lineUserId && lineConfigured(booking.lineOa)) {
+    try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${difference.toLocaleString("th-TH")} บาท\nบิลใหม่ต้องชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${extension.billToken}` }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE booking modification notice failed:", error); }
   }
   return Response.json({ ok: true, ...details, items, start, end, days, schedule, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, lineNotified });
 }

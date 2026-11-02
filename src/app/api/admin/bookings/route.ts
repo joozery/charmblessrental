@@ -20,7 +20,7 @@ const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, billToken });
   }
   if (body.action === "sendLine") {
-    if (!lineConfigured()) return Response.json({ error: "ยังไม่ได้ตั้งค่า LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN" }, { status: 503 });
+    if (!lineConfigured(booking.lineOa)) return Response.json({ error: "ยังไม่ได้ตั้งค่า LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN" }, { status: 503 });
     if (!booking.lineUserId) return Response.json({ error: "ลูกค้ายังไม่ได้ส่งเลขที่คำขอหรือเบอร์โทรใน LINE" }, { status: 409 });
     if (!booking.quote) return Response.json({ error: "กรุณากดบันทึกราคาในใบสรุปก่อนส่งบิล" }, { status: 409 });
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     const origin = requestOrigin(request), billUrl = `${origin}/bill/${billToken}`;
     const imageUrl = `${billUrl}/image?v=${Date.now()}`;
     const message = { type: "text" as const, text: `ใบรายละเอียดการเช่า (${booking._id}) ของคุณ${booking.name ? " " + booking.name : ""} พร้อมแล้วค่ะ\nดูบิลและบันทึกไฟล์: ${billUrl}\n\nกรุณาตรวจสอบยอด โอนเงินตามยอดสุทธิ และส่งสลิปในแชทนี้นะคะ 🙏${booking.verification?.mode === "identity" && booking.verification.status !== "approved" ? `\n\nคำขอนี้ไม่วางเงินมัดจำ รบกวนยืนยันตัวตน (บัตรประชาชน + แคปหน้า Instagram เต็มหน้าจอ + ที่อยู่) ได้ที่ลิงก์เดียวกันนี้ก่อนวันจัดส่งค่ะ` : ""}` };
-    try { await pushLine(booking.lineUserId, origin.startsWith("https://") ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }, message] : [message]); } catch (error) { console.error("LINE push failed:", error); return Response.json({ error: "ส่งข้อความไม่สำเร็จ ลูกค้าอาจบล็อกบัญชีร้านหรือ token ไม่ถูกต้อง" }, { status: 502 }); }
+    try { await pushLine(booking.lineUserId, origin.startsWith("https://") ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }, message] : [message], booking.lineOa); } catch (error) { console.error("LINE push failed:", error); return Response.json({ error: "ส่งข้อความไม่สำเร็จ ลูกค้าอาจบล็อกบัญชีร้านหรือ token ไม่ถูกต้อง" }, { status: 502 }); }
     await bookings.updateOne({ _id: body.id }, { $set: { lineSentAt: new Date() } });
     await log("booking.bill_sent", "ส่งบิลทาง LINE");
     return Response.json({ ok: true, billToken });
@@ -125,14 +125,14 @@ export async function POST(request: Request) {
     for (const [sku, previous] of before) if (previous.status !== (released.includes(sku) ? "available" : "rented")) await audit(request, admin, { action: "product.unit", targetType: "product", targetId: String(previous.productId), summary: `${sku} ${released.includes(sku) ? "ถูกเปลี่ยนออกจาก" : "ส่งให้ลูกค้า"} คำขอ ${booking._id}`, changes: [{ field: "status", before: previous.status, after: released.includes(sku) ? "available" : "rented" }] });
     // Tell the customer on first dispatch, or when the tracking number changes.
     let lineNotified = false;
-    if (booking.lineUserId && lineConfigured() && (!booking.shipment || booking.shipment.trackingNumber !== shipment.trackingNumber || booking.shipment.carrier !== shipment.carrier)) {
+    if (booking.lineUserId && lineConfigured(booking.lineOa) && (!booking.shipment || booking.shipment.trackingNumber !== shipment.trackingNumber || booking.shipment.carrier !== shipment.carrier)) {
       const billToken = booking.billToken || randomBytes(18).toString("base64url");
       if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken } });
       const billUrl = `${requestOrigin(request)}/bill/${billToken}`;
       const text = booking.method === "pickup"
         ? `ส่งมอบสินค้าคำขอ ${booking._id} เรียบร้อยแล้วค่ะ\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nเมื่อส่งคืนแล้ว แจ้งเลขพัสดุได้ที่ ${billUrl}`
         : `จัดส่งสินค้าคำขอ ${booking._id} แล้วค่ะ 📦\n${shipment.carrier} ${shipment.trackingNumber}\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nติดตามสถานะและแจ้งเลขพัสดุตอนส่งคืนได้ที่ ${billUrl}`;
-      try { await pushLine(booking.lineUserId, [{ type: "text", text }]); lineNotified = true; } catch (error) { console.error("LINE shipping notice failed:", error); }
+      try { await pushLine(booking.lineUserId, [{ type: "text", text }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE shipping notice failed:", error); }
     }
     return Response.json({ ok: true, lineNotified, items, shipment: { ...shipment, shippedAt: shipment.shippedAt.toISOString() } });
   }

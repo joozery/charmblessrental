@@ -25,8 +25,8 @@ export async function POST(request: Request) {
   const deposit = await deposits(db).findOne({ _id: body.bookingId });
   if (!deposit || deposit.status === "void") return Response.json({ error: "ไม่พบเงินมัดจำของรายการนี้ ต้องยืนยันชำระเงินก่อน" }, { status: 404 });
   if (deposit.status !== "held") return Response.json({ error: "บันทึกการคืนเงินมัดจำของรายการนี้แล้ว" }, { status: 409 });
-  const bookings = db.collection<{ _id: string; returned?: unknown; lineUserId?: string; billToken?: string; refundAccount?: RefundAccount; lateReturn?: LateReturn }>("bookingRequests");
-  const booking = await bookings.findOne({ _id: body.bookingId }, { projection: { returned: 1, lineUserId: 1, billToken: 1, refundAccount: 1, lateReturn: 1 } });
+  const bookings = db.collection<{ _id: string; returned?: unknown; lineUserId?: string; lineOa?: string; billToken?: string; refundAccount?: RefundAccount; lateReturn?: LateReturn }>("bookingRequests");
+  const booking = await bookings.findOne({ _id: body.bookingId }, { projection: { returned: 1, lineUserId: 1, lineOa: 1, billToken: 1, refundAccount: 1, lateReturn: 1 } });
   if (!booking?.returned) return Response.json({ error: "กรุณาบันทึกรับคืนสินค้าก่อนคืนเงินมัดจำ" }, { status: 409 });
   const refund = Math.round(body.refund * 100) / 100, deducted = Math.round((deposit.amount - refund) * 100) / 100, reason = body.reason.trim(), transferRef = typeof body.transferRef === "string" ? body.transferRef.trim() : "";
   if (deducted < 0) return Response.json({ error: "ยอดคืนต้องไม่เกินเงินมัดจำที่รับไว้" }, { status: 400 });
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   if (booking.lateReturn?.status === "unpaid" && deducted >= booking.lateReturn.fine) await bookings.updateOne({ _id: booking._id, "lateReturn.status": "unpaid" }, { $set: { "lateReturn.status": "deposit", "lateReturn.paidOn": body.date, "lateReturn.paidByName": admin.name } });
   // Tell the customer on LINE, with the transfer slip when there is one.
   let lineNotified = false;
-  if (booking.lineUserId && lineConfigured()) {
+  if (booking.lineUserId && lineConfigured(booking.lineOa)) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: booking._id }, { $set: { billToken } });
     const account = booking.refundAccount, link = `${requestOrigin(request)}/bill/${billToken}`;
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       ? `💸 ร้านโอนเงินมัดจำคืนให้แล้วค่ะ\nคำขอ ${deposit.bookingId}\nยอดคืน ${money(refund)} บาท${account ? ` เข้าบัญชี ${account.bank} •••${account.accountNumber.slice(-4)}` : ""}${deducted > 0 ? `\nหัก ${money(deducted)} บาท: ${reason}` : ""}\nดูรายละเอียด: ${link}\n\nขอบคุณที่ใช้บริการ Charm Bless นะคะ 💗`
       : `แจ้งเรื่องเงินมัดจำคำขอ ${deposit.bookingId} ค่ะ\nร้านหักเงินมัดจำทั้งหมด ${money(deducted)} บาท\nเหตุผล: ${reason}\nหากมีข้อสงสัย ทักแชทนี้ได้เลยค่ะ`;
     const slip = refund > 0 ? body.evidence[0] as string | undefined : undefined;
-    try { await pushLine(booking.lineUserId, [{ type: "text", text }, ...(slip ? [{ type: "image" as const, originalContentUrl: slip, previewImageUrl: slip }] : [])]); lineNotified = true; } catch (error) { console.error("LINE deposit notice failed:", error); }
+    try { await pushLine(booking.lineUserId, [{ type: "text", text }, ...(slip ? [{ type: "image" as const, originalContentUrl: slip, previewImageUrl: slip }] : [])], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE deposit notice failed:", error); }
   }
   return Response.json({ lineNotified, deposit: { ...deposit, status, refund: { amount: refund, deducted, reason, ...(transferRef ? { transferRef } : {}), date: body.date, evidence: body.evidence, at: now.toISOString(), by, byName: admin.name } } });
 }
@@ -61,8 +61,8 @@ async function createPenaltyBill(request: Request, body: { action?: string; book
   if (auth.error) return auth.error;
   if (typeof body.bookingId !== "string" || body.bookingId.length > 100 || typeof body.amount !== "number" || !Number.isFinite(body.amount) || body.amount <= 0 || body.amount > 1000000 || typeof body.reason !== "string" || !body.reason.trim() || body.reason.length > 500) return Response.json({ error: "กรุณากรอกยอดค่าปรับและเหตุผลให้ครบถ้วน" }, { status: 400 });
   const db = await database();
-  const bookings = db.collection<{ _id: string; name?: string; lineUserId?: string; status: string; end: string; extensions?: Extension[] }>("bookingRequests");
-  const booking = await bookings.findOne({ _id: body.bookingId }, { projection: { _id: 1, name: 1, lineUserId: 1, status: 1, end: 1, extensions: 1 } });
+  const bookings = db.collection<{ _id: string; name?: string; lineUserId?: string; lineOa?: string; status: string; end: string; extensions?: Extension[] }>("bookingRequests");
+  const booking = await bookings.findOne({ _id: body.bookingId }, { projection: { _id: 1, name: 1, lineUserId: 1, lineOa: 1, status: 1, end: 1, extensions: 1 } });
   if (!booking || booking.status === "cancelled") return Response.json({ error: "ไม่พบรายการจองที่ใช้งานได้" }, { status: 404 });
   const now = new Date(), amount = Math.round(body.amount * 100) / 100, billToken = randomBytes(18).toString("base64url");
   const extension: Extension = { id: randomUUID(), fromEnd: booking.end, toEnd: booking.end, addedDays: 0, amount, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken, dueAt: new Date(now.getTime() + 60 * 60 * 1000), chargeType: "penalty", note: body.reason.trim().slice(0, 500) };
@@ -70,6 +70,6 @@ async function createPenaltyBill(request: Request, body: { action?: string; book
   if (!result.modifiedCount) return Response.json({ error: "สร้างบิลค่าปรับไม่สำเร็จ กรุณาลองใหม่" }, { status: 409 });
   await audit(request, auth.admin, { action: "booking.penalty_bill_created", targetType: "booking", targetId: booking._id, summary: `สร้างบิลค่าปรับ ${money(amount)} บาท · ${extension.note}`, changes: [{ field: "penaltyAmount", before: null, after: amount }, { field: "penaltyReason", before: null, after: extension.note }] });
   let lineNotified = false;
-  if (booking.lineUserId && lineConfigured()) try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีบิลค่าปรับเพิ่มเติมสำหรับคำขอ ${booking._id} ค่ะ\nยอด ${money(amount)} บาท\nเหตุผล: ${extension.note}\nกรุณาชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${billToken}` }]); lineNotified = true; } catch (error) { console.error("LINE penalty notice failed:", error); }
+  if (booking.lineUserId && lineConfigured(booking.lineOa)) try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีบิลค่าปรับเพิ่มเติมสำหรับคำขอ ${booking._id} ค่ะ\nยอด ${money(amount)} บาท\nเหตุผล: ${extension.note}\nกรุณาชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${billToken}` }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE penalty notice failed:", error); }
   return Response.json({ extension, lineNotified });
 }

@@ -9,7 +9,7 @@ import { database } from "@/lib/mongodb";
 import { getStoreSettings } from "@/lib/store-settings";
 import { requestOrigin } from "@/lib/request-origin";
 
-type BookingDoc = { _id: string; status: string; billToken?: string; lineUserId?: string; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; billToken?: string; lineUserId?: string; lineOa?: string; verification?: BookingVerification };
 
 // What the reviewer needs for one booking: the customer's details and the ids of the stored images.
 export async function GET(request: Request) {
@@ -60,12 +60,12 @@ export async function POST(request: Request) {
     : { $set: { status: "rejected", updatedAt: now } });
   await audit(request, auth.admin, { action: body.approve ? "identity.approved" : "identity.rejected", targetType: "booking", targetId: booking._id, summary: body.approve ? "ตรวจเอกสารยืนยันตัวตนแล้ว ผ่าน" : `ขอเอกสารใหม่: ${reason}`, changes: [{ field: "status", before: booking.verification.status, after: verification.status }] });
   let lineNotified = false;
-  if (booking.lineUserId && lineConfigured()) {
+  if (booking.lineUserId && lineConfigured(booking.lineOa)) {
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: booking._id }, { $set: { billToken } });
     const link = `${requestOrigin(request)}/bill/${billToken}`;
     const message = body.approve ? `✅ ยืนยันตัวตนคำขอ ${booking._id} เรียบร้อยแล้วค่ะ ไม่ต้องวางเงินมัดจำ ร้านจะดำเนินการตามกำหนดนะคะ 💗` : `รบกวนส่งเอกสารยืนยันตัวตนคำขอ ${booking._id} ใหม่อีกครั้งค่ะ 🙏\nเหตุผล: ${reason}\nส่งได้ที่ ${link}`;
-    try { await pushLine(booking.lineUserId, [{ type: "text", text: message }]); lineNotified = true; } catch (error) { console.error("LINE identity notice failed:", error); }
+    try { await pushLine(booking.lineUserId, [{ type: "text", text: message }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE identity notice failed:", error); }
   }
   return Response.json({ ok: true, verification: { ...verification, reviewedAt: now.toISOString() }, lineNotified });
 }
