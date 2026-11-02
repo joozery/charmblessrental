@@ -9,9 +9,11 @@ import { can, permissionsOf } from "@/lib/permissions";
 import { getStoreSettings } from "@/lib/store-settings";
 import { legacyToShipFilter, toShipFilter } from "@/lib/to-ship";
 import { legacyShipFrom } from "@/lib/legacy-rentals";
+import { toReturnFilter } from "@/lib/to-return";
 import AdminChrome from "./admin-chrome";
 import "./admin.css";
 import "./admin-chrome.css";
+import "./mobile-tables.css";
 async function Workspace({ children }: { children: React.ReactNode }) {
   const admin = await currentAdmin();
   if (!admin) return children;
@@ -27,7 +29,7 @@ async function Workspace({ children }: { children: React.ReactNode }) {
   // Out with a customer past the return day, and the customer has not said it is on its way.
   const today = thaiDay();
   const overdue = () => db.collection("bookingRequests").countDocuments({ status: "confirmed", shipment: { $exists: true }, returned: { $exists: false }, customerReturn: { $exists: false }, $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] });
-  const [products, admins, bookings, refunds, late, clashes, slips, toShip, shipLate] = await Promise.all([
+  const [products, admins, bookings, refunds, late, clashes, slips, toShip, shipLate, toReturn] = await Promise.all([
     db.collection("products").countDocuments(),
     admin.role === "owner" ? db.collection("admins").countDocuments() : Promise.resolve(0),
     can(admin, "bookings") ? db.collection("bookingRequests").countDocuments({ status: "new" }) : Promise.resolve(0),
@@ -40,10 +42,11 @@ async function Workspace({ children }: { children: React.ReactNode }) {
     // Old-sheet rentals due from legacyShipFrom go out from the same page.
     can(admin, "shipping") ? Promise.all([db.collection("bookingRequests").countDocuments(toShipFilter), db.collection("rentals").countDocuments(legacyToShipFilter(legacyShipFrom))]).then(([web, old]) => web + old) : Promise.resolve(0),
     can(admin, "shipping") ? Promise.all([db.collection("bookingRequests").countDocuments({ ...toShipFilter, $or: [{ "schedule.ship": { $lte: today } }, { schedule: { $exists: false }, start: { $lte: today } }] }), db.collection("rentals").countDocuments({ ...legacyToShipFilter(legacyShipFrom), shipDate: { $gte: new Date(`${legacyShipFrom}T00:00:00.000Z`), $lte: new Date(`${today}T00:00:00.000Z`) } })]).then(([web, old]) => web + old) : Promise.resolve(0),
+    can(admin, "shipping") ? db.collection("bookingRequests").countDocuments(toReturnFilter) : Promise.resolve(0),
   ]);
   // The shop logo replaces the star in the sidebar header once one is uploaded in store settings.
   const logoImage = (await getStoreSettings()).logoImage || "", logo = /^(https?:\/\/|\/[^/])/.test(logoImage) ? logoImage : "";
-  return <AdminChrome user={{ name: admin.name, email: admin.email, username: admin.username, role: admin.role, permissions: permissionsOf(admin) }} counts={{ products, admins, bookings, refunds, late, clashes, slips, toShip, shipLate }} logo={logo}>{children}</AdminChrome>;
+  return <AdminChrome user={{ name: admin.name, email: admin.email, username: admin.username, role: admin.role, permissions: permissionsOf(admin) }} counts={{ products, admins, bookings, refunds, late, clashes, slips, toShip, shipLate, toReturn }} logo={logo}>{children}</AdminChrome>;
 }
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<main className="admin-loading" role="status">กำลังโหลดพื้นที่จัดการร้าน…</main>}><Workspace>{children}</Workspace></Suspense>;

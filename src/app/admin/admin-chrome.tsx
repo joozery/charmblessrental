@@ -10,7 +10,7 @@ import type { Permission } from "@/lib/permissions";
 export default function AdminChrome({ user, counts, logo = "", children }: {
   logo?: string;
   user: { name: string; email?: string; username: string; role: "owner" | "admin"; permissions: Permission[] };
-  counts: { products: number; admins: number; bookings: number; refunds: number; late: number; clashes?: number; slips?: number; toShip?: number; shipLate?: number };
+  counts: { products: number; admins: number; bookings: number; refunds: number; late: number; clashes?: number; slips?: number; toShip?: number; shipLate?: number; toReturn?: number };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -33,6 +33,7 @@ export default function AdminChrome({ user, counts, logo = "", children }: {
     { href: "/admin/rentals", title: "ประวัติการเช่า", description: "ค้นหารายการเช่าและข้อมูลลูกค้า", icon: "calendar" as const, count: null as number | null, permission: "rentals" as Permission },
     { href: "/admin/bookings", title: "คำขอจอง", description: "ตรวจสอบและอัปเดตคำขอจากลูกค้า", icon: "booking" as const, count: counts.bookings, alerts: [{ label: "เลยคืน", title: "เลยกำหนดคืน", count: counts.late, danger: true }, { label: "สลิป", title: "สลิปรอตรวจ", count: counts.slips || 0, danger: true }, { label: "มัดจำ", title: "รอคืนมัดจำ", count: counts.refunds, danger: false }], permission: "bookings" as Permission },
     { href: "/admin/to-ship", title: "รอจัดส่ง", description: "ลูกค้าชำระแล้ว รอร้านจัดส่ง", icon: "delivery" as const, count: counts.toShip ?? null, alerts: [{ label: "ด่วน", title: "ถึงวันส่งหรือเลยกำหนดส่ง", count: counts.shipLate || 0, danger: true }], permission: "shipping" as Permission },
+    { href: "/admin/to-return", title: "รอส่งคืน", description: "ส่งสินค้าแล้ว รอลูกค้าส่งคืนหรือร้านรับคืน", icon: "delivery" as const, count: counts.toReturn ?? null, permission: "shipping" as Permission },
     { href: "/admin/customers", title: "ลูกค้าและเครดิต", description: "ประวัติลูกค้า LINE และเครดิตส่วนลด", icon: "users" as const, count: null as number | null, permission: "bookings" as Permission },
     { href: "/admin/discounts", title: "ส่วนลดและโค้ด", description: "สร้างโค้ดส่วนลดสำหรับจัดทำบิล", icon: "sliders" as const, count: null as number | null, permission: "pricing" as Permission },
     { href: "/admin/preparation", title: "เตรียมสินค้า", description: "ตรวจสภาพ ซัก ซ่อม และยืนยันพร้อมให้เช่า", icon: "box" as const, count: null as number | null, permission: "shipping" as Permission },
@@ -49,7 +50,7 @@ export default function AdminChrome({ user, counts, logo = "", children }: {
     ...(user.role === "owner" ? [{ href: "/admin/admins", title: "จัดการแอดมิน", description: "ทีมงานและสิทธิ์ใช้งาน", icon: "users" as const, count: counts.admins }] : []),
   ].filter(item => allowed(item.permission));
   const navigationGroups = [
-    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings", "/admin/to-ship", "/admin/customers", "/admin/identity", "/admin/preparation"].includes(item.href)) },
+    { label: "ภาพรวม", items: navigation.filter(item => ["/admin", "/admin/rentals", "/admin/bookings", "/admin/to-ship", "/admin/to-return", "/admin/customers", "/admin/identity", "/admin/preparation"].includes(item.href)) },
     { label: "จัดการร้าน", items: navigation.filter(item => ["/admin/finance", "/admin/commissions", "/admin/store-settings", "/admin/products", "/admin/rental-pricing", "/admin/discounts", "/admin/delivery-settings", "/admin/availability"].includes(item.href)) },
     { label: "เอกสารการเช่า", items: navigation.filter(item => item.href === "/admin/rental-document-settings") },
     { label: "ทีมงาน", items: navigation.filter(item => ["/admin/admins", "/admin/activity"].includes(item.href)) },

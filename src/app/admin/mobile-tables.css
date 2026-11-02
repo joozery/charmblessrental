@@ -1,0 +1,111 @@
+@media (max-width: 760px) {
+  .admin-table-wrap,
+  .finance-ledger-table-wrap,
+  .rental-history-table-wrap {
+    overflow: visible;
+  }
+
+  .admin-table.inventory-table,
+  .admin-table.customers-table,
+  .finance-ledger-table,
+  .rental-history-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .admin-table.inventory-table thead,
+  .admin-table.customers-table thead,
+  .finance-ledger-table thead,
+  .rental-history-table thead {
+    display: none;
+  }
+
+  .admin-table.inventory-table tbody,
+  .admin-table.customers-table tbody,
+  .finance-ledger-table tbody,
+  .rental-history-table tbody,
+  .admin-table.inventory-table tr,
+  .admin-table.customers-table tr:not(.customers-expanded-row),
+  .finance-ledger-table tr,
+  .rental-history-table tr {
+    display: block;
+  }
+
+  .admin-table.inventory-table tr,
+  .admin-table.customers-table tr:not(.customers-expanded-row),
+  .finance-ledger-table tr,
+  .rental-history-table tr {
+    margin: 8px;
+    padding: 9px 12px;
+    border: 1px solid #e5e8ed;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgb(32 41 56 / 4%);
+  }
+
+  .admin-table.inventory-table td,
+  .admin-table.customers-table tr:not(.customers-expanded-row) td,
+  .finance-ledger-table td,
+  .rental-history-table td {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    min-width: 0;
+    padding: 7px 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-table.inventory-table td::before,
+  .admin-table.customers-table td::before,
+  .finance-ledger-table td::before,
+  .rental-history-table td::before {
+    color: #8a919e;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .admin-table.inventory-table td:nth-child(1)::before { content: "รูปสินค้า"; }
+  .admin-table.inventory-table td:nth-child(2)::before { content: "รหัสสินค้า"; }
+  .admin-table.inventory-table td:nth-child(3)::before { content: "ชื่อสินค้า"; }
+  .admin-table.inventory-table td:nth-child(4)::before { content: "ประเภท"; }
+  .admin-table.inventory-table td:nth-child(5)::before { content: "สต๊อก"; }
+  .admin-table.inventory-table td:nth-child(6)::before { content: "ราคาเช่า"; }
+  .admin-table.inventory-table td:nth-child(7)::before { content: "หน้าร้าน"; }
+  .admin-table.inventory-table td:nth-child(8)::before { content: "ต้นทุนรวม"; }
+  .admin-table.inventory-table td:nth-child(9)::before { content: "รายได้"; }
+  .admin-table.inventory-table td:nth-child(10)::before { content: "กำไร"; }
+  .admin-table.inventory-table td:nth-child(11)::before { content: "หมายเหตุ"; }
+  .admin-table.inventory-table td:nth-child(12)::before { content: "จัดการ"; }
+
+  .admin-table.customers-table td:nth-child(1)::before { content: "ลูกค้า"; }
+  .admin-table.customers-table td:nth-child(2)::before { content: "LINE"; }
+  .admin-table.customers-table td:nth-child(3)::before { content: "เบอร์โทร"; }
+  .admin-table.customers-table td:nth-child(4)::before { content: "การจอง"; }
+  .admin-table.customers-table td:nth-child(5)::before { content: "สำเร็จ"; }
+  .admin-table.customers-table td:nth-child(6)::before { content: "เครดิตคงเหลือ"; }
+  .admin-table.customers-table td:nth-child(7)::before { content: "อัปเดตล่าสุด"; }
+
+  .finance-ledger-table td:nth-child(1)::before { content: "วันที่"; }
+  .finance-ledger-table td:nth-child(2)::before { content: "ประเภท"; }
+  .finance-ledger-table td:nth-child(3)::before { content: "หมวดหมู่"; }
+  .finance-ledger-table td:nth-child(4)::before { content: "หมายเหตุ"; }
+  .finance-ledger-table td:nth-child(5)::before { content: "จำนวนเงิน"; }
+  .finance-ledger-table td:nth-child(6)::before { content: "จัดการ"; }
+
+  .rental-history-table td:nth-child(1)::before { content: "เลขที่รายการ"; }
+  .rental-history-table td:nth-child(2)::before { content: "วันที่ลงข้อมูล"; }
+  .rental-history-table td:nth-child(3)::before { content: "ลูกค้า"; }
+  .rental-history-table td:nth-child(4)::before { content: "กำหนดเช่า"; }
+  .rental-history-table td:nth-child(5)::before { content: "ยอดรวม"; }
+  .rental-history-table td:nth-child(6)::before { content: "สถานะ"; }
+  .rental-history-table td:nth-child(7)::before { content: "รายละเอียด"; }
+
+  .admin-table.inventory-table .inventory-money,
+  .finance-ledger-table td.is-income,
+  .finance-ledger-table td.is-expense {
+    text-align: left;
+  }
+}
