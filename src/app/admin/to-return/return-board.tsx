@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 
 export type ReturnRow = {
-  id: string; name: string; phone: string; pickup: boolean; returnDay: string; start: string;
+  id: string; legacy?: boolean; name: string; phone: string; pickup: boolean; returnDay: string; start: string;
   items: { name: string; sku: string; image: string }[];
   customerReturn: { carrier: string; trackingNumber: string; at: string } | null;
 };
@@ -35,7 +35,7 @@ export default function ReturnBoard({ rows: initial, today }: { rows: ReturnRow[
     if (!form) return;
     setBusy(true); setError(""); setDone("");
     try {
-      const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, action: "receiveReturn", condition: form.condition, note: form.note.trim() }) });
+      const response = await fetch(row.legacy ? "/api/admin/rentals" : "/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(row.legacy ? { id: row.id, action: "return", condition: form.condition, note: form.note.trim() } : { id: row.id, action: "receiveReturn", condition: form.condition, note: form.note.trim() }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "บันทึกรับคืนไม่สำเร็จ");
       setRows(current => current.filter(item => item.id !== row.id)); setForm(null);
