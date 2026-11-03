@@ -11,12 +11,12 @@ import { audit } from "@/lib/audit";
 import { carrierFor, saysReturned, trackingIn } from "@/lib/line-return";
 import { rentalStage, stageLabel } from "@/lib/rental-stage";
 import { returnMethods, type ScheduleRecord } from "@/lib/schedule";
-import { ensureCustomer, type CustomerRecord } from "@/lib/customer-credits";
+import { creditEntries, ensureCustomer, type CustomerRecord } from "@/lib/customer-credits";
 import { requestOrigin } from "@/lib/request-origin";
 
 type LineEvent = { type: string; replyToken?: string; source?: { userId?: string }; message?: { type: string; text?: string } };
 type BookingDoc = {
-  _id: string; name?: string; phone: string; status: string; payment?: string; method?: string; lineUserId?: string; lineOa?: string; lineName?: string; lineLinkedAt?: Date; billToken?: string;
+  _id: string; name?: string; phone: string; status: string; payment?: string; method?: string; lineUserId?: string; lineOa?: string; lineName?: string; lineLinkedAt?: Date; billToken?: string; pendingCredit?: { amount: number; reason: string; createdAt: Date; createdBy: string; createdByName: string };
   verification?: BookingVerification; schedule?: ScheduleRecord; shipment?: { shippedAt?: Date }; returned?: object; customerReturn?: { carrier: string; trackingNumber: string; at: Date; via?: "line" | "bill" };
 };
 
@@ -84,6 +84,14 @@ async function handle(request: Request, events: LineEvent[], origin: string, oa:
       const lineName = await lineProfileName(userId, oa);
       await bookings.updateOne({ _id: target._id }, { $set: { lineUserId: userId, lineOa: oa, lineName, lineLinkedAt: new Date() } });
       await ensureCustomer(db, { lineUserId: userId, lineName, name: target.name, phone: target.phone });
+      const pendingCustomerId = `pending:${target._id}`;
+      const pendingCredits = await creditEntries(db).find({ customerId: pendingCustomerId, type: "grant", remaining: { $gt: 0 } }).toArray();
+      if (pendingCredits.length) {
+        const amount = pendingCredits.reduce((sum, item) => sum + item.remaining, 0);
+        await creditEntries(db).updateMany({ customerId: pendingCustomerId, type: "grant", remaining: { $gt: 0 } }, { $set: { customerId: userId } });
+        await db.collection<CustomerRecord>("customers").updateOne({ _id: userId }, { $inc: { creditBalance: amount }, $set: { updatedAt: new Date() } });
+        await db.collection<CustomerRecord>("customers").updateOne({ _id: pendingCustomerId }, { $inc: { creditBalance: -amount }, $set: { updatedAt: new Date() } });
+      }
       if (before?.lineUserId !== userId) await db.collection<CustomerRecord>("customers").updateOne({ _id: userId }, { $inc: { bookingCount: 1 }, $set: { updatedAt: new Date() } });
       // Only a new or different LINE account (or OA) goes in the history; repeating the request number is not news.
       const sameOa = (before?.lineOa || "main") === oa;
