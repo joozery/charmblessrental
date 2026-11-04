@@ -27,7 +27,7 @@ export const derived = (units: ProductUnit[]) => ({
 const pieceNumber = (sku: string, code: string) => sku.startsWith(`${code}-`) ? Number(sku.slice(code.length + 1)) || 0 : 0;
 const pieceCode = (code: string, number: number) => `${code}-${String(number).padStart(2, "0")}`;
 
-async function skuTaken(db: Db, sku: string) { return !!await products(db).findOne({ $or: [{ "units.sku": sku }, { sku }] }, { projection: { _id: 1 } }); }
+async function skuTaken(db: Db, sku: string, excludeId?: number) { return !!await products(db).findOne({ $and: [{ $or: [{ "units.sku": sku }, { sku }] }, ...(excludeId === undefined ? [] : [{ id: { $ne: excludeId } }])] }, { projection: { _id: 1 } }); }
 // Next free product code: A0330, A0331… The counter is seeded by the merge script.
 async function nextProductCode(db: Db) {
   for (;;) {
@@ -37,24 +37,26 @@ async function nextProductCode(db: Db) {
   }
 }
 
-export async function createProduct(fields: ProductFields, pieces: { cost: number | null; note: string }[]) {
+export async function createProduct(fields: ProductFields, pieces: { cost: number | null; note: string }[], requestedSku?: string) {
   const db = await database();
   await products(db).createIndex({ id: 1 }, { unique: true });
   const counter = await db.collection<{ _id: string; sequence: number }>("counters").findOneAndUpdate(
     { _id: "products" }, [{ $set: { sequence: { $add: [{ $ifNull: ["$sequence", 0] }, 1] } } }], { upsert: true, returnDocument: "after" }
   );
-  const id = counter!.sequence, code = await nextProductCode(db), now = new Date();
+  const id = counter!.sequence, code = requestedSku || await nextProductCode(db), now = new Date();
+  if (await skuTaken(db, code)) throw new Error("SKU_TAKEN");
   const units: ProductUnit[] = pieces.map((piece, index) => ({ sku: pieceCode(code, index + 1), cost: piece.cost, status: "available", note: piece.note, addedAt: now }));
   await products(db).insertOne({ ...fields, sku: code, units, ...derived(units), legacyId: `PD-${code}`, id, image: `rental-${id}`, inventoryStatus: "อยู่ที่ร้าน" });
   return { id, code, units };
 }
 
-export async function updateProduct(id: number, fields: ProductFields) {
+export async function updateProduct(id: number, fields: ProductFields, requestedSku?: string) {
   const db = await database();
   const existing = await products(db).findOne({ id });
   if (!existing) throw new Error("PRODUCT_NOT_FOUND");
+  if (requestedSku && requestedSku !== existing.sku && await skuTaken(db, requestedSku, id)) throw new Error("SKU_TAKEN");
   const units = unitsOf(existing);
-  await products(db).updateOne({ id }, { $set: { ...fields, units, ...derived(units) } });
+  await products(db).updateOne({ id }, { $set: { ...fields, ...(requestedSku ? { sku: requestedSku } : {}), units, ...derived(units) } });
   return existing;
 }
 
@@ -88,6 +90,20 @@ export async function updateUnit(id: number, sku: string, patch: { cost: number 
   const next = units.map(unit => unit.sku === sku ? after : unit);
   await products(db).updateOne({ id }, { $set: { units: next, ...derived(next) } });
   return { before, after, units: next };
+}
+
+export async function deleteUnit(id: number, sku: string) {
+  const db = await database();
+  const existing = await products(db).findOne({ id });
+  if (!existing) throw new Error("PRODUCT_NOT_FOUND");
+  if (!existing.units?.length) throw new Error("UNIT_REQUIRED");
+  const before = existing.units.find(unit => unit.sku === sku);
+  if (!before) throw new Error("UNIT_NOT_FOUND");
+  if (before.status !== "retired" && before.status !== "unavailable") throw new Error("UNIT_ACTIVE");
+  const next = existing.units.filter(unit => unit.sku !== sku);
+  const result = await products(db).updateOne({ id, "units.sku": sku }, { $set: { units: next, ...derived(next) } });
+  if (!result.modifiedCount) throw new Error("PRODUCT_CHANGED");
+  return { before, units: next };
 }
 
 // Moves pieces (by piece code, across products) to a new status; returns each piece's status before the change.

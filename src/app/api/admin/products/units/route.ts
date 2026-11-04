@@ -1,7 +1,8 @@
 import { revalidateTag } from "next/cache";
 import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
 import { audit, diff } from "@/lib/audit";
-import { addUnits, getProducts, updateUnit } from "@/lib/product-store";
+import { addUnits, deleteUnit, getProducts, updateUnit } from "@/lib/product-store";
+import { database } from "@/lib/mongodb";
 import { unitStatusLabels, type UnitStatus } from "@/lib/products";
 
 const validAmount = (value: unknown) => value === null || typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 10000000;
@@ -21,6 +22,13 @@ export async function POST(request: Request) {
       const { before, after } = await updateUnit(body.productId, body.sku, { cost: body.cost, status: body.status as UnitStatus, note: body.note.trim() });
       const changes = diff(before, after, ["cost", "status", "note"]);
       if (changes.length) await audit(request, auth.admin, { action: changes.some(change => change.field === "cost") ? "product.price" : "product.unit", targetType: "product", targetId: String(body.productId), summary: `แก้ไขชิ้น ${body.sku}`, changes });
+    } else if (body.action === "delete") {
+      if (typeof body.sku !== "string" || body.sku.length > 100) return Response.json({ error: "ข้อมูลชิ้นไม่ถูกต้อง" }, { status: 400 });
+      const db = await database();
+      const bookingCount = await db.collection("bookingRequests").countDocuments({ status: { $ne: "cancelled" }, "items.unitSku": body.sku });
+      if (bookingCount) return Response.json({ error: `ลบไม่ได้ เพราะชิ้นนี้ผูกกับรายการจองที่ยังไม่ยกเลิก ${bookingCount} รายการ` }, { status: 409 });
+      const { before } = await deleteUnit(body.productId, body.sku);
+      await audit(request, auth.admin, { action: "product.unit", targetType: "product", targetId: String(body.productId), summary: `ลบชิ้น ${body.sku}`, changes: [{ field: "unit", before: body.sku, after: null }] });
     } else return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
     revalidateTag("catalog", { expire: 0 });
     return Response.json({ products: await getProducts() });
@@ -28,6 +36,8 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "";
     if (message === "PRODUCT_NOT_FOUND" || message === "UNIT_NOT_FOUND") return Response.json({ error: "ไม่พบสินค้าหรือชิ้นนี้ กรุณาโหลดหน้าใหม่" }, { status: 404 });
     if (message === "PRODUCT_CHANGED") return Response.json({ error: "มีการแก้ไขสินค้านี้พร้อมกัน กรุณาลองอีกครั้ง" }, { status: 409 });
+    if (message === "UNIT_ACTIVE") return Response.json({ error: "กรุณาเปลี่ยนสถานะชิ้นนี้เป็นเลิกใช้แล้วหรือไม่พร้อมเช่าก่อนลบ" }, { status: 409 });
+    if (message === "UNIT_REQUIRED") return Response.json({ error: "สินค้านี้ต้องมีชิ้นอย่างน้อย 1 ชิ้น ไม่สามารถลบชิ้นสุดท้ายได้" }, { status: 409 });
     return Response.json({ error: "บันทึกไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
   }
 }

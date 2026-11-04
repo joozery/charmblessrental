@@ -35,7 +35,9 @@ export async function promoteWaitlist(db: Db, request: Request | null, origin = 
     if (row.lineUserId && lineConfigured(row.lineOa) && origin) {
       const billToken = row.billToken || randomBytes(18).toString("base64url");
       if (!row.billToken) await bookings.updateOne({ _id: row._id }, { $set: { billToken } });
-      await pushLine(row.lineUserId, [{ type: "text", text: `🎉 ถึงคิวของคุณแล้วค่ะ คำขอ ${row._id}\nชุดที่รอคิวว่างแล้ว ร้านกันคิวให้ ${holdMinutes} นาที กรุณาชำระเงินภายในเวลานี้ ไม่เช่นนั้นสิทธิ์จะเลื่อนไปยังคิวถัดไป\nดูบิลได้ที่ ${origin}/bill/${billToken}` }], row.lineOa).catch(error => console.error("LINE waitlist notice failed:", error));
+      const imageUrl = `${origin}/bill/${billToken}/image?v=${Date.now()}`;
+      const message = { type: "text" as const, text: `🎉 ถึงคิวของคุณแล้วค่ะ คำขอ ${row._id}\nชุดที่รอคิวว่างแล้ว ร้านกันคิวให้ ${holdMinutes} นาที กรุณาชำระเงินภายในเวลานี้ ไม่เช่นนั้นสิทธิ์จะเลื่อนไปยังคิวถัดไป\nดูบิลและรายละเอียดการเช่าได้ที่ ${origin}/bill/${billToken}` };
+      await pushLine(row.lineUserId, origin.startsWith("https://") ? [{ type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl }, message] : [message], row.lineOa).catch(error => console.error("LINE waitlist notice failed:", error));
     }
   }
   return promoted;

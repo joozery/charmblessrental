@@ -20,7 +20,7 @@ const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, id: booking._id });
   }
   if (body.action === "billLink") {
+    if (booking.waitlist) return Response.json({ error: "คำขอนี้ยังอยู่ในคิวสำรอง ยังไม่มีลิงก์บิลจนกว่าจะถึงคิว" }, { status: 409 });
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken, payment: booking.payment || "unpaid" } });
     return Response.json({ ok: true, billToken });
@@ -57,6 +58,13 @@ export async function POST(request: Request) {
   if (body.action === "sendLine") {
     if (!lineConfigured(booking.lineOa)) return Response.json({ error: "ยังไม่ได้ตั้งค่า LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN" }, { status: 503 });
     if (!booking.lineUserId) return Response.json({ error: "ลูกค้ายังไม่ได้ส่งเลขที่คำขอหรือเบอร์โทรใน LINE" }, { status: 409 });
+    if (booking.waitlist) {
+      const message = { type: "text" as const, text: `⏳ คำขอ ${booking._id} ของคุณอยู่ในคิวสำรองค่ะ\nขณะนี้มีลูกค้าก่อนหน้าใช้ชุดในช่วงเวลานี้อยู่ กรุณารอสักครู่ ระบบจะแจ้งเตือนอีกครั้งเมื่อคิวว่างค่ะ\nยังไม่ต้องชำระเงิน จนกว่าจะได้รับบิลยืนยันจากร้านนะคะ` };
+      try { await pushLine(booking.lineUserId, [message], booking.lineOa); } catch (error) { console.error("LINE waitlist notice failed:", error); return Response.json({ error: "ส่งข้อความไม่สำเร็จ ลูกค้าอาจบล็อกบัญชีร้านหรือ token ไม่ถูกต้อง" }, { status: 502 }); }
+      await bookings.updateOne({ _id: body.id }, { $set: { lineSentAt: new Date() } });
+      await log("booking.bill_sent", "แจ้งสถานะคิวสำรองทาง LINE");
+      return Response.json({ ok: true, waitlist: true });
+    }
     if (!booking.quote) return Response.json({ error: "กรุณากดบันทึกราคาในใบสรุปก่อนส่งบิล" }, { status: 409 });
     const billToken = booking.billToken || randomBytes(18).toString("base64url");
     if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken, payment: booking.payment || "unpaid" } });

@@ -13,13 +13,13 @@ import PriceTiersEditor, { pricingFrom, rowsFrom, type TierRow } from "@/compone
 import { startingTier } from "@/lib/pricing";
 
 type Draft = {
-  id?: number; name: string; category: string; description: string; images: string[];
+  id?: number; sku: string; name: string; category: string; description: string; images: string[];
   color: string; size: string; dailyRate: number | null; deposit: number | null; depositRequired: boolean; shippingFee: number | null; gapDays: number | null; active: boolean;
   pieces: number; cost: number | null;
   custom: boolean; tierRows: TierRow[]; extra: string;
 };
 type Restock = { product: Product; count: number; cost: number | null; note: string };
-const empty: Draft = { name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, depositRequired: false, shippingFee: null, gapDays: null, active: true, pieces: 1, cost: null, custom: false, tierRows: rowsFrom(null), extra: "" };
+const empty: Draft = { sku: "", name: "", category: "เสื้อ", description: "", images: [], color: "", size: "", dailyRate: null, deposit: null, depositRequired: false, shippingFee: null, gapDays: null, active: true, pieces: 1, cost: null, custom: false, tierRows: rowsFrom(null), extra: "" };
 const money = (value?: number | null) => value == null ? "—" : value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const numeric = (input: HTMLInputElement) => Number.isNaN(input.valueAsNumber) ? null : input.valueAsNumber;
 const nextCodes = (product: Product, count: number) => {
@@ -30,7 +30,7 @@ const nextCodes = (product: Product, count: number) => {
 async function post(url: string, body: unknown) {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "บันทึกไม่สำเร็จ");
+  if (!response.ok) { const error = new Error(result.error || "บันทึกไม่สำเร็จ") as Error & { code?: string }; error.code = result.code; throw error; }
   return result as { products: Product[] };
 }
 
@@ -69,7 +69,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
   }
   function edit(product?: Product) {
     setError(""); setNotice(""); setUnitEdits({});
-    setDraft(product ? { id: product.id, name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: null, deposit: product.deposit ?? null, depositRequired: product.depositRequired === true, shippingFee: product.shippingFee ?? null, gapDays: product.gapDays ?? null, active: product.active !== false, pieces: 0, cost: null, ...customFields(product) } : { ...empty });
+    setDraft(product ? { id: product.id, sku: product.sku || "", name: product.name, category: product.category, description: product.notes ?? product.description, images: product.images, color: product.color || "", size: product.size || "", dailyRate: null, deposit: product.deposit ?? null, depositRequired: product.depositRequired === true, shippingFee: product.shippingFee ?? null, gapDays: product.gapDays ?? null, active: product.active !== false, pieces: 0, cost: null, ...customFields(product) } : { ...empty });
   }
   async function upload(file?: File) {
     if (!file || !draft) return;
@@ -87,13 +87,18 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
     event.preventDefault(); if (!draft) return;
     setBusy(true); setError("");
     try {
-      const { id, pieces: count, cost, custom, tierRows, extra, ...rest } = draft;
+      const { id, sku, pieces: count, cost, custom, tierRows, extra, ...rest } = draft;
       const customPricing = custom ? pricingFrom(tierRows, extra) : null;
       if (typeof customPricing === "string") throw new Error(customPricing);
       if (custom && !customPricing?.tiers.length) throw new Error("กรอกราคาเฉพาะอย่างน้อย 1 แถว หรือยกเลิกการใช้ราคาเฉพาะ");
       const fields = { ...rest, customPricing };
-      const result = await post("/api/admin/products", id ? { id, ...fields } : { ...fields, pieces: count, cost });
-      setDraft(null); done(result, id ? "บันทึกข้อมูลสินค้าเรียบร้อยแล้ว" : `เพิ่มสินค้าใหม่ ${count} ชิ้นแล้ว ระบบสร้างรหัสให้อัตโนมัติ`);
+      let confirmSkuChange = false;
+      let result;
+      for (;;) {
+        try { result = await post("/api/admin/products", id ? { id, sku, ...fields, confirmSkuChange } : { sku, ...fields, pieces: count, cost }); break; }
+        catch (cause) { if (!confirmSkuChange && cause instanceof Error && (cause as Error & { code?: string }).code === "PRODUCT_IN_USE" && window.confirm(cause.message)) { confirmSkuChange = true; continue; } throw cause; }
+      }
+      setDraft(null); done(result!, id ? "บันทึกข้อมูลสินค้าเรียบร้อยแล้ว" : `เพิ่มสินค้าใหม่ ${count} ชิ้นแล้ว`);
     } catch (e) { setError(e instanceof Error ? e.message : "เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่"); }
     finally { setBusy(false); }
   }
@@ -113,6 +118,16 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       setUnitEdits(current => { const next = { ...current }; delete next[unit.sku]; return next; });
       done(result, `บันทึกชิ้น ${unit.sku} แล้ว`);
     } catch (e) { setError(e instanceof Error ? e.message : "บันทึกชิ้นไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  }
+  async function deleteUnit(product: Product, unit: ProductUnit) {
+    if (!window.confirm(`ยืนยันลบชิ้น ${unit.sku} ใช่หรือไม่?\n\nการลบจะนำชิ้นนี้ออกจากสต๊อกถาวร และไม่สามารถกู้คืนจากหน้านี้ได้`)) return;
+    setBusy(true); setError("");
+    try {
+      const result = await post("/api/admin/products/units", { action: "delete", productId: product.id, sku: unit.sku, cost: unit.cost, note: unit.note });
+      setUnitEdits(current => { const next = { ...current }; delete next[unit.sku]; return next; });
+      done(result, `ลบชิ้น ${unit.sku} แล้ว`);
+    } catch (e) { setError(e instanceof Error ? e.message : "ลบชิ้นไม่สำเร็จ"); }
     finally { setBusy(false); }
   }
   async function removeProduct(product: Product) {
@@ -167,7 +182,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
       <p className="admin-form-full inventory-next-codes">รหัสชิ้นที่จะสร้าง: <strong>{nextCodes(restock.product, restock.count).join(", ")}</strong></p>
     </div>{error && <p className="admin-error" role="alert">{error}</p>}<div className="admin-form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => { setRestock(null); setError(""); }}>ยกเลิก</Button><Button type="submit" variant="primary" disabled={busy}>{busy ? "กำลังบันทึก…" : `เติม ${restock.count} ชิ้น`}</Button></div></form>}<Dialog.Close className="admin-dialog-close" aria-label="ปิดหน้าต่าง" disabled={busy}><Icon name="close" /></Dialog.Close></Dialog.Content></Dialog.Portal></Dialog.Root>
     <Dialog.Root open={!!draft} onOpenChange={open => { if (!open && !busy) { setDraft(null); setError(""); } }}><Dialog.Portal><Dialog.Overlay className="admin-dialog-overlay" /><Dialog.Content className="admin-dialog inventory-editor"><Dialog.Title>{draft?.id ? "แก้ไขข้อมูลสินค้า" : "เพิ่มสินค้าใหม่"}</Dialog.Title><Dialog.Description>{draft?.id ? "ข้อมูลสินค้าใช้ร่วมกันทุกชิ้น ต้นทุนและสถานะแก้ได้รายชิ้นด้านล่าง" : "ระบบสร้างรหัสสินค้าและรหัสชิ้นให้อัตโนมัติเมื่อบันทึก ถ้าเป็นชุดที่มีอยู่แล้ว ให้ใช้ปุ่ม “เติมสต๊อก” แทน"}</Dialog.Description>{draft && <form onSubmit={save}><div className="admin-form-grid">
-      <label>รหัสสินค้า<Input readOnly value={original?.sku || "สร้างอัตโนมัติเมื่อบันทึก"} /></label>
+      <label>รหัสสินค้า<Input maxLength={50} value={draft.sku} placeholder="เว้นว่างเพื่อสร้างอัตโนมัติ" onChange={e => setDraft({ ...draft, sku: e.target.value.toUpperCase() })} /><small className="inventory-help">รหัสชิ้นจะรันต่อท้ายอัตโนมัติ เช่น รหัสสินค้า-01, รหัสสินค้า-02</small></label>
       <label>ประเภท<Select label="ประเภท" value={draft.category} onValueChange={value => setDraft({ ...draft, category: value })} options={Array.from(new Set([...categories, draft.category])).map(c => ({ value: c, label: categoryLabels[c] || c }))} /></label>
       <label className="admin-form-full">ชื่อสินค้า<Input required maxLength={300} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
       {!draft.id && <><label>จำนวนชิ้นเริ่มต้น<Input type="number" min="1" max="50" step="1" required value={draft.pieces} onChange={e => setDraft({ ...draft, pieces: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })} /></label>
@@ -188,7 +203,7 @@ export default function AdminProducts({ initialProducts }: { initialProducts: Pr
           <td><input type="number" min="0" step="0.01" aria-label={`ต้นทุน ${saved.sku}`} value={unit.cost ?? ""} onChange={e => change({ cost: numeric(e.target) })} /></td>
           <td><select aria-label={`สถานะ ${saved.sku}`} value={unit.status} onChange={e => change({ status: e.target.value as UnitStatus })}>{Object.entries(unitStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
           <td><input maxLength={500} aria-label={`หมายเหตุ ${saved.sku}`} value={unit.note} onChange={e => change({ note: e.target.value })} placeholder="—" /></td>
-          <td>{dirty && <Button type="button" size="sm" variant="primary" disabled={busy} onClick={() => saveUnit(original, unit)}>บันทึก</Button>}</td>
+          <td>{dirty && <Button type="button" size="sm" variant="primary" disabled={busy} onClick={() => saveUnit(original, unit)}>บันทึก</Button>}<Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => deleteUnit(original, saved)}>ลบ</Button></td>
         </tr>; })}</tbody></table>
         <small>“ไม่พร้อมเช่า” ใช้กับชิ้นที่ซ่อมหรือรอของ · “เลิกใช้แล้ว” ใช้กับชิ้นที่ขายหรือทิ้งไป ประวัติการเช่าของชิ้นนั้นยังเก็บไว้ครบ</small>
       </div>}

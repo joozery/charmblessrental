@@ -35,9 +35,10 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   const text = (key: string) => typeof body[key] === "string" ? body[key].trim() : "";
+  const sku = text("sku").toUpperCase();
   const validAmount = (value: unknown) => value === null || typeof value === "number" && Number.isFinite(value) && value >= 0;
   const images = Array.isArray(body.images) ? body.images.filter((image: unknown) => typeof image === "string" && image) : [];
-  if (!text("name") || !Object.hasOwn(categoryLabels, text("category")) || !validAmount(body.dailyRate) || !validAmount(body.deposit) || typeof body.depositRequired !== "boolean" || typeof body.active !== "boolean" || ["name", "color", "size", "description"].some(key => text(key).length > 3000) || !images.length || images.length > 12 || !images.every(isProductImage) || (body.id !== undefined && (!Number.isSafeInteger(body.id) || body.id < 1))) return Response.json({ error: "กรุณาตรวจสอบชื่อ ประเภท รูป และราคาอีกครั้ง" }, { status: 400 });
+  if ((sku && !/^\S{1,50}$/.test(sku)) || !text("name") || !Object.hasOwn(categoryLabels, text("category")) || !validAmount(body.dailyRate) || !validAmount(body.deposit) || typeof body.depositRequired !== "boolean" || typeof body.active !== "boolean" || ["name", "color", "size", "description"].some(key => text(key).length > 3000) || !images.length || images.length > 12 || !images.every(isProductImage) || (body.id !== undefined && (!Number.isSafeInteger(body.id) || body.id < 1))) return Response.json({ error: "ข้อมูลสินค้าไม่ถูกต้อง หรือรหัสสินค้าไม่ถูกต้อง" }, { status: 400 });
   if (!(body.shippingFee === null || body.shippingFee === undefined || (Number.isSafeInteger(body.shippingFee) && body.shippingFee >= 0 && body.shippingFee <= 10000))) return Response.json({ error: "ค่าส่งเฉพาะสินค้าต้องเป็นจำนวนเต็มบาท" }, { status: 400 });
   if (!(body.gapDays === null || body.gapDays === undefined || (Number.isSafeInteger(body.gapDays) && body.gapDays >= 0 && body.gapDays <= 14))) return Response.json({ error: "Gap ของสินค้าต้องเป็นจำนวนเต็ม 0–14 วัน" }, { status: 400 });
   if (body.customPricing !== null && !validPricing(body.customPricing)) return Response.json({ error: "ตรวจสอบตารางราคาเฉพาะสินค้าอีกครั้ง" }, { status: 400 });
@@ -48,18 +49,24 @@ export async function POST(request: Request) {
     description: text("description"), notes: text("description"), images: [...new Set<string>(images)], active: body.active,
     customPricing: body.customPricing?.tiers.length ? cleanPricing(body.customPricing) : null, shippingFee: body.shippingFee ?? null, gapDays: body.gapDays ?? null,
   };
+  const db = await database();
   try {
     if (body.id === undefined) {
-      const created = await createProduct(fields, Array.from({ length: body.pieces }, () => ({ cost: body.cost, note: "" })));
+      const created = await createProduct(fields, Array.from({ length: body.pieces }, () => ({ cost: body.cost, note: "" })), sku || undefined);
       await audit(request, auth.admin, { action: "product.create", targetType: "product", targetId: String(created.id), summary: `เพิ่มสินค้า ${created.code} ${fields.name} (${created.units.length} ชิ้น)`, changes: diff(null, { ...fields, stock: created.units.length }, ["name", "category", "dailyRate", "deposit", "depositRequired", "stock"]) });
     } else {
-      const before = await updateProduct(body.id, fields);
-      const changes = diff(before, fields, ["name", "category", "color", "size", "dailyRate", "customPricing", "deposit", "depositRequired", "shippingFee", "gapDays", "active", "description", "images"]);
+      const current = await db.collection<Product>("products").findOne({ id: body.id }, { projection: { _id: 0, sku: 1 } });
+      const skuChanged = !!current && !!sku && sku !== current.sku;
+      const activeBookings = skuChanged ? await db.collection<{ _id: string }>("bookingRequests").countDocuments({ status: { $ne: "cancelled" }, "items.id": body.id }) : 0;
+      if (activeBookings && body.confirmSkuChange !== true) return Response.json({ code: "PRODUCT_IN_USE", bookingCount: activeBookings, error: `สินค้านี้มีรายการจองที่ยังไม่ยกเลิก ${activeBookings} รายการ หากเปลี่ยนรหัส รายการจองเดิมจะยังเก็บรหัสเดิมไว้ ต้องการดำเนินการต่อหรือไม่?` }, { status: 409 });
+      const before = await updateProduct(body.id, fields, sku || undefined);
+      const changes = diff({ ...before, sku: before.sku }, { ...fields, sku: sku || before.sku }, ["sku", "name", "category", "color", "size", "dailyRate", "customPricing", "deposit", "depositRequired", "shippingFee", "gapDays", "active", "description", "images"]);
       if (changes.length) await audit(request, auth.admin, { action: changes.some(change => ["dailyRate", "customPricing", "deposit"].includes(change.field)) ? "product.price" : "product.update", targetType: "product", targetId: String(body.id), summary: `แก้ไขสินค้า ${before.sku || ""} ${fields.name}`.trim(), changes });
     }
     revalidateTag("catalog", { expire: 0 });
     return Response.json({ products: await getProducts() });
   } catch (error) {
+    if (error instanceof Error && error.message === "SKU_TAKEN") return Response.json({ error: "รหัสสินค้านี้ถูกใช้แล้ว กรุณาใช้รหัสอื่น" }, { status: 409 });
     if (error instanceof Error && error.message === "PRODUCT_NOT_FOUND") return Response.json({ error: "ไม่พบสินค้า กรุณาโหลดหน้าใหม่" }, { status: 404 });
     return Response.json({ error: "บันทึกไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
   }
