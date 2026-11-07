@@ -6,10 +6,11 @@ import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { prepMoves } from "@/lib/preparation";
 import { unitStatusLabels, type UnitStatus } from "@/lib/products";
+import type { BookingPenalty } from "@/lib/penalty";
 
 export type PrepPiece = {
   sku: string; status: UnitStatus; note: string; productName: string; image: string;
-  lastReturn: { bookingId: string; at: string; condition: string; note: string; gapEnd: string } | null;
+  lastReturn: { bookingId: string; at: string; condition: string; note: string; gapEnd: string; penalties: BookingPenalty[] } | null;
   out: { bookingId: string; name: string; end: string } | null;
   next: { bookingId: string; name: string; start: string } | null;
 };
@@ -22,6 +23,7 @@ export default function PreparationBoard({ initial, today }: { initial: PrepPiec
   const [pieces, setPieces] = useState(initial);
   const [tab, setTab] = useState<UnitStatus | "todo">("todo");
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [penalties, setPenalties] = useState<Record<string, { amount: string; reason: string }>>({});
   const [busy, setBusy] = useState(""); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const count = (key: UnitStatus | "todo") => pieces.filter(piece => key === "todo" ? piece.status !== "rented" : piece.status === key).length;
   // Pieces a customer is waiting for come first.
@@ -37,6 +39,19 @@ export default function PreparationBoard({ initial, today }: { initial: PrepPiec
       setNotes(current => ({ ...current, [piece.sku]: "" }));
       setNotice(`${piece.sku} → ${unitStatusLabels[to]}`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(""); }
+  }
+  async function addPenalty(piece: PrepPiece) {
+    if (!piece.lastReturn) return;
+    const form = penalties[piece.sku];
+    if (!form || !(Number(form.amount) > 0) || !form.reason.trim()) return;
+    setBusy(piece.sku); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/admin/preparation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "penalty", bookingId: piece.lastReturn.bookingId, amount: Number(form.amount), reason: form.reason }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "บันทึกค่าปรับไม่สำเร็จ");
+      setPenalties(current => ({ ...current, [piece.sku]: { amount: "", reason: "" } }));
+      setNotice(`บันทึกค่าปรับของบิล ${piece.lastReturn!.bookingId} แล้ว`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกค่าปรับไม่สำเร็จ"); } finally { setBusy(""); }
   }
 
   return <main className="admin-main prep-page">
@@ -54,6 +69,7 @@ export default function PreparationBoard({ initial, today }: { initial: PrepPiec
           {piece.next && <p className={`prep-next${wait !== null && wait <= 2 ? " is-urgent" : ""}`}><Icon name="calendar" />คิวถัดไป <Link href={`/admin/bookings?id=${encodeURIComponent(piece.next.bookingId)}`}>{piece.next.bookingId}</Link> · {piece.next.name} · ต้องส่ง {day(piece.next.start)}{wait !== null && (wait <= 0 ? " (วันนี้)" : ` (อีก ${wait} วัน)`)}</p>}
           {piece.out && <p className="prep-meta">อยู่กับลูกค้า <Link href={`/admin/bookings?id=${encodeURIComponent(piece.out.bookingId)}`}>{piece.out.bookingId}</Link> · {piece.out.name} · กำหนดคืน {day(piece.out.end)}</p>}
           {piece.lastReturn && <p className="prep-meta">รับคืนจาก <Link href={`/admin/bookings?id=${encodeURIComponent(piece.lastReturn.bookingId)}`}>{piece.lastReturn.bookingId}</Link> · {day(piece.lastReturn.at)} · {conditionLabels[piece.lastReturn.condition] || piece.lastReturn.condition}{piece.lastReturn.note ? ` · ${piece.lastReturn.note}` : ""}</p>}
+          {piece.lastReturn && <div className="prep-penalty"><strong>ค่าปรับในบิลนี้</strong>{piece.lastReturn.penalties.map(item => <p key={item.id}>฿{item.amount.toLocaleString("th-TH")} · {item.reason}</p>)}<div className="prep-penalty-form"><input type="number" min="0.01" step="0.01" placeholder="จำนวนเงิน" value={penalties[piece.sku]?.amount || ""} onChange={event => setPenalties(current => ({ ...current, [piece.sku]: { amount: event.target.value, reason: current[piece.sku]?.reason || "" } }))} /><input placeholder="เหตุผล เช่น มีคราบ / ชำรุด" value={penalties[piece.sku]?.reason || ""} onChange={event => setPenalties(current => ({ ...current, [piece.sku]: { amount: current[piece.sku]?.amount || "", reason: event.target.value } }))} /><button type="button" disabled={busy === piece.sku || !(Number(penalties[piece.sku]?.amount) > 0) || !penalties[piece.sku]?.reason.trim()} onClick={() => void addPenalty(piece)}>บันทึกค่าปรับลงบิล</button></div></div>}
           {piece.lastReturn?.gapEnd && piece.lastReturn.gapEnd >= today && <p className="prep-meta">ช่วงพักชุด (Gap) ถึง {day(piece.lastReturn.gapEnd)}{piece.next && piece.next.start <= piece.lastReturn.gapEnd ? <b className="prep-gap-clash"> · คิวถัดไปต้องส่งก่อน Gap หมด</b> : ""}</p>}
           {piece.next && piece.status !== "available" && wait !== null && wait <= 1 && <p className="prep-gap-clash">⚠️ ต้องพร้อมให้เช่าภายใน{wait <= 0 ? "วันนี้" : "พรุ่งนี้"} เพื่อส่งให้คิวถัดไป</p>}
           {piece.note && <p className="prep-meta">หมายเหตุ: {piece.note}</p>}

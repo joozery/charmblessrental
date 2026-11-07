@@ -18,6 +18,7 @@ body:has(.prep-page),body:has(.prep-page) .chrome-shell,body:has(.prep-page) .ch
 .prep-next,.prep-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:3px 0;color:#667085;font-size:12px;line-height:1.5}
 .prep-next{color:#344054;font-weight:500}.prep-next.is-urgent{color:#b42318}.prep-next svg{width:13px;height:13px}
 .prep-next a,.prep-meta a{color:#79516c;font-weight:600}
+.prep-penalty{margin-top:9px;padding:9px 10px;border:1px solid #f3c6c6;border-radius:7px;background:#fff6f5;color:#b42318;font-size:11px}.prep-penalty strong{display:block;font-size:11px}.prep-penalty p{margin:3px 0}.prep-penalty-form{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}.prep-penalty-form input{min-height:32px;min-width:0;padding:0 8px;border:1px solid #e2b8b8;border-radius:6px;background:#fff;font:inherit;font-size:11px}.prep-penalty-form input:first-child{width:110px}.prep-penalty-form input:nth-child(2){flex:1 1 180px}.prep-penalty-form button{min-height:32px;padding:0 10px;border:1px solid #b42318;border-radius:6px;background:#b42318;color:#fff;font:inherit;font-size:11px;cursor:pointer}.prep-penalty-form button:disabled{opacity:.55;cursor:default}
 .prep-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .prep-actions input{flex:1 1 220px;min-height:36px;padding:0 10px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;font-size:13px}
 .prep-actions button{min-height:36px;padding:0 12px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;color:#344054;font:inherit;font-size:13px;cursor:pointer}

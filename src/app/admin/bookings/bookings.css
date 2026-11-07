@@ -302,3 +302,4 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .rental-paper-total .rental-paper-discount-note{display:block;margin:0 12px 5px;color:#29252a;font-family:inherit;font-size:11px;font-weight:400;line-height:1.65}
 .bookings-extension-amount-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:8px 10px;border:1px solid #eadde4;border-radius:8px;background:#fff}.bookings-extension-amount-row button{padding:5px 10px;border:1px solid #d9cfd6;border-radius:7px;background:#fff;color:#604a5b;font:inherit;font-size:11px;cursor:pointer}.bookings-extension-amount .bookings-inline-form{margin-top:9px}
 .bookings-extension-discount{color:#a24d70!important;font-weight:600}
+.bookings-penalty-line{color:#b42318!important;font-weight:650}

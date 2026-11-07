@@ -12,6 +12,7 @@ import { returnDay, returnMethods, type ScheduleRecord } from "@/lib/schedule";
 import { identityFileLabel, verificationLabels, type BookingVerification } from "@/lib/identity";
 import type { RefundAccount } from "@/lib/refund-account";
 import { lastUseDay, type Extension, type LateReturn } from "@/lib/extension";
+import type { BookingPenalty } from "@/lib/penalty";
 import ExtensionPanel from "./extension-panel";
 import ExtensionAmountPanel from "./extension-amount-panel";
 import LateReturnPanel from "./late-return-panel";
@@ -22,7 +23,7 @@ export type Returned = { at: string; condition: string; note: string; byName: st
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; transferRef?: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string; via?: "line" | "bill" };
 export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
-export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; clashes?: QueueClash[]; lateDays?: number; risks?: NextRisk[]; lateNoticeSentAt?: string; lineLinked?: boolean; lateReturn?: LateReturn };
+export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; penalties?: BookingPenalty[]; clashes?: QueueClash[]; lateDays?: number; risks?: NextRisk[]; lateNoticeSentAt?: string; lineLinked?: boolean; lateReturn?: LateReturn };
 // Returned to the shop while its deposit is still held: the refund is the step left to do.
 export const awaitingRefund = (row: FulfillmentRow) => row.status !== "cancelled" && !!row.returned && row.deposit?.status === "held";
 type Log = { _id: string; at: string; action: string; summary: string; actorName: string; actorEmail: string; changes: { field: string; before: unknown; after: unknown }[] };

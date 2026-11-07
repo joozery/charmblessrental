@@ -5,12 +5,14 @@ import FinanceTransactions from "./finance-transactions";
 import { pageAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
 import { deposits, transactions } from "@/lib/finance";
+import type { BookingPenalty } from "@/lib/penalty";
 import "./finance.css";
 
 export const metadata = { title: "สรุปการเงิน | Charm Bless", robots: { index: false, follow: false } };
 
 type Query = { from?: string | string[]; to?: string | string[] };
 type Rental = { legacyId: string; customerName?: string; enteredAt?: Date | null; paidAt?: Date | null; legacyStatus?: string; rentalTotal?: number | null; deposit?: number | null; shipping?: number | null; total?: number | null; bankId?: string; slips?: string[] };
+type CurrentBooking = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; createdAt: Date; paidAt?: Date | null; estimatedTotal?: number | null; quote?: { rental?: number; deposit?: number; shipping?: number }; penalties?: BookingPenalty[] };
 type Summary = { count: number; rentalTotal: number; deposit: number; shipping: number; total: number; pendingCount: number; pendingTotal: number };
 type Trend = { _id: string; total: number; count: number };
 
@@ -18,6 +20,7 @@ const one = (value?: string | string[]) => Array.isArray(value) ? value[0] : val
 const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T12:00:00Z`));
 const amount = (value?: number | null) => `${(value || 0).toLocaleString("th-TH", { maximumFractionDigits: 2 })} บาท`;
 const dateLabel = (value?: Date | null) => value ? new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(value) : "—";
+const bookingTotal = (row: CurrentBooking) => row.estimatedTotal ?? (row.quote?.rental || 0) + (row.quote?.deposit || 0) + (row.quote?.shipping || 0);
 const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
 const monthLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { month: "short", year: "2-digit", timeZone: "UTC" }).format(new Date(`${value}-01T12:00:00Z`));
 
@@ -32,11 +35,11 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
   const startDate = new Date(`${from}T00:00:00.000Z`);
   const endDate = new Date(`${nextDay(to)}T00:00:00.000Z`);
   const db = await database();
-  const rentals = db.collection<Rental>("rentals");
+  const rentals = db.collection<Rental>("rentals"), bookings = db.collection<CurrentBooking>("bookingRequests");
   const match = reversed ? { _id: { $exists: false } } : { enteredAt: { $gte: startDate, $lt: endDate } };
   const paidMatch = reversed ? { _id: { $exists: false } } : { paidAt: { $gte: startDate, $lt: endDate } };
   const transactionMatch = reversed ? { _id: { $exists: false } } : { date: { $gte: startDate, $lt: endDate } };
-  const [summaryResult, paidResult, trend, paidRows, pendingRows, transactionRows] = await Promise.all([
+  const [summaryResult, paidResult, trend, legacyPaidRows, legacyPendingRows, transactionRows, currentRows] = await Promise.all([
     rentals.aggregate<Summary>([
       { $match: match },
       { $group: { _id: null, count: { $sum: 1 }, rentalTotal: { $sum: { $ifNull: ["$rentalTotal", 0] } }, deposit: { $sum: { $ifNull: ["$deposit", 0] } }, shipping: { $sum: { $ifNull: ["$shipping", 0] } }, total: { $sum: { $ifNull: ["$total", 0] } }, pendingCount: { $sum: { $cond: [{ $eq: ["$legacyStatus", "รอชำระเงิน"] }, 1, 0] } }, pendingTotal: { $sum: { $cond: [{ $eq: ["$legacyStatus", "รอชำระเงิน"] }, { $ifNull: ["$total", 0] }, 0] } } } },
@@ -55,7 +58,16 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
     rentals.find(paidMatch, { projection: { _id: 0, legacyId: 1, customerName: 1, paidAt: 1, legacyStatus: 1, total: 1, bankId: 1, slips: 1 } }).sort({ paidAt: -1 }).limit(8).toArray(),
     rentals.find({ ...match, legacyStatus: "รอชำระเงิน" }, { projection: { _id: 0, legacyId: 1, customerName: 1, enteredAt: 1, total: 1 } }).sort({ enteredAt: -1 }).limit(8).toArray(),
     transactions(db).find(transactionMatch, { projection: { _id: 1, type: 1, category: 1, amount: 1, date: 1, note: 1, createdBy: 1, createdByName: 1, bookingId: 1, source: 1, voided: 1 } }).sort({ date: -1, _id: -1 }).toArray(),
+    bookings.find(reversed ? { _id: { $exists: false } } : { status: { $ne: "cancelled" }, $or: [{ createdAt: { $gte: startDate, $lt: endDate } }, { paidAt: { $gte: startDate, $lt: endDate } }, { "penalties.createdAt": { $gte: startDate, $lt: endDate } }] }, { projection: { _id: 1, name: 1, status: 1, payment: 1, createdAt: 1, paidAt: 1, estimatedTotal: 1, quote: 1, penalties: 1 } }).toArray(),
   ]);
+  const currentInPeriod = currentRows.filter(row => row.createdAt >= startDate && row.createdAt < endDate);
+  const currentPaidRows = currentRows.filter(row => row.payment === "paid" && row.paidAt && row.paidAt >= startDate && row.paidAt < endDate);
+  const currentPendingRows = currentInPeriod.filter(row => row.payment !== "paid");
+  const penaltyRows = currentRows.flatMap(row => (row.penalties || []).map(item => ({ ...item, bookingId: row._id, customerName: row.name || "ไม่ระบุชื่อลูกค้า" }))).filter(item => { const date = new Date(item.createdAt); return !reversed && date >= startDate && date < endDate; }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const penaltyTotal = penaltyRows.reduce((sum, row) => sum + row.amount, 0);
+  const currentSummary = currentInPeriod.reduce((sum, row) => ({ count: sum.count + 1, rentalTotal: sum.rentalTotal + (row.quote?.rental || 0), deposit: sum.deposit + (row.quote?.deposit || 0), shipping: sum.shipping + (row.quote?.shipping || 0), total: sum.total + bookingTotal(row), pendingCount: sum.pendingCount + (row.payment !== "paid" ? 1 : 0), pendingTotal: sum.pendingTotal + (row.payment !== "paid" ? bookingTotal(row) : 0) }), { count: 0, rentalTotal: 0, deposit: 0, shipping: 0, total: 0, pendingCount: 0, pendingTotal: 0 });
+  const paidRows = [...legacyPaidRows.map(row => ({ id: row.legacyId, name: row.customerName, date: row.paidAt, total: row.total })), ...currentPaidRows.map(row => ({ id: row._id, name: row.name, date: row.paidAt, total: bookingTotal(row) }))].sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0)).slice(0, 8);
+  const pendingRows = [...legacyPendingRows.map(row => ({ id: row.legacyId, name: row.customerName, date: row.enteredAt, total: row.total })), ...currentPendingRows.map(row => ({ id: row._id, name: row.name, date: row.createdAt, total: bookingTotal(row) }))].sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0)).slice(0, 8);
   const [heldDeposits, depositPeriod] = await Promise.all([
     deposits(db).find({ status: "held" }, { projection: { _id: 1, customerName: 1, amount: 1, receivedAt: 1 } }).sort({ receivedAt: 1 }).toArray(),
     reversed ? Promise.resolve(null) : deposits(db).aggregate<{ received: number; refunded: number; deducted: number }>([
@@ -64,8 +76,9 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
     ]).next(),
   ]);
   const heldTotal = heldDeposits.reduce((sum, row) => sum + row.amount, 0);
-  const summary = summaryResult || { count: 0, rentalTotal: 0, deposit: 0, shipping: 0, total: 0, pendingCount: 0, pendingTotal: 0 };
-  const paid = paidResult || { count: 0, total: 0 };
+  const legacySummary = summaryResult || { count: 0, rentalTotal: 0, deposit: 0, shipping: 0, total: 0, pendingCount: 0, pendingTotal: 0 };
+  const summary = { count: legacySummary.count + currentSummary.count, rentalTotal: legacySummary.rentalTotal + currentSummary.rentalTotal, deposit: legacySummary.deposit + currentSummary.deposit, shipping: legacySummary.shipping + currentSummary.shipping, total: legacySummary.total + currentSummary.total, pendingCount: legacySummary.pendingCount + currentSummary.pendingCount, pendingTotal: legacySummary.pendingTotal + currentSummary.pendingTotal };
+  const paid = { count: (paidResult?.count || 0) + currentPaidRows.length, total: (paidResult?.total || 0) + currentPaidRows.reduce((sum, row) => sum + bookingTotal(row), 0) };
   const maxTrend = Math.max(1, ...trend.map(row => row.total));
   const isDaily = (Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000 <= 31;
   const breakdown = [
@@ -94,6 +107,7 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
       <article className="is-paid"><span className="finance-metric-icon"><Icon name="check" /></span><div><span>ยอดที่มีวันที่ชำระบันทึก</span><strong>{amount(paid.total)}</strong><small>{paid.count.toLocaleString("th-TH")} รายการ · กรองตามวันที่ชำระ</small></div></article>
       <article className="is-pending"><span className="finance-metric-icon"><Icon name="calendar" /></span><div><span>สถานะรอชำระเงิน</span><strong>{amount(summary.pendingTotal)}</strong><small>{summary.pendingCount.toLocaleString("th-TH")} รายการ · กรองตามวันที่ลงข้อมูล</small></div></article>
     </section>
+    <section className="finance-panel finance-penalties" aria-labelledby="finance-penalties-title"><div className="finance-panel-head"><div><span className="finance-eyebrow">RECORDED PENALTIES</span><h2 id="finance-penalties-title">ค่าปรับที่บันทึกหลังรับคืน</h2></div><strong className="finance-penalty-total">{amount(penaltyTotal)}</strong></div>{penaltyRows.length ? <div className="finance-list">{penaltyRows.map(row => <article key={row.id}><div><strong>{row.bookingId} · {row.customerName}</strong><span>{row.reason}</span></div><strong>{amount(row.amount)}</strong></article>)}</div> : <p className="finance-empty">ยังไม่มีค่าปรับที่บันทึกในช่วงนี้</p>}<p className="finance-panel-note">ยอดนี้เป็นค่าปรับที่บันทึกไว้ในบิลเดิม ยังไม่ถือว่าเป็นยอดโอนหรือรายรับที่ได้รับจริง</p></section>
     <FinanceTransactions initial={transactionRows.map(({ voided, ...row }) => ({ ...row, _id: String(row._id), date: row.date.toISOString(), note: row.note || "", ...(voided ? { voided: { reason: voided.reason, byName: voided.byName, at: voided.at.toISOString() } } : {}) }))} today={today} />
     <section className="finance-panel finance-deposits" aria-labelledby="finance-deposits-title">
       <div className="finance-panel-head"><div><span className="finance-eyebrow">SECURITY DEPOSITS</span><h2 id="finance-deposits-title">เงินมัดจำชุด</h2></div><span className="finance-panel-caption">แยกจากรายรับ</span></div>
@@ -106,8 +120,8 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
       <section className="finance-panel finance-breakdown"><div className="finance-panel-head"><div><span className="finance-eyebrow">AMOUNT BREAKDOWN</span><h2>ส่วนประกอบยอดรวม</h2></div></div><div className="finance-breakdown-content"><div className="finance-pie" role="img" aria-label={`สัดส่วนยอดรวมองค์ประกอบ: ${pieSlices.map(slice => `${slice.label} ${slice.share.toFixed(1)} เปอร์เซ็นต์`).join(", ")}`} style={{ background: pieBackground }} /><div className="finance-breakdown-legend">{pieSlices.map(slice => <div className="finance-breakdown-row" key={slice.className}><span><i className={slice.className} />{slice.label}</span><strong>{slice.share.toFixed(1)}%<small>{amount(slice.value)}</small></strong></div>)}</div></div><div className="finance-breakdown-total"><span>รวมทั้งหมด</span><strong>{amount(summary.total)}</strong></div><p className="finance-panel-note">เงินมัดจำแยกจากรายได้ค่าเช่า เนื่องจากอาจต้องคืนให้ลูกค้าหลังจบการเช่า</p></section>
     </div>
     <div className="finance-tables-grid">
-      <section className="finance-panel finance-list-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">PAYMENTS RECORDED</span><h2>รายการที่มีวันที่ชำระในช่วงนี้</h2></div><span className="finance-list-count">{paid.count.toLocaleString("th-TH")}</span></div>{paidRows.length ? <div className="finance-list">{paidRows.map(row => <article key={row.legacyId}><div><strong>{row.legacyId}</strong><span>{row.customerName || "ไม่ระบุชื่อลูกค้า"} · {dateLabel(row.paidAt)}</span></div><strong>{amount(row.total)}</strong></article>)}</div> : <p className="finance-empty">ไม่มีวันที่ชำระที่บันทึกในช่วงนี้</p>}<Link className="finance-list-link" href={`/admin/rentals?from=${from}&to=${to}`}>ดูประวัติการเช่า<Icon name="arrowRight" /></Link></section>
-      <section className="finance-panel finance-list-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">PAYMENT FOLLOW-UP</span><h2>รายการสถานะรอชำระเงิน</h2></div><span className="finance-list-count is-warning">{summary.pendingCount.toLocaleString("th-TH")}</span></div>{pendingRows.length ? <div className="finance-list">{pendingRows.map(row => <article key={row.legacyId}><div><strong>{row.legacyId}</strong><span>{row.customerName || "ไม่ระบุชื่อลูกค้า"} · {dateLabel(row.enteredAt)}</span></div><strong>{amount(row.total)}</strong></article>)}</div> : <p className="finance-empty">ไม่มีรายการสถานะรอชำระในช่วงนี้</p>}<Link className="finance-list-link" href={`/admin/rentals?status=${encodeURIComponent("รอชำระเงิน")}&from=${from}&to=${to}`}>ดูรายการรอชำระทั้งหมด<Icon name="arrowRight" /></Link></section>
+      <section className="finance-panel finance-list-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">PAYMENTS RECORDED</span><h2>รายการที่มีวันที่ชำระในช่วงนี้</h2></div><span className="finance-list-count">{paid.count.toLocaleString("th-TH")}</span></div>{paidRows.length ? <div className="finance-list">{paidRows.map(row => <article key={row.id}><div><strong>{row.id}</strong><span>{row.name || "ไม่ระบุชื่อลูกค้า"} · {dateLabel(row.date)}</span></div><strong>{amount(row.total)}</strong></article>)}</div> : <p className="finance-empty">ไม่มีวันที่ชำระที่บันทึกในช่วงนี้</p>}<Link className="finance-list-link" href={`/admin/rentals?from=${from}&to=${to}`}>ดูประวัติการเช่า<Icon name="arrowRight" /></Link></section>
+      <section className="finance-panel finance-list-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">PAYMENT FOLLOW-UP</span><h2>รายการสถานะรอชำระเงิน</h2></div><span className="finance-list-count is-warning">{summary.pendingCount.toLocaleString("th-TH")}</span></div>{pendingRows.length ? <div className="finance-list">{pendingRows.map(row => <article key={row.id}><div><strong>{row.id}</strong><span>{row.name || "ไม่ระบุชื่อลูกค้า"} · {dateLabel(row.date)}</span></div><strong>{amount(row.total)}</strong></article>)}</div> : <p className="finance-empty">ไม่มีรายการสถานะรอชำระในช่วงนี้</p>}<Link className="finance-list-link" href={`/admin/rentals?status=${encodeURIComponent("รอชำระเงิน")}&from=${from}&to=${to}`}>ดูรายการรอชำระทั้งหมด<Icon name="arrowRight" /></Link></section>
     </div>
     <p className="finance-source-note">ข้อมูลจากแท็บ “ข้อมูลการเช่า” · ยอดชำระคำนวณจากรายการที่มีวันที่ชำระบันทึกไว้ โดยไม่มีข้อมูลค่าใช้จ่ายและการคืนเงินมัดจำครบถ้วน จึงไม่แสดงกำไรสุทธิหรือยอดเงินสดคงเหลือ</p>
   </main>;

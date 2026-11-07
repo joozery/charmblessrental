@@ -12,6 +12,8 @@
 .booking-help { font-size: 10px; color: #988593; line-height: 1.8; margin-top: -9px; }
 .booking-privacy, .booking-rules { font-size: 11px; color: #8c6b7c; line-height: 1.8; }
 .booking-privacy summary, .booking-rules summary { cursor: pointer; color: #b22767; }
+.booking-rules summary { padding: 10px 12px; border-radius: 9px; background: #fff1f7; font-size: 13px; font-weight: 600; line-height: 1.6; }
+.booking-rules[open] summary { margin-bottom: 10px; }
 .booking-form fieldset { display: grid; gap: 8px; }
 .booking-form legend { margin-bottom: 10px; }
 .booking-method { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #eee4ec; border-radius: 9px; cursor: pointer; }
