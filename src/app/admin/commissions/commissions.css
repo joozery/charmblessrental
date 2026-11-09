@@ -24,6 +24,8 @@
 .commissions-panel select{height:30px;padding:0 6px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;font:inherit;font-size:12px}
 .commissions-muted{color:#8a7f87}.commissions-empty{margin:0;padding:24px;color:#8a7f87;text-align:center}
 .commissions-note{margin:0;padding:10px 14px;color:#8a7f87;font-size:12px}.commissions-error{margin:0;color:#b42318;font-size:13px}
+.commissions-pagination{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 14px;border-top:1px solid #eef0f3;color:#8a7f87;font-size:12px}
+.commissions-pagination button{height:30px;padding:0 10px;border:1px solid #d9cfd6;border-radius:7px;background:#fff;color:#604a5b;font:inherit;cursor:pointer}.commissions-pagination button:disabled{opacity:.45;cursor:default}
 .commissions-month>span{visibility:hidden}
 .commissions-cards button{gap:6px}
 .commissions-card-name{display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

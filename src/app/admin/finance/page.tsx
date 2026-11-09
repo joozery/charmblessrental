@@ -10,7 +10,7 @@ import "./finance.css";
 
 export const metadata = { title: "สรุปการเงิน | Charm Bless", robots: { index: false, follow: false } };
 
-type Query = { from?: string | string[]; to?: string | string[] };
+type Query = { from?: string | string[]; to?: string | string[]; page?: string | string[] };
 type Rental = { legacyId: string; customerName?: string; enteredAt?: Date | null; paidAt?: Date | null; legacyStatus?: string; rentalTotal?: number | null; deposit?: number | null; shipping?: number | null; total?: number | null; bankId?: string; slips?: string[] };
 type CurrentBooking = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; createdAt: Date; paidAt?: Date | null; estimatedTotal?: number | null; quote?: { rental?: number; deposit?: number; shipping?: number }; penalties?: BookingPenalty[] };
 type Summary = { count: number; rentalTotal: number; deposit: number; shipping: number; total: number; pendingCount: number; pendingTotal: number };
@@ -36,10 +36,11 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
   const endDate = new Date(`${nextDay(to)}T00:00:00.000Z`);
   const db = await database();
   const rentals = db.collection<Rental>("rentals"), bookings = db.collection<CurrentBooking>("bookingRequests");
+  const pageSize = 30, requestedPage = Math.max(1, Number.parseInt(one(query.page), 10) || 1);
   const match = reversed ? { _id: { $exists: false } } : { enteredAt: { $gte: startDate, $lt: endDate } };
   const paidMatch = reversed ? { _id: { $exists: false } } : { paidAt: { $gte: startDate, $lt: endDate } };
   const transactionMatch = reversed ? { _id: { $exists: false } } : { date: { $gte: startDate, $lt: endDate } };
-  const [summaryResult, paidResult, trend, legacyPaidRows, legacyPendingRows, transactionRows, currentRows] = await Promise.all([
+  const [summaryResult, paidResult, trend, legacyPaidRows, legacyPendingRows, transactionCount, transactionSummary, transactionRows, currentRows] = await Promise.all([
     rentals.aggregate<Summary>([
       { $match: match },
       { $group: { _id: null, count: { $sum: 1 }, rentalTotal: { $sum: { $ifNull: ["$rentalTotal", 0] } }, deposit: { $sum: { $ifNull: ["$deposit", 0] } }, shipping: { $sum: { $ifNull: ["$shipping", 0] } }, total: { $sum: { $ifNull: ["$total", 0] } }, pendingCount: { $sum: { $cond: [{ $eq: ["$legacyStatus", "รอชำระเงิน"] }, 1, 0] } }, pendingTotal: { $sum: { $cond: [{ $eq: ["$legacyStatus", "รอชำระเงิน"] }, { $ifNull: ["$total", 0] }, 0] } } } },
@@ -57,9 +58,17 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
     ]).toArray(),
     rentals.find(paidMatch, { projection: { _id: 0, legacyId: 1, customerName: 1, paidAt: 1, legacyStatus: 1, total: 1, bankId: 1, slips: 1 } }).sort({ paidAt: -1 }).limit(8).toArray(),
     rentals.find({ ...match, legacyStatus: "รอชำระเงิน" }, { projection: { _id: 0, legacyId: 1, customerName: 1, enteredAt: 1, total: 1 } }).sort({ enteredAt: -1 }).limit(8).toArray(),
-    transactions(db).find(transactionMatch, { projection: { _id: 1, type: 1, category: 1, amount: 1, date: 1, note: 1, createdBy: 1, createdByName: 1, bookingId: 1, source: 1, voided: 1 } }).sort({ date: -1, _id: -1 }).toArray(),
+    transactions(db).countDocuments(transactionMatch),
+    transactions(db).aggregate<{ _id: "income" | "expense"; total: number }>([
+      { $match: { ...transactionMatch, voided: { $exists: false } } },
+      { $group: { _id: "$type", total: { $sum: "$amount" } } },
+    ]).toArray(),
+    transactions(db).find(transactionMatch, { projection: { _id: 1, type: 1, category: 1, amount: 1, date: 1, note: 1, createdBy: 1, createdByName: 1, bookingId: 1, source: 1, voided: 1 } }).sort({ date: -1, _id: -1 }).skip((requestedPage - 1) * pageSize).limit(pageSize).toArray(),
     bookings.find(reversed ? { _id: { $exists: false } } : { status: { $ne: "cancelled" }, $or: [{ createdAt: { $gte: startDate, $lt: endDate } }, { paidAt: { $gte: startDate, $lt: endDate } }, { "penalties.createdAt": { $gte: startDate, $lt: endDate } }] }, { projection: { _id: 1, name: 1, status: 1, payment: 1, createdAt: 1, paidAt: 1, estimatedTotal: 1, quote: 1, penalties: 1 } }).toArray(),
   ]);
+  const transactionPageCount = Math.max(1, Math.ceil(transactionCount / pageSize));
+  const transactionPage = Math.min(requestedPage, transactionPageCount);
+  const transactionTotals = { income: transactionSummary.find(row => row._id === "income")?.total || 0, expense: transactionSummary.find(row => row._id === "expense")?.total || 0 };
   const currentInPeriod = currentRows.filter(row => row.createdAt >= startDate && row.createdAt < endDate);
   const currentPaidRows = currentRows.filter(row => row.payment === "paid" && row.paidAt && row.paidAt >= startDate && row.paidAt < endDate);
   const currentPendingRows = currentInPeriod.filter(row => row.payment !== "paid");
@@ -108,7 +117,7 @@ async function Finance({ searchParams }: { searchParams: Promise<Query> }) {
       <article className="is-pending"><span className="finance-metric-icon"><Icon name="calendar" /></span><div><span>สถานะรอชำระเงิน</span><strong>{amount(summary.pendingTotal)}</strong><small>{summary.pendingCount.toLocaleString("th-TH")} รายการ · กรองตามวันที่ลงข้อมูล</small></div></article>
     </section>
     <section className="finance-panel finance-penalties" aria-labelledby="finance-penalties-title"><div className="finance-panel-head"><div><span className="finance-eyebrow">RECORDED PENALTIES</span><h2 id="finance-penalties-title">ค่าปรับที่บันทึกหลังรับคืน</h2></div><strong className="finance-penalty-total">{amount(penaltyTotal)}</strong></div>{penaltyRows.length ? <div className="finance-list">{penaltyRows.map(row => <article key={row.id}><div><strong>{row.bookingId} · {row.customerName}</strong><span>{row.reason}</span></div><strong>{amount(row.amount)}</strong></article>)}</div> : <p className="finance-empty">ยังไม่มีค่าปรับที่บันทึกในช่วงนี้</p>}<p className="finance-panel-note">ยอดนี้เป็นค่าปรับที่บันทึกไว้ในบิลเดิม ยังไม่ถือว่าเป็นยอดโอนหรือรายรับที่ได้รับจริง</p></section>
-    <FinanceTransactions initial={transactionRows.map(({ voided, ...row }) => ({ ...row, _id: String(row._id), date: row.date.toISOString(), note: row.note || "", ...(voided ? { voided: { reason: voided.reason, byName: voided.byName, at: voided.at.toISOString() } } : {}) }))} today={today} />
+    <FinanceTransactions initial={transactionRows.map(({ voided, ...row }) => ({ ...row, _id: String(row._id), date: row.date.toISOString(), note: row.note || "", ...(voided ? { voided: { reason: voided.reason, byName: voided.byName, at: voided.at.toISOString() } } : {}) }))} today={today} totals={transactionTotals} total={transactionCount} page={transactionPage} pageCount={transactionPageCount} from={from} to={to} />
     <section className="finance-panel finance-deposits" aria-labelledby="finance-deposits-title">
       <div className="finance-panel-head"><div><span className="finance-eyebrow">SECURITY DEPOSITS</span><h2 id="finance-deposits-title">เงินมัดจำชุด</h2></div><span className="finance-panel-caption">แยกจากรายรับ</span></div>
       <div className="finance-ledger-totals"><article><span>ถืออยู่ตอนนี้ (ต้องคืนลูกค้า)</span><strong>{amount(heldTotal)}</strong></article><article><span>รับเงินมัดจำในช่วงนี้</span><strong className="is-income">{amount(depositPeriod?.received)}</strong></article><article><span>คืนแล้ว / หักไว้ในช่วงนี้</span><strong>{amount(depositPeriod?.refunded)} <small>/ {amount(depositPeriod?.deducted)}</small></strong></article></div>

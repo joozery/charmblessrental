@@ -20,7 +20,7 @@ const validDate = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
-  const body = await request.json().catch(() => null) as { id?: unknown; name?: unknown; phone?: unknown; address?: unknown; pin?: unknown; note?: unknown; method?: unknown; returnMethod?: unknown; rental?: unknown; deposit?: unknown; shipping?: unknown; start?: unknown; end?: unknown; items?: unknown } | null;
+  const body = await request.json().catch(() => null) as { id?: unknown; name?: unknown; phone?: unknown; address?: unknown; pin?: unknown; note?: unknown; method?: unknown; returnMethod?: unknown; rental?: unknown; deposit?: unknown; shipping?: unknown; start?: unknown; end?: unknown; items?: unknown; penalty?: { amount?: unknown; reason?: unknown } } | null;
   if (!body || typeof body.id !== "string" || !validDate(body.start) || !validDate(body.end) || (body.end as string) < (body.start as string) || !Array.isArray(body.items) || !body.items.length) return Response.json({ error: "กรุณาระบุวันและสินค้าให้ครบ" }, { status: 400 });
   const rawItems = body.items as Array<Record<string, unknown>>;
   const inputs = rawItems.map(item => ({ id: Number(item?.id), quantity: Number(item?.quantity), rental: Number(item?.rental), deposit: Number(item?.deposit) || 0, note: typeof item?.note === "string" ? item.note : "" })).filter(item => Number.isSafeInteger(item.id) && item.id > 0 && Number.isSafeInteger(item.quantity) && item.quantity > 0 && item.quantity <= 50 && Number.isFinite(item.rental) && item.rental >= 0 && Number.isFinite(item.deposit) && item.deposit >= 0) as InputItem[];
@@ -30,6 +30,9 @@ export async function POST(request: Request) {
   if (!booking) return Response.json({ error: "ไม่พบคำขอจองนี้" }, { status: 404 });
   if (booking.shipment) return Response.json({ error: "จัดส่งสินค้าแล้ว แก้ไขสินค้าและวันเช่าไม่ได้ กรุณาใช้ปุ่มขยายวันเช่าแทน" }, { status: 409 });
   if (booking.status === "cancelled" || booking.returned || booking.extensions?.some(item => item.status === "unpaid")) return Response.json({ error: "รายการนี้ยังแก้ไขไม่ได้ กรุณาจัดการบิลค้างหรือรับคืนสินค้าแล้ว" }, { status: 409 });
+  const penaltyAmount = body.penalty?.amount === undefined || body.penalty?.amount === "" ? 0 : Number(body.penalty.amount);
+  const penaltyReason = typeof body.penalty?.reason === "string" ? body.penalty.reason.trim().slice(0, 500) : "";
+  if (body.penalty && (!Number.isFinite(penaltyAmount) || penaltyAmount <= 0 || penaltyAmount > 1000000 || !penaltyReason)) return Response.json({ error: "กรุณาระบุค่าปรับและเหตุผลให้ถูกต้อง" }, { status: 400 });
   const settings = await getStoreSettings(), products = await db.collection<Product>("products").find({ id: { $in: inputs.map(item => item.id) }, active: { $ne: false } }).toArray();
   if (products.length !== inputs.length) return Response.json({ error: "มีสินค้าที่ไม่พร้อมให้เช่า" }, { status: 409 });
   for (const product of products) {
@@ -46,6 +49,7 @@ export async function POST(request: Request) {
   const items = products.map(product => { const input = inputs.find(item => item.id === product.id)!; const pricing = effectivePricing(product, settings.rentalPricing, settings.extraDayRates); const tableRental = priceFor(pricing, days); const previous = booking.items.find(item => item.id === product.id); return { id: product.id, name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || product.image || "", dailyRate: product.dailyRate, ...(previous?.unitSku ? { unitSku: previous.unitSku } : {}), rentalPrice: input.rental ?? tableRental, depositPrice: input.deposit ?? product.deposit ?? 0, quantity: input.quantity, note: input.note || "", stock: product.stock ?? 1 }; });
   const calculatedRental = items.reduce((sum, item) => sum + (item.rentalPrice || 0) * item.quantity, 0), calculatedDeposit = items.reduce((sum, item) => sum + (item.depositPrice || 0) * item.quantity, 0);
   const schedule = scheduleRecord(plan, returnMethod), now = new Date();
+  const penaltyExtension: Extension | undefined = penaltyAmount > 0 ? { id: randomUUID(), fromEnd: booking.end, toEnd: booking.end, addedDays: 0, amount: Math.round(penaltyAmount * 100) / 100, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken: randomBytes(18).toString("base64url"), dueAt: new Date(now.getTime() + 3600000), chargeType: "penalty", note: penaltyReason } : undefined;
   const nextSkus = new Set(items.map(item => item.unitSku).filter((sku): sku is string => !!sku));
   const releasedSkus = booking.items.map(item => item.unitSku).filter((sku): sku is string => !!sku && !nextSkus.has(sku));
   if (releasedSkus.length) await setUnitStatuses(db, releasedSkus.map(sku => ({ sku, status: "available" as const })));
@@ -58,9 +62,9 @@ export async function POST(request: Request) {
   if (details.method !== "pickup" && !details.address) return Response.json({ error: "กรุณากรอกที่อยู่จัดส่ง" }, { status: 400 });
   if (booking.payment !== "paid") {
     const quote = booking.quote ? { ...booking.quote, rental, deposit, shipping, rentalBeforeDiscount: calculatedRental, discountAmount, discountPercent } : booking.quote;
-    await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, deliveryFee: shipping, ...(quote ? { quote } : {}), estimatedTotal: rental + deposit + shipping, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username } });
+    await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, deliveryFee: shipping, ...(quote ? { quote } : {}), estimatedTotal: rental + deposit + shipping, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(penaltyExtension ? { $push: { extensions: penaltyExtension } } : {}) });
     await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: "แก้ไขสินค้าและวันเช่าก่อนชำระเงิน" });
-    return Response.json({ ok: true, ...details, items, start, end, days, schedule, deliveryFee: shipping, estimatedTotal: rental + deposit + shipping, quote });
+    return Response.json({ ok: true, ...details, items, start, end, days, schedule, deliveryFee: shipping, estimatedTotal: rental + deposit + shipping, quote, penalty: penaltyExtension });
   }
   const oldTotal = (booking.quote?.rental || 0) + (booking.quote?.deposit || 0) + (booking.quote?.shipping || booking.deliveryFee || 0), newTotal = rental + deposit + shipping, difference = Math.round((newTotal - oldTotal) * 100) / 100;
   // A paid booking may not have a LINE link yet. Create a temporary customer key so a refund difference can still be recorded.
@@ -71,12 +75,13 @@ export async function POST(request: Request) {
   }
   if (difference < 0 && !booking.lineUserId) return Response.json({ error: "รายการนี้ยังไม่เชื่อม LINE จึงยังบันทึกเครดิตส่วนต่างไม่ได้" }, { status: 409 });
   const extension: Extension | undefined = difference > 0 ? { id: randomUUID(), fromEnd: booking.end, toEnd: end, addedDays: Math.max(0, days - booking.days), amount: difference, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken: randomBytes(18).toString("base64url"), dueAt: new Date(now.getTime() + 3600000), chargeType: "standard", note: "บิลส่วนต่างจากการแก้ไขสินค้า/วันเช่า" } : undefined;
+  const extensions = [extension, penaltyExtension].filter((item): item is Extension => !!item);
   if (difference < 0 && booking.lineUserId) await grantCredit(db, { customerId: booking.lineUserId, amount: Math.abs(difference), reason: "ส่วนต่างจากการแก้ไขสินค้า/วันเช่า", bookingId: booking._id, billToken: booking.billToken, createdBy: auth.admin.email || auth.admin.username, createdByName: auth.admin.name });
-  await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, deliveryFee: shipping, estimatedTotal: newTotal, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(extension ? { $push: { extensions: extension } } : {}) });
+  await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, deliveryFee: shipping, estimatedTotal: newTotal, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(extensions.length ? { $push: { extensions: { $each: extensions } } } : {}) });
   await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: `แก้ไขสินค้า/วันเช่าหลังชำระเงิน · ส่วนต่าง ${difference} บาท` });
   let lineNotified = false;
   if (extension?.billToken && booking.lineUserId && !booking.lineUserId.startsWith("pending:") && lineConfigured(booking.lineOa)) {
     try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${difference.toLocaleString("th-TH")} บาท\nบิลใหม่ต้องชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${extension.billToken}` }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE booking modification notice failed:", error); }
   }
-  return Response.json({ ok: true, ...details, items, start, end, days, schedule, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, lineNotified });
+  return Response.json({ ok: true, ...details, items, start, end, days, schedule, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, penalty: penaltyExtension, lineNotified });
 }

@@ -13,12 +13,35 @@ export const metadata = { title: "สรุปบิลตามแอดมิ�
 
 type Query = { from?: string | string[]; to?: string | string[]; month?: string | string[]; tab?: string | string[] };
 type BookingDoc = { _id: string; name?: string; status: string; payment?: "unpaid" | "paid"; paidAt?: Date | null; createdAt: Date; billOwner?: BillOwner; extensions?: Extension[]; adjustments?: Adjustment[]; quote?: { rental?: number; deposit?: number; shipping?: number; discountAmount?: number; updatedAt?: Date } };
+type CommissionData = { bookings: BookingDoc[]; admins: AdminAccount[] };
+const commissionCache = new Map<string, { at: number; data: CommissionData }>();
+const commissionRuns = new Map<string, Promise<CommissionData>>();
 const one = (value?: string | string[]) => Array.isArray(value) ? value[0] : value || "";
 const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && new Date(`${day}T12:00:00Z`).toISOString().slice(0, 10) === day;
 const shiftDay = (day: string, by: number) => { const date = new Date(`${day}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + by); return date.toISOString().slice(0, 10); };
 const shiftMonth = (month: string, by: number) => { const date = new Date(`${month}-01T12:00:00Z`); date.setUTCMonth(date.getUTCMonth() + by); return date.toISOString().slice(0, 7); };
 const lastOfMonth = (month: string) => shiftDay(`${shiftMonth(month, 1)}-01`, -1);
 const dayLabel = (day: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
+
+async function loadCommissionData(db: Awaited<ReturnType<typeof database>>, key: string, filter: Record<string, unknown>, open: boolean) {
+  const now = Date.now();
+  const cached = commissionCache.get(key);
+  if (cached && now - cached.at < 5000) return cached.data;
+  const running = commissionRuns.get(key);
+  if (running) return running;
+  const run = Promise.all([
+    db.collection<BookingDoc>("bookingRequests").find(filter, { projection: { _id: 1, name: 1, status: 1, payment: 1, paidAt: 1, createdAt: 1, billOwner: 1, extensions: 1, adjustments: 1, quote: 1 } }).sort(open ? { createdAt: -1 } : { paidAt: -1 }).toArray(),
+    db.collection<AdminAccount>("admins").find({}, { projection: { _id: 1, name: 1, active: 1 } }).sort({ name: 1 }).toArray(),
+  ]).then(([bookings, admins]) => ({ bookings, admins }));
+  commissionRuns.set(key, run);
+  try {
+    const data = await run;
+    commissionCache.set(key, { at: Date.now(), data });
+    return data;
+  } finally {
+    commissionRuns.delete(key);
+  }
+}
 
 async function Commissions({ searchParams }: { searchParams: Promise<Query> }) {
   const admin = await pageAdmin("finance");
@@ -36,10 +59,7 @@ async function Commissions({ searchParams }: { searchParams: Promise<Query> }) {
   const filter = open
     ? { status: { $ne: "cancelled" }, payment: { $ne: "paid" as const }, quote: { $exists: true } }
     : { status: { $ne: "cancelled" }, payment: "paid" as const, paidAt: { $gte: new Date(`${from}T00:00:00Z`), $lt: new Date(`${shiftDay(to, 1)}T00:00:00Z`) } };
-  const [bookings, admins] = await Promise.all([
-    db.collection<BookingDoc>("bookingRequests").find(filter, { projection: { _id: 1, name: 1, status: 1, payment: 1, paidAt: 1, createdAt: 1, billOwner: 1, extensions: 1, adjustments: 1, quote: 1 } }).sort(open ? { createdAt: -1 } : { paidAt: -1 }).toArray(),
-    db.collection<AdminAccount>("admins").find({}, { projection: { _id: 1, name: 1, active: 1 } }).sort({ name: 1 }).toArray(),
-  ]);
+  const { bookings, admins } = await loadCommissionData(db, `${open ? "open" : "paid"}:${from}:${to}`, filter, open);
   const rows: CommissionRow[] = bookings.map(row => {
     // Rent the bill earned: the quoted rent after discount, plus paid extensions and fines, plus settled edit differences.
     const extras = activeExtensions(row.extensions).filter(item => item.status === "paid").reduce((sum, item) => sum + item.amount, 0);

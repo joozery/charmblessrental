@@ -42,9 +42,15 @@ async function Dashboard({ from, to, date, status, denied }: PageQuery) {
   const inRange = (day: string) => !reversedRange && day >= start && day <= end;
   const rangeLabel = start === end ? dateWithYear(start) : `${start.slice(0, 4) === end.slice(0, 4) ? shortDate(start) : dateWithYear(start)} – ${dateWithYear(end)}`;
   const db = await database();
+  const rangeEnd = nextDay(end, 1);
+  const legacyWindow = !reversedRange ? { $or: [
+    { enteredAt: { $gte: new Date(`${start}T00:00:00.000Z`), $lt: new Date(`${rangeEnd}T00:00:00.000Z`) } },
+    { shipDate: { $gte: new Date(`${start}T00:00:00.000Z`), $lt: new Date(`${rangeEnd}T00:00:00.000Z`) } },
+    { returnDate: { $gte: new Date(`${start}T00:00:00.000Z`), $lt: new Date(`${rangeEnd}T00:00:00.000Z`) } },
+  ] } : { _id: { $exists: false } };
   const [imported, web, products] = await Promise.all([
-    db.collection<Rental>("rentals").find({}, { projection: { _id: 0, legacyId: 1, enteredAt: 1, customerName: 1, shipDate: 1, returnDate: 1, legacyStatus: 1, total: 1 } }).toArray(),
-    webRentals(db, today),
+    db.collection<Rental>("rentals").find(legacyWindow, { projection: { _id: 0, legacyId: 1, enteredAt: 1, customerName: 1, shipDate: 1, returnDate: 1, legacyStatus: 1, total: 1 } }).toArray(),
+    webRentals(db, today, { from: start, to: rangeEnd }),
     getProducts(),
   ]);
   // Imported rentals from the old sheet plus bookings made on the website, counted and listed together.

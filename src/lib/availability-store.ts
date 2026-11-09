@@ -1,4 +1,5 @@
 import type { Db } from "mongodb";
+import { cache } from "react";
 import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 import { lastUseDay, type Extension } from "./extension";
 import type { QueueBooking, QueueClash } from "./queue";
@@ -52,7 +53,7 @@ export async function getReservationCounts(db: Db, productId: number, from: stri
 
 // Every day in [from, to): a hand-set capacity wins, otherwise the pieces in service (stock) are the capacity.
 // `over` counts bookings beyond the pieces that exist (an extension the shop let run into the next rental): a real clash.
-export async function getQueue(db: Db, productId: number, from: string, to: string, exceptId?: string) {
+async function getQueueUncached(db: Db, productId: number, from: string, to: string, exceptId?: string) {
   const [capacities, reservations, firm, product] = await Promise.all([
     db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
     getReservationCounts(db, productId, from, to, exceptId),
@@ -64,6 +65,18 @@ export async function getQueue(db: Db, productId: number, from: string, to: stri
   for (let date = from; date < to; date = addDays(date, 1)) { const reserved = reservations.get(date) || 0, capacity = set.get(date) ?? stock; days.push({ date, capacity, remaining: Math.max(0, capacity - reserved), over: Math.max(0, reserved - stock), waitable: reserved >= capacity && capacity - (firm.get(date) || 0) >= 1 }); }
   return days;
 }
+const queueCache = new Map<string, { at: number; value: Awaited<ReturnType<typeof getQueueUncached>> }>();
+const queueRuns = new Map<string, Promise<Awaited<ReturnType<typeof getQueueUncached>>>>();
+async function getQueueCached(db: Db, productId: number, from: string, to: string, exceptId?: string) {
+  const key = `${productId}:${from}:${to}:${exceptId || ""}`, now = Date.now(), cached = queueCache.get(key);
+  if (cached && now - cached.at < 5000) return cached.value;
+  const running = queueRuns.get(key);
+  if (running) return running;
+  const run = getQueueUncached(db, productId, from, to, exceptId);
+  queueRuns.set(key, run);
+  try { const value = await run; queueCache.set(key, { at: Date.now(), value }); return value; } finally { queueRuns.delete(key); }
+}
+export const getQueue = cache(getQueueCached);
 
 type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
 // Every booking or hold that takes this piece out of the queue in [from, to), with the days of each step (admin calendars).
@@ -95,8 +108,8 @@ export async function queueClashes(db: Db, rows: ClashRow[]) {
   if (!open.length) return result;
   const from = open.reduce((min, row) => blockRange(row).from < min ? blockRange(row).from : min, blockRange(open[0]).from);
   const to = open.reduce((max, row) => blockRange(row).to > max ? blockRange(row).to : max, blockRange(open[0]).to);
-  for (const id of new Set(open.flatMap(row => row.items.map(item => item.id)))) {
-    const clashing = (await getQueue(db, id, from, to)).filter(day => day.over > 0).map(day => day.date);
+  const productClashes = await Promise.all([...new Set(open.flatMap(row => row.items.map(item => item.id)))].map(async id => [id, (await getQueue(db, id, from, to)).filter(day => day.over > 0).map(day => day.date)] as const));
+  for (const [id, clashing] of productClashes) {
     if (!clashing.length) continue;
     const holders = open.filter(row => row.items.some(item => item.id === id));
     for (const row of holders) {

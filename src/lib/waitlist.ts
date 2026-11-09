@@ -8,9 +8,22 @@ import { requestOrigin } from "@/lib/request-origin";
 
 type Waiting = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; items: { id: number }[]; createdAt: Date; lineUserId?: string; lineOa?: string; billToken?: string; holdUntil?: Date; payment?: string; verification?: { status?: string }; holdExpiredNoticeSentAt?: Date; waitlist?: { since?: Date } };
 
+// Admin layouts can render more than once during a navigation. Share one in-flight
+// promotion and avoid repeating the same queue scan for a short interval.
+let lastPromotionAt = 0;
+let promotionRun: Promise<number> | null = null;
+const promotionCooldownMs = 30_000;
+
 // Requests waiting behind someone's payment hold, oldest first: each whose pieces are free again gets its turn now,
 // with the same time to pay. Runs whenever the queue is looked at (booking, availability, admin pages, daily cron).
-export async function promoteWaitlist(db: Db, request: Request | null, origin = request ? requestOrigin(request) : undefined) {
+export function promoteWaitlist(db: Db, request: Request | null, origin = request ? requestOrigin(request) : undefined) {
+  if (promotionRun) return promotionRun;
+  if (Date.now() - lastPromotionAt < promotionCooldownMs) return Promise.resolve(0);
+  promotionRun = promoteWaitlistNow(db, request, origin).finally(() => { lastPromotionAt = Date.now(); promotionRun = null; });
+  return promotionRun;
+}
+
+async function promoteWaitlistNow(db: Db, request: Request | null, origin: string | undefined) {
   const bookings = db.collection<Waiting>("bookingRequests");
   const expired = await bookings.find({
     status: { $in: ["new", "contacted"] }, payment: { $ne: "paid" }, waitlist: { $exists: false }, holdExpiredNoticeSentAt: { $exists: false },

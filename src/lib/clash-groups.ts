@@ -5,8 +5,11 @@ import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 type Row = { _id: string; name?: string; phone?: string; status: string; createdAt?: Date | string; payment?: string; holdUntil?: Date | null; waitlist?: unknown; start: string; end: string; schedule?: ScheduleRecord | null; shipment?: object; returned?: unknown; verification?: { status: string } | null; items: { id: number; name: string; sku: string; unitSku?: string }[] };
 export type ClashGroup = { key: string; item: string; from: string; to: string; bookings: { id: string; name: string; phone: string; status: string; shipped: boolean; ship: string; ready: string }[] };
 
+let cached: { at: number; value: ClashGroup[] } | null = null;
+let running: Promise<ClashGroup[]> | null = null;
+
 // Every clash between open bookings, one group per piece and set of bookings, with the run of days they overlap.
-export async function clashGroups(db: Db) {
+async function clashGroupsNow(db: Db) {
   const rows = (await db.collection<Row>("bookingRequests").find({ status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, "verification.status": 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray()).map(row => ({ ...row, _id: String(row._id) }));
   const clashes = await queueClashes(db, rows);
   const byId = new Map(rows.map(row => [row._id, row]));
@@ -20,4 +23,17 @@ export async function clashGroups(db: Db) {
     groups.set(key, group);
   }
   return [...groups.values()].sort((a, b) => a.from.localeCompare(b.from));
+}
+
+// The clashes page is read-only and expensive to calculate. Share an in-flight run
+// and reuse it briefly when the page shell requests the same data more than once.
+export async function clashGroups(db: Db) {
+  const now = Date.now();
+  if (cached && now - cached.at < 5000) return cached.value;
+  if (running) return running;
+  running = clashGroupsNow(db).then(value => {
+    cached = { at: Date.now(), value };
+    return value;
+  }).finally(() => { running = null; });
+  return running;
 }

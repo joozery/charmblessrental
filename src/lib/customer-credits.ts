@@ -9,7 +9,18 @@ export const customers = (db: Db) => db.collection<CustomerRecord>("customers");
 export const creditEntries = (db: Db) => db.collection<CreditEntry>("customerCredits");
 
 // Backfill customers for bookings linked before the customer page existed.
-export async function syncCustomersFromBookings(db: Db) {
+let syncRun: Promise<number> | null = null;
+let lastSyncAt = 0;
+const syncCooldownMs = 30_000;
+
+export function syncCustomersFromBookings(db: Db) {
+  if (syncRun) return syncRun;
+  if (Date.now() - lastSyncAt < syncCooldownMs) return Promise.resolve(0);
+  syncRun = syncCustomersFromBookingsNow(db).finally(() => { lastSyncAt = Date.now(); syncRun = null; });
+  return syncRun;
+}
+
+async function syncCustomersFromBookingsNow(db: Db) {
   const rows = await db.collection<{ lineUserId?: string; lineName?: string; name?: string; phone?: string; status?: string }>("bookingRequests").find({ lineUserId: { $exists: true, $type: "string" } }, { projection: { lineUserId: 1, lineName: 1, name: 1, phone: 1, status: 1 } }).toArray();
   const grouped = new Map<string, typeof rows>();
   for (const row of rows) if (row.lineUserId) grouped.set(row.lineUserId, [...(grouped.get(row.lineUserId) || []), row]);

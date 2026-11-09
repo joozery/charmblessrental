@@ -18,9 +18,11 @@ async function Content() {
   const pieces = products.flatMap(product => unitsOf(product).filter(unit => prepStatuses.includes(unit.status) || unit.status === "rented").map(unit => ({ product, unit })));
   const skus = pieces.map(piece => piece.unit.sku);
   const bookings = await db.collection<BookingDoc>("bookingRequests").find({ "items.unitSku": { $in: skus }, status: { $ne: "cancelled" } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, status: 1, items: 1, shipment: 1, returned: 1, penalties: 1 } }).toArray();
+  const bookingsBySku = new Map<string, BookingDoc[]>();
+  for (const booking of bookings) for (const sku of new Set(booking.items.map(item => item.unitSku).filter((value): value is string => !!value))) bookingsBySku.set(sku, [...(bookingsBySku.get(sku) || []), booking]);
   const today = thaiDay();
   const rows: PrepPiece[] = pieces.map(({ product, unit }) => {
-    const mine = bookings.filter(booking => booking.items.some(item => item.unitSku === unit.sku));
+    const mine = bookingsBySku.get(unit.sku) || [];
     const last = mine.filter(booking => booking.returned).sort((a, b) => +new Date(b.returned!.at) - +new Date(a.returned!.at))[0];
     const out = mine.find(booking => booking.shipment && !booking.returned);
     const next = mine.filter(booking => booking.status === "confirmed" && !booking.shipment && booking.end >= today).sort((a, b) => a.start.localeCompare(b.start))[0];

@@ -4,6 +4,8 @@ import type { Db } from "mongodb";
 // Set once; later edits by others do not move it, and only the owner reassigns it on the commission page.
 export type BillOwner = { adminId: string; name: string; email: string; at: Date; assignedByName?: string };
 type Actor = { _id: string; name: string; email?: string; username: string };
+let lastBackfillAt = 0;
+let backfillRun: Promise<void> | null = null;
 
 export const ownerOf = (admin: Actor, assignedByName?: string): BillOwner => ({ adminId: String(admin._id), name: admin.name, email: admin.email || admin.username, at: new Date(), ...(assignedByName ? { assignedByName } : {}) });
 
@@ -12,7 +14,7 @@ export async function claimBill(db: Db, bookingId: string, admin: Actor) {
 }
 
 // Bills priced before owners were recorded: the first admin in their history who created or priced them.
-export async function backfillBillOwners(db: Db) {
+async function backfillBillOwnersNow(db: Db) {
   const bookings = db.collection<{ _id: string; billOwner?: BillOwner }>("bookingRequests");
   const missing = await bookings.find({ billOwner: { $exists: false }, quote: { $exists: true } }, { projection: { _id: 1 } }).toArray();
   if (!missing.length) return;
@@ -22,4 +24,17 @@ export async function backfillBillOwners(db: Db) {
     { $group: { _id: "$targetId", actorId: { $first: "$actorId" }, actorName: { $first: "$actorName" }, actorEmail: { $first: "$actorEmail" }, at: { $first: "$at" } } },
   ]).toArray();
   for (const row of firsts) await bookings.updateOne({ _id: row._id, billOwner: { $exists: false } }, { $set: { billOwner: { adminId: String(row.actorId), name: row.actorName, email: row.actorEmail, at: row.at } } });
+}
+
+// Commission pages are read-heavy. Share concurrent backfills and avoid repeating
+// the same missing-owner scan on every refresh for a short period.
+export async function backfillBillOwners(db: Db) {
+  const now = Date.now();
+  if (now - lastBackfillAt < 30000) return;
+  if (backfillRun) return backfillRun;
+  backfillRun = backfillBillOwnersNow(db).finally(() => {
+    lastBackfillAt = Date.now();
+    backfillRun = null;
+  });
+  return backfillRun;
 }

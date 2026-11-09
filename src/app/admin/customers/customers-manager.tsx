@@ -1,16 +1,18 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 type Customer = { _id: string; lineName: string; name: string; phone: string; bookingCount: number; completedCount: number; legacyCount?: number; reviewCount?: number; creditBalance: number; createdAt: string; updatedAt: string };
 type Credit = { _id: string; customerId: string; amount: number; remaining: number; type: string; reason: string; bookingId?: string; billToken?: string; expiresAt?: string | Date; createdAt: string; createdByName: string };
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const date = (value: string | Date) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(value));
 
-export default function CustomersManager({ initial, initialCredits }: { initial: Customer[]; initialCredits: Credit[] }) {
+export default function CustomersManager({ initial, initialCredits, total: _total }: { initial: Customer[]; initialCredits: Credit[]; total: number }) {
+  void _total;
   const [rows, setRows] = useState(initial), [credits, setCredits] = useState(initialCredits), [selected, setSelected] = useState("");
   const [amount, setAmount] = useState(""), [reason, setReason] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [historyFilter, setHistoryFilter] = useState<"all" | "grant" | "use">("all");
   const [profile, setProfile] = useState({ bookingCount: "", reviewCount: "" });
+  useEffect(() => { void fetch("/api/admin/customers/sync", { method: "POST" }).catch(() => undefined); }, []);
   const customer = rows.find(row => row._id === selected), customerCredits = credits.filter(row => row.customerId === selected), visibleCredits = customerCredits.filter(row => historyFilter === "all" || row.type === historyFilter);
   function selectCustomer(id: string) { const next = selected === id ? "" : id; const nextCustomer = rows.find(row => row._id === next); setSelected(next); setProfile({ bookingCount: nextCustomer ? String(nextCustomer.bookingCount) : "", reviewCount: nextCustomer ? String(nextCustomer.reviewCount || 0) : "" }); setError(""); setNotice(""); }
   async function saveProfile() { if (!customer) return; const bookingCount = Math.max(0, Number(profile.bookingCount || customer.bookingCount)), reviewCount = Number(profile.reviewCount) > 0 ? 1 : 0; setBusy(true); setError(""); setNotice(""); try { const response = await fetch("/api/admin/customers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "discountProfile", customerId: customer._id, bookingCount, reviewCount }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "บันทึกประวัติไม่สำเร็จ"); setRows(current => current.map(row => row._id === customer._id ? { ...row, bookingCount, completedCount: bookingCount, reviewCount } : row)); setProfile({ bookingCount: String(bookingCount), reviewCount: String(reviewCount) }); setNotice("บันทึกข้อมูลส่วนลดลูกค้าเก่าแล้ว"); } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกประวัติไม่สำเร็จ"); } finally { setBusy(false); } }

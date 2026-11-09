@@ -21,8 +21,13 @@ const statusOf = (row: BookingDoc, today: string) => {
   return { pending: "รอชำระเงิน", paid: "รอจัดส่ง", shipped: "จัดส่งแล้ว", returning: "ลูกค้าส่งคืนแล้ว", returned: "คืนสินค้าแล้ว", cancelled: "ยกเลิก" }[stage];
 };
 
-export async function webRentals(db: Db, today: string): Promise<WebRental[]> {
-  const rows = await db.collection<BookingDoc>("bookingRequests").find({ status: { $ne: "cancelled" } }, { projection: { _id: 1, name: 1, status: 1, payment: 1, createdAt: 1, start: 1, end: 1, schedule: 1, estimatedTotal: 1, quote: 1, shipment: 1, customerReturn: 1, returned: 1, items: 1 } }).toArray();
+export async function webRentals(db: Db, today: string, range?: { from: string; to: string }): Promise<WebRental[]> {
+  const filter = range ? { status: { $ne: "cancelled" }, $or: [
+    { createdAt: { $gte: new Date(`${range.from}T00:00:00.000Z`), $lt: new Date(`${range.to}T00:00:00.000Z`) } },
+    { start: { $gte: range.from, $lt: range.to } }, { end: { $gte: range.from, $lt: range.to } },
+    { "schedule.ship": { $gte: range.from, $lt: range.to } }, { "schedule.returnDate": { $gte: range.from, $lt: range.to } },
+  ] } : { status: { $ne: "cancelled" } };
+  const rows = await db.collection<BookingDoc>("bookingRequests").find(filter, { projection: { _id: 1, name: 1, status: 1, payment: 1, createdAt: 1, start: 1, end: 1, schedule: 1, estimatedTotal: 1, quote: 1, shipment: 1, customerReturn: 1, returned: 1, items: 1 } }).toArray();
   return rows.map(row => ({
     legacyId: row._id, customerName: row.name || "", enteredAt: new Date(row.createdAt),
     shipDate: new Date(`${row.schedule?.ship || row.start}T00:00:00Z`), returnDate: new Date(`${returnDay(row)}T00:00:00Z`),

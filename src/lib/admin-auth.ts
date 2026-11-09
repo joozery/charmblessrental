@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { connection } from "next/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { adminAccounts, type PublicAdmin } from "./admin-accounts";
 import { can, type Permission } from "./permissions";
 import { requestOrigin } from "@/lib/request-origin";
@@ -15,7 +16,7 @@ export function sessionToken(account: { _id: string; version: number }) {
   const payload = Buffer.from(JSON.stringify({ id: account._id, version: account.version, expires: Date.now() + 28800000 })).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
-export async function currentAdmin(): Promise<PublicAdmin | null> {
+export const currentAdmin = cache(async function currentAdmin(): Promise<PublicAdmin | null> {
   await connection();
   if (!configured()) return null;
   const token = (await cookies()).get("admin_session")?.value || "";
@@ -25,7 +26,7 @@ export async function currentAdmin(): Promise<PublicAdmin | null> {
   try { value = JSON.parse(Buffer.from(payload, "base64url").toString()); } catch { return null; }
   if (typeof value.id !== "string" || !Number.isInteger(value.version) || typeof value.expires !== "number" || value.expires <= Date.now()) return null;
   return (await adminAccounts()).findOne({ _id: value.id, version: value.version, active: true }, { projection: { passwordHash: 0 } });
-}
+});
 export async function isAdmin() { return !!await currentAdmin(); }
 export function sameOrigin(request: Request) { return request.headers.get("origin") === requestOrigin(request); }
 // Route handlers: returns the admin, or the 401/403 response to send back.

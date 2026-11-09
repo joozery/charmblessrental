@@ -11,3 +11,4 @@
 .customers-profile-form .customers-review-check input{width:16px;height:16px;accent-color:#a85f78}
 @media(max-width:760px){.customers-profile-form{grid-template-columns:1fr}.customers-profile-form button{width:100%}}
 .customers-legacy-count{display:block;margin-top:2px;color:#667085;font-size:10px}
+.customers-pagination{justify-content:center;flex-wrap:wrap;margin:16px auto 30px}.customers-pagination a{min-width:30px;padding:5px 9px;border:1px solid #e9dce4;border-radius:6px;background:#fff;color:#90667c;text-align:center;text-decoration:none;font-size:11px}.customers-pagination a.is-active{border-color:#a85f78;background:#a85f78;color:#fff}

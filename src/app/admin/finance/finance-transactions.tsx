@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 
@@ -10,8 +10,9 @@ const sourceLabel = { manual: "บันทึกเอง", booking: "จาก
 const money = (value: number) => `${value.toLocaleString("th-TH", { maximumFractionDigits: 2 })} บาท`;
 const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(value));
 
-export default function FinanceTransactions({ initial, today }: { initial: Transaction[]; today: string }) {
+export default function FinanceTransactions({ initial, today, totals: initialTotals, total, page, pageCount, from, to }: { initial: Transaction[]; today: string; totals: { income: number; expense: number }; total: number; page: number; pageCount: number; from: string; to: string }) {
   const [transactions, setTransactions] = useState(initial);
+  const [totals, setTotals] = useState(initialTotals);
   const [type, setType] = useState<"income" | "expense">("income");
   const [category, setCategory] = useState(categories.income[0]);
   const [date, setDate] = useState(today);
@@ -21,7 +22,6 @@ export default function FinanceTransactions({ initial, today }: { initial: Trans
   const [voiding, setVoiding] = useState<{ id: string; reason: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const totals = useMemo(() => transactions.reduce((sum, row) => { if (!row.voided) sum[row.type] += row.amount; return sum; }, { income: 0, expense: 0 }), [transactions]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError("");
@@ -29,7 +29,8 @@ export default function FinanceTransactions({ initial, today }: { initial: Trans
       const response = await fetch("/api/admin/finance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, category, date, amount: Number(amount), note, ...(bookingId.trim() ? { bookingId: bookingId.trim() } : {}) }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "บันทึกรายการไม่สำเร็จ");
-      setTransactions(rows => [data.transaction, ...rows]); setAmount(""); setNote(""); setBookingId("");
+      const transaction = data.transaction as Transaction;
+      setTransactions(rows => [transaction, ...rows]); setTotals(current => ({ ...current, [transaction.type]: current[transaction.type] + transaction.amount })); setAmount(""); setNote(""); setBookingId("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกรายการไม่สำเร็จ กรุณาลองอีกครั้ง"); }
     finally { setSaving(false); }
   }
@@ -58,8 +59,9 @@ export default function FinanceTransactions({ initial, today }: { initial: Trans
       <button type="submit" disabled={saving}><Icon name="plus" />{saving ? "กำลังบันทึก…" : "เพิ่มรายการ"}</button>
     </form>
     {error && <p className="finance-error" role="alert">{error}</p>}
-    <div className="finance-ledger-list-head"><h3>รายการในช่วงวันที่นี้</h3><span>{transactions.length.toLocaleString("th-TH")} รายการ</span></div>
+    <div className="finance-ledger-list-head"><h3>รายการในช่วงวันที่นี้</h3><span>{total.toLocaleString("th-TH")} รายการ · หน้า {page}/{pageCount}</span></div>
     {transactions.length ? <div className="finance-ledger-table-wrap"><table className="finance-ledger-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>หมายเหตุ</th><th>จำนวนเงิน</th><th><span className="admin-sr-only">จัดการ</span></th></tr></thead><tbody>{transactions.map(row => <tr key={row._id} className={row.voided ? "is-void" : undefined}><td>{dateLabel(row.date)}</td><td><span className={`finance-ledger-badge ${row.type === "income" ? "is-income" : "is-expense"}`}>{row.type === "income" ? "รายรับ" : "รายจ่าย"}</span></td><td>{row.category}</td><td>{row.note || "—"}{row.bookingId && <> · <Link href={`/admin/bookings?id=${encodeURIComponent(row.bookingId)}`}>{row.bookingId}</Link></>}<span className="finance-ledger-meta">{sourceLabel[row.source || "manual"]} · {row.createdByName || row.createdBy || "—"}{row.voided && ` · ยกเลิกโดย ${row.voided.byName}: ${row.voided.reason}`}</span></td><td className={`is-${row.type}`}>{row.type === "income" ? "+" : "−"}{money(row.amount)}</td><td className="finance-ledger-actions">{!row.voided && (row.source || "manual") === "manual" && (voiding?.id === row._id ? <span className="finance-void-form"><input autoFocus value={voiding.reason} maxLength={300} placeholder="เหตุผลที่ยกเลิก" onChange={event => setVoiding({ id: row._id, reason: event.target.value })} /><button type="button" disabled={saving || !voiding.reason.trim()} onClick={voidRow}>ยืนยัน</button><button type="button" disabled={saving} onClick={() => setVoiding(null)}>ปิด</button></span> : <button type="button" onClick={() => setVoiding({ id: row._id, reason: "" })}>ยกเลิกรายการ</button>)}</td></tr>)}</tbody></table></div> : <p className="finance-empty">ยังไม่มีรายการรายรับหรือรายจ่ายในช่วงนี้</p>}
+    {pageCount > 1 && <nav className="finance-pagination" aria-label="เปลี่ยนหน้ารายการธุรกรรม">{page > 1 && <Link href={`/admin/finance?from=${from}&to=${to}&page=${page - 1}`}>ก่อนหน้า</Link>}<span>หน้า {page} / {pageCount}</span>{page < pageCount && <Link href={`/admin/finance?from=${from}&to=${to}&page=${page + 1}`}>ถัดไป</Link>}</nav>}
     <p className="finance-panel-note">รายรับค่าเช่าและค่าส่งของคำขอจองจะลงให้อัตโนมัติเมื่อยืนยันชำระ เงินมัดจำไม่อยู่ในบัญชีนี้ รายการที่ยกเลิกยังแสดงไว้แต่ไม่นับยอด และไม่สามารถลบได้</p>
   </section>;
 }

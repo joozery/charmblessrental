@@ -23,4 +23,5 @@ body:has(.activity-page),body:has(.activity-page) .chrome-shell,body:has(.activi
 .activity-changes td{padding:5px 8px;border-top:1px solid #eef0f3;color:#344054;overflow-wrap:anywhere;vertical-align:top}
 .activity-changes td:first-child{width:22%;color:#667085}.activity-changes td:last-child{color:#17202e;font-weight:550}
 .activity-empty{padding:40px 16px;border:1px dashed #d0d5dd;border-radius:8px;background:#fff;color:#667085;text-align:center;font-size:13px}
+.activity-pagination{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:14px}.activity-pagination a{min-width:30px;padding:6px 9px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#667085;text-align:center;text-decoration:none;font-size:12px}.activity-pagination a.is-active{border-color:#79516c;background:#79516c;color:#fff}
 @media(max-width:650px){.chrome-shell .activity-page{padding:22px 14px}.activity-filters label{min-width:calc(50% - 4px)}.activity-changes td:first-child{width:30%}}

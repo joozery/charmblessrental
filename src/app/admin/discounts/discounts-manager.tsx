@@ -1,21 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Coupon = { _id: string; code: string; label: string; percent: number; active: boolean; startsAt?: string; endsAt?: string; maxUses?: number | null; usedCount: number };
 type FormState = { code: string; label: string; percent: string; startsAt: string; endsAt: string; maxUses: string; active: boolean };
 const emptyForm: FormState = { code: "", label: "", percent: "", startsAt: "", endsAt: "", maxUses: "", active: true };
 const dateLabel = (value?: string) => value ? new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`)) : "ไม่กำหนด";
 
-export default function DiscountsManager({ initial }: { initial: Coupon[] }) {
+export default function DiscountsManager({ initial, page, pageCount, total }: { initial: Coupon[]; page: number; pageCount: number; total: number }) {
+  const router = useRouter();
   const [rows, setRows] = useState(initial), [form, setForm] = useState<FormState>(emptyForm), [error, setError] = useState(""), [saving, setSaving] = useState(false);
+  const shown = rows;
   const update = (key: keyof FormState, value: string | boolean) => setForm(current => ({ ...current, [key]: value }));
   async function save(event: React.FormEvent) {
     event.preventDefault(); setError(""); setSaving(true);
     try {
       const response = await fetch("/api/admin/discounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, percent: Number(form.percent), maxUses: form.maxUses ? Number(form.maxUses) : null }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
-      setRows(current => [data.coupon, ...current.filter(row => row._id !== data.coupon._id)]); setForm(emptyForm);
+      setRows(current => [data.coupon, ...current.filter(row => row._id !== data.coupon._id)].slice(0, 20)); router.push("/admin/discounts"); setForm(emptyForm);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setSaving(false); }
   }
   return <main className="admin-main discounts-page">
@@ -35,8 +38,9 @@ export default function DiscountsManager({ initial }: { initial: Coupon[] }) {
       {error && <p className="admin-error">{error}</p>}
     </section>
     <section className="admin-catalog discounts-card">
-      <div className="discounts-card-heading"><div><h2>โค้ดที่มีอยู่</h2><p>ตรวจสอบสถานะและจำนวนการใช้งานของแต่ละโค้ด</p></div><span className="discount-count">{rows.length} โค้ด</span></div>
-      {rows.length ? <div className="discount-list">{rows.map(row => <article key={row._id} className="discount-item"><div className="discount-item-main"><strong>{row.code}</strong><span>{row.label}</span></div><div className="discount-item-value"><strong>ลด {row.percent}%</strong><small>ใช้แล้ว {row.usedCount}{row.maxUses ? ` / ${row.maxUses}` : " ครั้ง"}</small></div><div className="discount-item-meta"><span className={row.active ? "discount-status is-active" : "discount-status"}>{row.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span><small>{dateLabel(row.startsAt)} – {dateLabel(row.endsAt)}</small></div></article>)}</div> : <p className="admin-empty">ยังไม่มีโค้ดส่วนลด</p>}
+      <div className="discounts-card-heading"><div><h2>โค้ดที่มีอยู่</h2><p>ตรวจสอบสถานะและจำนวนการใช้งานของแต่ละโค้ด</p></div><span className="discount-count">{total} โค้ด</span></div>
+      {rows.length ? <div className="discount-list">{shown.map(row => <article key={row._id} className="discount-item"><div className="discount-item-main"><strong>{row.code}</strong><span>{row.label}</span></div><div className="discount-item-value"><strong>ลด {row.percent}%</strong><small>ใช้แล้ว {row.usedCount}{row.maxUses ? ` / ${row.maxUses}` : " ครั้ง"}</small></div><div className="discount-item-meta"><span className={row.active ? "discount-status is-active" : "discount-status"}>{row.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span><small>{dateLabel(row.startsAt)} – {dateLabel(row.endsAt)}</small></div></article>)}</div> : <p className="admin-empty">ยังไม่มีโค้ดส่วนลด</p>}
+      {pageCount > 1 && <nav className="discount-pagination" aria-label="เปลี่ยนหน้าคูปอง"><button type="button" disabled={page === 1} onClick={() => router.push(`/admin/discounts?page=${page - 1}`)}>ก่อนหน้า</button><span>หน้า {page} / {pageCount}</span><button type="button" disabled={page === pageCount} onClick={() => router.push(`/admin/discounts?page=${page + 1}`)}>ถัดไป</button></nav>}
     </section>
   </main>;
 }

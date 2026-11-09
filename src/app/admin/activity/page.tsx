@@ -9,7 +9,7 @@ import { actionGroups, actionLabels, fieldLabels, showValue } from "@/lib/audit-
 import "./activity.css";
 
 export const metadata = { title: "ประวัติการทำรายการ | Charm Bless", robots: { index: false, follow: false } };
-type Query = { group?: string | string[]; actor?: string | string[]; q?: string | string[]; from?: string | string[]; to?: string | string[] };
+type Query = { group?: string | string[]; actor?: string | string[]; q?: string | string[]; from?: string | string[]; to?: string | string[]; page?: string | string[] };
 const one = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value) || "";
 const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T12:00:00Z`));
 // Days are Bangkok calendar days (UTC+7).
@@ -23,12 +23,16 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
   const group = actionGroups.some(item => item.key === one(query.group)) ? one(query.group) : "";
   const actor = one(query.actor).slice(0, 100), q = one(query.q).trim().slice(0, 100);
   const from = validDay(one(query.from)) ? one(query.from) : "", to = validDay(one(query.to)) ? one(query.to) : "";
+  const pageSize = 30, requestedPage = Math.max(1, Number.parseInt(one(query.page), 10) || 1);
   const filter: Filter<AuditLog> = {};
   if (group) filter.action = { $in: Object.entries(actionLabels).filter(([, item]) => item.group === group).map(([key]) => key) };
   if (actor) filter.actorId = actor;
   if (q) filter.$or = [{ targetId: q.toUpperCase() }, { targetId: q }, { actorEmail: q.toLowerCase() }];
   if (from || to) filter.at = { ...(from ? { $gte: bangkokStart(from) } : {}), ...(to ? { $lt: new Date(bangkokStart(to).getTime() + 86400000) } : {}) };
-  const [rows, admins] = await Promise.all([(await auditLogs()).find(filter).sort({ at: -1 }).limit(300).toArray(), listAdmins()]);
+  const logs = await auditLogs();
+  const total = await logs.countDocuments(filter);
+  const pageCount = Math.max(1, Math.ceil(total / pageSize)), page = Math.min(requestedPage, pageCount);
+  const [rows, admins] = await Promise.all([logs.find(filter).sort({ at: -1 }).skip((page - 1) * pageSize).limit(pageSize).toArray(), listAdmins()]);
   const failedLogins = rows.filter(row => row.action === "auth.login_failed").length;
 
   return <main className="admin-main activity-page">
@@ -42,7 +46,7 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
       <button type="submit"><Icon name="search" />กรอง</button>
       {(group || actor || q || from || to) && <Link href="/admin/activity">ล้างตัวกรอง</Link>}
     </form>
-    <p className="activity-count">{rows.length.toLocaleString("th-TH")} รายการ{rows.length === 300 ? " (แสดงล่าสุด 300 รายการ กรุณากรองเพิ่ม)" : ""}{failedLogins ? ` · เข้าสู่ระบบไม่สำเร็จ ${failedLogins.toLocaleString("th-TH")} ครั้ง` : ""}</p>
+    <p className="activity-count">{total.toLocaleString("th-TH")} รายการ · หน้า {page}/{pageCount}{failedLogins ? ` · เข้าสู่ระบบไม่สำเร็จ ${failedLogins.toLocaleString("th-TH")} ครั้ง` : ""}</p>
     {rows.length ? <ol className="activity-list">{rows.map(row => {
       const link = targetLink(row);
       return <li key={row._id} className={`activity-item is-${actionLabels[row.action]?.group || "other"}${row.action === "auth.login_failed" ? " is-failed" : ""}`}>
@@ -51,6 +55,7 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
         {!!row.changes.length && <table className="activity-changes"><thead><tr><th>ข้อมูล</th><th>ก่อนแก้ไข</th><th>หลังแก้ไข</th></tr></thead><tbody>{row.changes.map(change => <tr key={change.field}><td>{fieldLabels[change.field] || change.field}</td><td>{showValue(change.before)}</td><td>{showValue(change.after)}</td></tr>)}</tbody></table>}
       </li>;
     })}</ol> : <p className="activity-empty">ยังไม่มีประวัติที่ตรงกับตัวกรอง</p>}
+    {pageCount > 1 && <nav className="activity-pagination" aria-label="เปลี่ยนหน้าประวัติ">{Array.from({ length: pageCount }, (_, index) => index + 1).map(number => <Link key={number} className={number === page ? "is-active" : ""} href={`/admin/activity?${new URLSearchParams({ ...(group ? { group } : {}), ...(actor ? { actor } : {}), ...(q ? { q } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), page: String(number) })}`}>{number}</Link>)}</nav>}
   </main>;
 }
 
