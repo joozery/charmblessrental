@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { mapsLink, messengerFee, type MessengerSettings } from "@/lib/delivery";
-import type { FreeShipping, ShippingOption } from "@/lib/shipping";
+import type { CategoryShippingRule, FreeShipping, ShippingOption } from "@/lib/shipping";
 import { planRental, returnMethods, type ReturnMethod, type ScheduleSettings } from "@/lib/schedule";
 
 type Form = { enabled: boolean; inBill: boolean; originLink: string; originLabel: string; baseFee: string; includedKm: string; perKm: string; maxKm: string; description: string };
@@ -19,10 +19,11 @@ async function post(body: Record<string, unknown>) {
 type OptionRow = Omit<ShippingOption, "fee"> & { fee: string };
 const slug = (label: string, taken: string[]) => { const base = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "carrier"; let id = base, n = 2; while (taken.includes(id)) id = `${base}-${n++}`; return id; };
 
-function ShippingSettings({ initial }: { initial: { options: ShippingOption[]; free: FreeShipping; schedule: ScheduleSettings } }) {
+function ShippingSettings({ initial, categories }: { initial: { options: ShippingOption[]; free: FreeShipping; schedule: ScheduleSettings; categoryRules: CategoryShippingRule[] }; categories: string[] }) {
   const [rows, setRows] = useState<OptionRow[]>(initial.options.map(option => ({ ...option, fee: String(option.fee) })));
   const [free, setFree] = useState({ enabled: initial.free.enabled, minItems: String(initial.free.minItems) });
   const [schedule, setSchedule] = useState(initial.schedule);
+  const [categoryRules, setCategoryRules] = useState(initial.categoryRules);
   const dayInput = (value: number, change: (value: number) => void, label: string) => <label>{label}<input type="number" min="0" max="14" step="1" value={value} onChange={event => change(Math.max(0, Math.min(14, Math.round(Number(event.target.value) || 0))))} /></label>;
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const set = (index: number, patch: Partial<OptionRow>) => setRows(current => current.map((row, at) => at === index ? { ...row, ...patch } : row));
@@ -31,7 +32,7 @@ function ShippingSettings({ initial }: { initial: { options: ShippingOption[]; f
     try {
       const options = rows.map(row => ({ ...row, id: row.id || slug(row.label, rows.map(item => item.id)), fee: Number(row.fee) }));
       if (options.some(option => !option.label.trim() || !Number.isFinite(option.fee) || option.fee < 0)) throw new Error("กรอกชื่อและราคาขนส่งให้ครบ");
-      await post({ action: "shipping", options, free: { enabled: free.enabled, minItems: Number(free.minItems) }, schedule });
+      await post({ action: "shipping", options, free: { enabled: free.enabled, minItems: Number(free.minItems) }, schedule, categoryRules });
       setRows(options.map(option => ({ ...option, fee: String(option.fee) })));
       setNotice("บันทึกแล้ว ฟอร์มจองจะแสดงราคาขนส่งใหม่ภายในไม่กี่นาที");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); }
@@ -49,6 +50,16 @@ function ShippingSettings({ initial }: { initial: { options: ShippingOption[]; f
       <label className="delivery-check"><input type="checkbox" checked={row.standard} onChange={event => set(index, { standard: event.target.checked })} />แบบมาตรฐาน (ส่งฟรีเมื่อเข้าโปร)</label>
       {rows.length > 1 && <button type="button" className="shipping-remove" onClick={() => setRows(rows.filter((_, at) => at !== index))}>ลบ</button>}
     </div>)}</div>
+    <h2>กฎค่าส่งตามหมวดหมู่</h2>
+    <p>ถ้ามีสินค้าหมวดที่เปิดใช้กฎนี้ ระบบจะบังคับใช้ขนส่งและค่าส่งนี้แทนโปรส่งฟรีปกติ ส่วนหมวดที่ไม่ได้ตั้งจะใช้ระบบเดิม</p>
+    <div className="shipping-rows">{categoryRules.map((rule, index) => <div className="shipping-row" key={`${rule.category}-${index}`}>
+      <label>หมวดหมู่<select value={rule.category} onChange={event => setCategoryRules(current => current.map((item, at) => at === index ? { ...item, category: event.target.value } : item))}><option value="">เลือกหมวดหมู่</option>{categories.filter(category => category === rule.category || !categoryRules.some((item, at) => at !== index && item.category === category)).map(category => <option key={category} value={category}>{category}</option>)}</select></label>
+      <label>ขนส่งที่บังคับใช้<select value={rule.method} onChange={event => setCategoryRules(current => current.map((item, at) => at === index ? { ...item, method: event.target.value } : item))}>{rows.filter(row => row.enabled).map(option => <option key={option.id} value={option.id}>{option.label}</option>)}<option value="messenger">แมสเซนเจอร์</option></select></label>
+      <label>ค่าส่งเหมาจ่าย (บาท)<input type="number" min="0" step="1" value={rule.fee} onChange={event => setCategoryRules(current => current.map((item, at) => at === index ? { ...item, fee: Math.max(0, Math.round(Number(event.target.value) || 0)) } : item))} /></label>
+      <label className="delivery-check"><input type="checkbox" checked={rule.enabled} onChange={event => setCategoryRules(current => current.map((item, at) => at === index ? { ...item, enabled: event.target.checked } : item))} />เปิดใช้</label>
+      <button type="button" className="shipping-remove" onClick={() => setCategoryRules(current => current.filter((_, at) => at !== index))}>ลบ</button>
+    </div>)}</div>
+    {categoryRules.length < categories.length && <Button type="button" variant="outline" onClick={() => setCategoryRules(current => [...current, { category: categories.find(category => !current.some(item => item.category === category)) || "", method: rows.find(row => row.enabled)?.id || "", fee: 80, enabled: true }])}>+ เพิ่มกฎตามหมวด</Button>}
     {rows.length < 10 && <Button type="button" variant="outline" onClick={() => setRows([...rows, { id: "", label: "", fee: "", description: "", enabled: true, standard: false, leadDays: 3 }])}>+ เพิ่มขนส่ง</Button>}
     <h2>ระยะเวลาจัดส่งและ Gap</h2>
     <p>ใช้กันคิวและแสดงในปฏิทินหน้าสินค้า: ร้านส่งล่วงหน้าก่อนวันเริ่มใช้งาน · ลูกค้าส่งคืนวันถัดจากวันใช้งานวันสุดท้าย · เว้น Gap ไว้รับของ ตรวจ และซัก ก่อนรับคิวใหม่</p>
@@ -64,7 +75,7 @@ function ShippingSettings({ initial }: { initial: { options: ShippingOption[]; f
   </form>;
 }
 
-export default function DeliverySettings({ initial, shipping, mapsReady }: { initial: MessengerSettings; shipping: { options: ShippingOption[]; free: FreeShipping; schedule: ScheduleSettings }; mapsReady: boolean }) {
+export default function DeliverySettings({ initial, shipping, categories, mapsReady }: { initial: MessengerSettings; shipping: { options: ShippingOption[]; free: FreeShipping; schedule: ScheduleSettings; categoryRules: CategoryShippingRule[] }; categories: string[]; mapsReady: boolean }) {
   const [form, setForm] = useState(toForm(initial));
   const [origin, setOrigin] = useState(initial.origin);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
@@ -96,7 +107,7 @@ export default function DeliverySettings({ initial, shipping, mapsReady }: { ini
 
   return <main className="admin-main rental-pricing-page">
     <header className="rental-pricing-header"><span className="rental-pricing-eyebrow">DELIVERY</span><h1>ค่าจัดส่ง</h1><p>ขนส่งพัสดุ โปรส่งฟรี และค่าส่งแมสเซนเจอร์ (Grab / LINE MAN) ตามระยะทางถนนจริงจากร้าน</p></header>
-    <div className="rental-pricing-layout delivery-shipping"><ShippingSettings initial={shipping} /></div>
+    <div className="rental-pricing-layout delivery-shipping"><ShippingSettings initial={shipping} categories={categories} /></div>
     {!mapsReady && <p className="admin-error" role="alert">ยังไม่ได้ตั้งค่า GOOGLE_MAPS_API_KEY บนเซิร์ฟเวอร์ ระบบจึงยังคำนวณระยะทางไม่ได้ (ลูกค้าจะเห็นว่าร้านจะแจ้งค่าส่งภายหลัง)</p>}
     <div className="rental-pricing-layout">
       <form className="rental-pricing-card delivery-form" onSubmit={save}>

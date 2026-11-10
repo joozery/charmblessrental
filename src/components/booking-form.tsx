@@ -1,14 +1,14 @@
 "use client";
 import { Icon } from "./ui/icon";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import RentalRules from "./rental-rules";
 import Image from "next/image";
 import { Dialog } from "radix-ui";
 import { useStoreSettings } from "@/components/store-settings-provider";
 import { priceFor, tiersOf, type RentalPricing } from "@/lib/pricing";
 import { mapsLink } from "@/lib/delivery";
-import { enabledOptions, freeEligible, shippingFor, standardFee } from "@/lib/shipping";
+import { categoryShippingRuleFor, enabledOptions, freeEligible, shippingFor, standardFee } from "@/lib/shipping";
 import { addDays, planFor, returnMethods, countUseDays, type ReturnMethod } from "@/lib/schedule";
 import { useToday } from "@/lib/use-today";
 import RentalTimeline from "./rental-timeline";
@@ -64,6 +64,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const [quote, setQuote] = useState<{ km: number; fee: number; inBill: boolean; for: string } | null>(null);
   const [quoteState, setQuoteState] = useState<{ busy: boolean; error: string }>({ busy: false, error: "" });
   const settings = useStoreSettings();
+  const categoryRule = categoryShippingRuleFor(settings, items);
   const messenger = settings.messenger;
   const autoFee = messenger.enabled && !!messenger.origin;
   const spot = `${pin.trim()}|${address.trim()}`;
@@ -99,7 +100,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const requiresDeposit = items.some(item => item.depositRequired || products.find(product => product.id === item.id)?.depositRequired === true);
   const canSkipDeposit = identityAllowed(settings.verification, rentalTotal, items.map(item => item.category || ""), requiresDeposit);
   const mode = canSkipDeposit ? depositMode : "deposit";
-  const carriers = enabledOptions(settings);
+  const carriers = enabledOptions(settings).filter(option => !categoryRule || option.id === categoryRule.method);
   const free = freeEligible(settings, items.length);
   const missing = settings.freeShipping.enabled ? settings.freeShipping.minItems - items.length : 0;
   const quoteFor = (value: string) => shippingFor(settings, value, items, value === "messenger" && fresh?.inBill ? fresh.fee : null);
@@ -107,6 +108,9 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const delivery = shipping?.fee ?? 0;
   const feeText = (value: string) => { const quote = quoteFor(value); if (!quote) return ""; if (value === "pickup") return "ฟรี"; if (quote.fee === null) return value === "messenger" ? (fresh ? baht(fresh.fee) : "ตามระยะทาง") : ""; return quote.fee === 0 ? "ส่งฟรี" : quote.discount ? `+${baht(quote.fee)} (ลด ${baht(quote.discount)})` : `+${baht(quote.fee)}`; };
   const methodLabel = method === "messenger" ? (fresh ? `แมสเซนเจอร์ · ${fresh.km.toLocaleString("th-TH")} กม. (${fresh.inBill ? feeText("messenger") : `จ่ายแมสปลายทาง ${baht(fresh.fee)}`})` : "แมสเซนเจอร์ (ค่าส่งตามระยะทาง)") : `${shipping?.label || "รับเองที่ร้าน"}${method === "pickup" ? "" : ` (${feeText(method)})`}`;
+  useEffect(() => {
+    if (categoryRule && method !== categoryRule.method) setMethod(categoryRule.method);
+  }, [categoryRule, method]);
 
   function problem(at: number) {
     if (at === 0) {
@@ -161,7 +165,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
 
   const receive = <>
     {settings.freeShipping.enabled && <p className={`booking-free${free ? " is-active" : ""}`}>{free ? `🎉 เช่าครบ ${settings.freeShipping.minItems} ตัว ส่งฟรีแบบมาตรฐาน · ขนส่งอื่นลด ${baht(standardFee(settings, items))}` : missing > 0 && `เช่าอีก ${missing} ตัว ส่งฟรีแบบมาตรฐาน`}</p>}
-    <fieldset><legend>อยากรับชุดยังไง</legend>{[["pickup", "รับเองที่ร้าน", "ไม่มีค่าส่ง"], ...carriers.map(option => [option.id, option.label, `${option.description}${option.description ? " · " : ""}${option.standard ? "แบบมาตรฐาน" : "ร้านส่งให้"} บวกค่าส่งในบิล`]), ["messenger", "แมสเซนเจอร์ (Grab / LINE MAN)", autoFee ? `คิดตามระยะทางจากร้าน · ${messenger.inBill ? "รวมในบิล" : "จ่ายแมสปลายทาง"}` : "ค่าส่งตามระยะทาง · ลูกค้าจ่ายปลายทาง"]].map(([value, title, description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{feeText(value)}</b></label>)}</fieldset>
+    <fieldset><legend>อยากรับชุดยังไง</legend>{[...(categoryRule ? [] : [["pickup", "รับเองที่ร้าน", "ไม่มีค่าส่ง"]]), ...carriers.map(option => [option.id, option.label, `${option.description}${option.description ? " · " : ""}${option.standard ? "แบบมาตรฐาน" : "ร้านส่งให้"} บวกค่าส่งในบิล`]), ...((!categoryRule || categoryRule.method === "messenger") ? [["messenger", "แมสเซนเจอร์ (Grab / LINE MAN)", autoFee ? `คิดตามระยะทางจากร้าน · ${messenger.inBill ? "รวมในบิล" : "จ่ายแมสปลายทาง"}` : "ค่าส่งตามระยะทาง · ลูกค้าจ่ายปลายทาง"]] : [])].map(([value, title, description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{feeText(value)}</b></label>)}</fieldset>
     {method !== "pickup" && <>
       <label>ที่อยู่จัดส่ง *<textarea autoComplete="street-address" value={address} onChange={e => setAddress(e.target.value)} onBlur={() => void priceDelivery()} placeholder="บ้านเลขที่ อาคาร ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด และรหัสไปรษณีย์" /></label>
       <label>หมุดตำแหน่ง {method === "messenger" ? "(แนะนำ ช่วยให้คิดค่าส่งแม่นขึ้น)" : "(ไม่บังคับ)"}<input type="url" value={pin} onChange={e => setPin(e.target.value)} onBlur={() => void priceDelivery()} placeholder="วางลิงก์หมุดจาก Google Maps" /></label>

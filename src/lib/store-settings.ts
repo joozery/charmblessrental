@@ -1,7 +1,7 @@
 import { database } from "@/lib/mongodb";
 import type { ExtraDayRates, RentalPricing } from "@/lib/pricing";
 import { defaultMessenger, type MessengerSettings } from "@/lib/delivery";
-import type { FreeShipping, ShippingOption } from "@/lib/shipping";
+import type { CategoryShippingRule, FreeShipping, ShippingOption } from "@/lib/shipping";
 import type { ScheduleSettings } from "@/lib/schedule";
 import type { VerificationSettings } from "@/lib/identity";
 
@@ -13,7 +13,7 @@ export type StoreSettings = {
   logoImage: string; faviconImage: string; heroImage: string; heroTitle: string; heroSubtitle: string; promotionImage: string;
   howTitle: string; howSteps: StoreStep[]; contactTitle: string; contactDescription: string;
   footerTagline: string; lineUrl: string; instagramUrl: string; facebookUrl: string;
-  shippingText: string; emsFee: number; rentalRules: string[]; rentalDocument: RentalDocumentDefaults; rentalPricing: RentalPricing; extraDayRates: ExtraDayRates; messenger: MessengerSettings; shippingOptions: ShippingOption[]; freeShipping: FreeShipping; schedule: ScheduleSettings; verification: VerificationSettings; lateRates: LateRates; categoryDeposits: CategoryDeposits;
+  shippingText: string; emsFee: number; rentalRules: string[]; rentalDocument: RentalDocumentDefaults; rentalPricing: RentalPricing; extraDayRates: ExtraDayRates; messenger: MessengerSettings; shippingOptions: ShippingOption[]; freeShipping: FreeShipping; categoryShippingRules: CategoryShippingRule[]; schedule: ScheduleSettings; verification: VerificationSettings; lateRates: LateRates; categoryDeposits: CategoryDeposits;
 };
 
 export { defaultStoreSettings } from "@/lib/store-settings-defaults";
@@ -35,5 +35,5 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     await collection.updateOne({ _id: "main" }, { $setOnInsert: { ...defaultStoreSettings, _id: "main" } }, { upsert: true });
     stored = await collection.findOne({ _id: "main" }, { projection: { _id: 0 } });
   }
-  return { ...defaultStoreSettings, ...(stored || {}), rentalDocument: withTodaysAccount({ ...defaultStoreSettings.rentalDocument, ...stored?.rentalDocument }), rentalPricing: stored?.rentalPricing || defaultStoreSettings.rentalPricing, extraDayRates: stored?.extraDayRates || defaultStoreSettings.extraDayRates, messenger: { ...defaultMessenger, ...stored?.messenger }, shippingOptions: (stored?.shippingOptions?.length ? stored.shippingOptions : defaultStoreSettings.shippingOptions).map(option => ({ ...option, leadDays: option.leadDays ?? 3 })), schedule: { ...defaultStoreSettings.schedule, ...stored?.schedule, gap: { ...defaultStoreSettings.schedule.gap, ...stored?.schedule?.gap } }, freeShipping: stored?.freeShipping || defaultStoreSettings.freeShipping, lateRates: { ...defaultStoreSettings.lateRates, ...stored?.lateRates }, categoryDeposits: stored?.categoryDeposits || {}, verification: { ...defaultStoreSettings.verification, ...stored?.verification, examples: { ...defaultStoreSettings.verification.examples, ...stored?.verification?.examples } } };
+  return { ...defaultStoreSettings, ...(stored || {}), rentalDocument: withTodaysAccount({ ...defaultStoreSettings.rentalDocument, ...stored?.rentalDocument }), rentalPricing: stored?.rentalPricing || defaultStoreSettings.rentalPricing, extraDayRates: stored?.extraDayRates || defaultStoreSettings.extraDayRates, messenger: { ...defaultMessenger, ...stored?.messenger }, shippingOptions: (stored?.shippingOptions?.length ? stored.shippingOptions : defaultStoreSettings.shippingOptions).map(option => ({ ...option, leadDays: option.leadDays ?? 3 })), schedule: { ...defaultStoreSettings.schedule, ...stored?.schedule, gap: { ...defaultStoreSettings.schedule.gap, ...stored?.schedule?.gap } }, freeShipping: stored?.freeShipping || defaultStoreSettings.freeShipping, categoryShippingRules: stored?.categoryShippingRules || defaultStoreSettings.categoryShippingRules, lateRates: { ...defaultStoreSettings.lateRates, ...stored?.lateRates }, categoryDeposits: stored?.categoryDeposits || {}, verification: { ...defaultStoreSettings.verification, ...stored?.verification, examples: { ...defaultStoreSettings.verification.examples, ...stored?.verification?.examples } } };
 }

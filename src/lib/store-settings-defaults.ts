@@ -31,6 +31,7 @@ export const defaultStoreSettings: StoreSettings = {
   messenger: defaultMessenger,
   shippingOptions: defaultShippingOptions,
   freeShipping: defaultFreeShipping,
+  categoryShippingRules: [],
   schedule: defaultSchedule,
   verification: defaultVerification,
   lateRates: defaultLateRates,

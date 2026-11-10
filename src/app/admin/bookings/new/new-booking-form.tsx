@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { returnMethods } from "@/lib/schedule";
-import { shippingFor, type FreeShipping, type ShippingOption } from "@/lib/shipping";
+import { categoryShippingRuleFor, shippingFor, type CategoryShippingRule, type FreeShipping, type ShippingOption } from "@/lib/shipping";
 import { countUseDays } from "@/lib/schedule";
 import { priceFor, type RentalPricing } from "@/lib/pricing";
 import { identityAllowed, type VerificationSettings } from "@/lib/identity";
@@ -11,7 +11,7 @@ import "./new-booking-search.css";
 
 type Product = { id: number; name: string; sku: string; category: string; price: number | null; pricing: RentalPricing | null; deposit: number; shippingFee: number | null; stock: number; gapDays: number | null };
 type Method = { id: string; label: string; description?: string; fee?: number; standard?: boolean };
-type Shipping = { options: ShippingOption[]; free: FreeShipping };
+type Shipping = { options: ShippingOption[]; free: FreeShipping; categoryRules: CategoryShippingRule[] };
 type Verification = VerificationSettings;
 type Messenger = { enabled: boolean; label: string; description: string; inBill: boolean };
 type LineItem = { id: number; quantity: number; rental: string; deposit: string; note: string };
@@ -47,7 +47,10 @@ export default function NewBookingForm({ products, methods, shipping, verificati
   const rentalTotal = useMemo(() => items.reduce((sum, item) => sum + (Number(item.rental) || 0) * item.quantity, 0), [items]);
   const depositTotal = useMemo(() => items.reduce((sum, item) => sum + (Number(item.deposit) || 0) * item.quantity, 0), [items]);
   const canUseIdentity = identityAllowed(verification, rentalTotal, items.map(item => product(item.id)?.category || ""));
-  const shippingQuote = useMemo(() => { const selectedProducts = items.map(item => ({ shippingFee: product(item.id)?.shippingFee })); if (form.method === "messenger" && shippingMode === "manual") { const fee = form.shipping === "" ? null : Number(form.shipping); return fee !== null && Number.isFinite(fee) && fee >= 0 ? { label: "Messenger (กำหนดเอง)", base: fee, discount: 0, fee } : null; } const messengerFee = form.method === "messenger" && deliveryQuote && deliveryQuote.for === `${form.pin.trim()}|${form.address.trim()}` && deliveryQuote.inBill ? deliveryQuote.fee : null; return shippingFor({ shippingOptions: shipping.options, freeShipping: shipping.free }, form.method, selectedProducts, messengerFee); }, [items, form.method, form.pin, form.address, deliveryQuote, shipping, shippingMode, form.shipping]);
+  const selectedProducts = items.map(item => ({ shippingFee: product(item.id)?.shippingFee, category: product(item.id)?.category }));
+  const categoryRule = categoryShippingRuleFor({ shippingOptions: shipping.options, freeShipping: shipping.free, categoryShippingRules: shipping.categoryRules }, selectedProducts);
+  const shippingQuote = useMemo(() => { if (form.method === "messenger" && shippingMode === "manual" && !categoryRule) { const fee = form.shipping === "" ? null : Number(form.shipping); return fee !== null && Number.isFinite(fee) && fee >= 0 ? { label: "Messenger (กำหนดเอง)", base: fee, discount: 0, fee } : null; } const messengerFee = form.method === "messenger" && deliveryQuote && deliveryQuote.for === `${form.pin.trim()}|${form.address.trim()}` && deliveryQuote.inBill ? deliveryQuote.fee : null; return shippingFor({ shippingOptions: shipping.options, freeShipping: shipping.free, categoryShippingRules: shipping.categoryRules }, form.method, selectedProducts, messengerFee); }, [items, form.method, form.pin, form.address, deliveryQuote, shipping, shippingMode, form.shipping, categoryRule]);
+  useEffect(() => { if (categoryRule && form.method !== categoryRule.method) setForm(current => ({ ...current, method: categoryRule.method })); }, [categoryRule, form.method]);
   const addProduct = () => { const id = Number(productId); const selected = product(id); if (!selected || items.some(item => item.id === id) || maxFor(id) < 1) return; const rental = rentalFor(id); setItems(current => [...current, { id, quantity: 1, rental: rental === null ? "" : String(rental), deposit: String(selected.deposit), note: "" }]); setProductId(""); };
   const updateItem = (id: number, patch: Partial<LineItem>) => setItems(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
   async function quoteMessenger() { const key = `${form.pin.trim()}|${form.address.trim()}`; if (!form.pin.trim() && form.address.trim().length < 10) return; setDeliveryQuoteState({ busy: true, error: "" }); try { const response = await fetch("/api/delivery-quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: form.pin.trim(), address: form.address.trim() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "คำนวณค่าแมสไม่สำเร็จ"); setDeliveryQuote({ km: data.km, fee: data.fee, inBill: data.inBill, for: key }); setDeliveryQuoteState({ busy: false, error: "" }); } catch (cause) { setDeliveryQuote(null); setDeliveryQuoteState({ busy: false, error: cause instanceof Error ? cause.message : "คำนวณค่าแมสไม่สำเร็จ" }); } }
