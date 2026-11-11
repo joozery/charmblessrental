@@ -39,11 +39,11 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   if (tab === "today") legacyClauses.push({ returnDate: { $lte: new Date(`${tomorrow}T23:59:59.999Z`) } });
   if (tab === "later") legacyClauses.push({ returnDate: { $gt: new Date(`${tomorrow}T23:59:59.999Z`) } });
   const legacyFilter = legacyClauses.length ? { $and: [legacyBase, ...legacyClauses] } : legacyBase;
-  const [bookings, legacy] = await Promise.all([db.collection<BookingDoc>("bookingRequests").find(webFilter, {
+  const [bookings, legacy, bookingTotal, legacyTotal] = await Promise.all([db.collection<BookingDoc>("bookingRequests").find(webFilter, {
     projection: { _id: 1, name: 1, phone: 1, method: 1, start: 1, end: 1, schedule: 1, items: 1, customerReturn: 1 },
   }).sort({ "schedule.returnDate": 1, end: 1, _id: 1 }).limit(skip + PAGE_SIZE).toArray(), legacyRentals(db).find(legacyFilter, {
     projection: { _id: 0, legacyId: 1, customerName: 1, phone: 1, shipDate: 1, returnDate: 1, days: 1, shipment: 1 },
-  }).sort({ returnDate: 1, legacyId: 1 }).limit(skip + PAGE_SIZE).toArray()]);
+  }).sort({ returnDate: 1, legacyId: 1 }).limit(skip + PAGE_SIZE).toArray(), db.collection("bookingRequests").countDocuments(webFilter), legacyRentals(db).countDocuments(legacyFilter)]);
   const rows: ReturnRow[] = bookings.map(row => ({
     id: row._id, name: row.name, phone: row.phone, pickup: row.method === "pickup",
     returnDay: returnDay(row), start: row.start,
@@ -62,9 +62,10 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   }
   rows.sort((a, b) => a.returnDay.localeCompare(b.returnDay) || a.start.localeCompare(b.start));
   const pageRows = rows.slice(skip, skip + PAGE_SIZE);
+  const total = bookingTotal + legacyTotal;
   return <main className="admin-main to-ship-page">
     <header className="to-ship-header"><div><span className="to-ship-eyebrow">TO RETURN</span><h1>รายการที่ต้องส่งคืน</h1><p>รายการที่ร้านส่งสินค้าให้ลูกค้าแล้ว แต่ยังไม่ได้บันทึกรับคืน แสดงเลขพัสดุขากลับที่ลูกค้าแจ้งมา และยืนยันรับคืนได้จากหน้านี้</p></div></header>
-    <ReturnBoard rows={pageRows} today={today} page={page} pageCount={1} total={pageRows.length} filters={{ query, tab }} />
+    <ReturnBoard rows={pageRows} today={today} page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} total={total} filters={{ query, tab }} />
   </main>;
 }
 

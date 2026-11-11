@@ -3,7 +3,6 @@ import { cache } from "react";
 import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 import { lastUseDay, type Extension } from "./extension";
 import type { QueueBooking, QueueClash } from "./queue";
-import { unitsOf, type Product } from "./products";
 import { legacyHolds } from "./legacy-rentals";
 
 type Capacity = { productId: number; date: string; capacity: number };
@@ -26,21 +25,23 @@ export const blockingFilter = (from: string, to: string, firmOnly = false) => ({
 ] });
 
 export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string, firmOnly = false) {
-  const [bookings, product, imported] = await Promise.all([
+  const [bookings, imported] = await Promise.all([
     db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to, firmOnly), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray(),
-    db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, units: 1, sku: 1, active: 1 } }),
     legacyHolds(db, from, to, productId),
   ]);
-  const readyUnits = new Set(unitsOf(product || { id: productId, name: "", thai: "", category: "", color: "", dailyRate: null, image: "", images: [], tag: "", description: "" }).filter(unit => unit.status === "available").map(unit => unit.sku));
   const result = new Map<string, number>();
   for (const booking of bookings) {
     const matching = booking.items.filter(item => item.id === productId);
-    const active = matching.filter(item => !item.unitSku || !readyUnits.has(item.unitSku));
-    const count = active.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-    if (!count) continue;
-    const range = active[0]?.schedule ? blockRange({ ...booking, schedule: active[0].schedule }) : blockRange(booking);
-    for (let date = range.from; date < range.to; date = addDays(date, 1)) {
-      if (date >= from && date < to) result.set(date, (result.get(date) || 0) + count);
+    // An assigned unit is still reserved for this booking even while its
+    // inventory status remains `available` before the shipment date. Count
+    // every matching line instead of treating that unit as free.
+    for (const item of matching) {
+      const count = item.quantity ?? 1;
+      if (count <= 0) continue;
+      const range = item.schedule ? blockRange({ ...booking, schedule: item.schedule }) : blockRange(booking);
+      for (let date = range.from; date < range.to; date = addDays(date, 1)) {
+        if (date >= from && date < to) result.set(date, (result.get(date) || 0) + count);
+      }
     }
   }
   // Rentals from the old sheet hold their piece the same way; an unpaid one counts only as a hold.

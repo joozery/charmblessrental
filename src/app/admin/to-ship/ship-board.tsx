@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 export type ShipRow = {
   // `legacy`: a rental imported from the old sheet, shipped through /api/admin/rentals and shown on the rentals page.
@@ -30,6 +30,15 @@ export default function ShipBoard({ rows: initial, today, page: serverPage, page
   const [copied, setCopied] = useState("");
   const [preview, setPreview] = useState<{ items: ShipRow["items"]; index: number } | null>(null);
   const router = useRouter();
+  // Next keeps client components alive during App Router navigation. Without
+  // syncing this prop, changing page/filter keeps rendering the first page's
+  // rows because `useState(initial)` only runs on the first mount.
+  useEffect(() => {
+    setRows(initial);
+    setQuery(filters.query);
+    setShipDate(filters.shipDate);
+    setTab((filters.tab as Tab) || "all");
+  }, [initial, filters.query, filters.shipDate, filters.tab]);
   const tomorrow = addDays(today, 1);
   const bucket = (row: ShipRow) => bucketFor(row, today, tomorrow);
   const counts = useMemo(() => ({
@@ -80,7 +89,7 @@ export default function ShipBoard({ rows: initial, today, page: serverPage, page
   const tabs: { key: Tab; label: string; tone: string }[] = [{ key: "all", label: "ทั้งหมด", tone: "blue" }, { key: "late", label: "เลยกำหนด", tone: "red" }, { key: "today", label: "ต้องส่งวันนี้", tone: "orange" }, { key: "tomorrow", label: "ต้องส่งพรุ่งนี้", tone: "blue" }, { key: "later", label: "ส่งวันถัดไป", tone: "gray" }];
 
   return <>
-    <div className="to-ship-toolbar"><label className="to-ship-search"><span aria-hidden="true">⌕</span><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") navigate(1); }} placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร, เลขออเดอร์, เลขพัสดุ, ที่อยู่..." /></label><label className="to-ship-date">วันที่ต้องส่ง<input type="date" aria-label="วันที่ต้องส่ง" value={shipDate} onChange={event => { setShipDate(event.target.value); navigate(1, query, event.target.value, tab); }} /></label><select value={tab} onChange={event => { const next = event.target.value as Tab; setTab(next); navigate(1, query, shipDate, next); }} aria-label="กรองสถานะ"><option value="all">สถานะการจัดส่ง · ทั้งหมด</option><option value="late">เลยกำหนด</option><option value="today">ต้องส่งวันนี้</option><option value="tomorrow">ต้องส่งพรุ่งนี้</option><option value="later">ส่งวันถัดไป</option></select><button type="button" onClick={() => { setQuery(""); setShipDate(""); setTab("all"); navigate(1, "", "", "all"); }}>รีเซ็ต</button><button type="button" className="to-ship-primary" onClick={exportCsv}>⇩ ส่งออก CSV</button></div>
+    <div className="to-ship-toolbar"><label className="to-ship-search"><span aria-hidden="true">⌕</span><input value={query} onChange={event => { const next = event.target.value; setQuery(next); navigate(1, next, shipDate, tab); }} onKeyDown={event => { if (event.key === "Enter") navigate(1); }} placeholder="ค้นหาชื่อลูกค้า, เบอร์โทร, เลขออเดอร์, เลขพัสดุ, ที่อยู่..." /></label><label className="to-ship-date">วันที่ต้องส่ง<input type="date" aria-label="วันที่ต้องส่ง" value={shipDate} onChange={event => { setShipDate(event.target.value); navigate(1, query, event.target.value, tab); }} /></label><select value={tab} onChange={event => { const next = event.target.value as Tab; setTab(next); navigate(1, query, shipDate, next); }} aria-label="กรองสถานะ"><option value="all">สถานะการจัดส่ง · ทั้งหมด</option><option value="late">เลยกำหนด</option><option value="today">ต้องส่งวันนี้</option><option value="tomorrow">ต้องส่งพรุ่งนี้</option><option value="later">ส่งวันถัดไป</option></select><button type="button" onClick={() => { setQuery(""); setShipDate(""); setTab("all"); navigate(1, "", "", "all"); }}>รีเซ็ต</button><button type="button" className="to-ship-primary" onClick={exportCsv}>⇩ ส่งออก CSV</button></div>
     <div className="to-ship-tabs" role="tablist" aria-label="กรองรายการจัดส่ง">{tabs.map(item => <button type="button" role="tab" aria-selected={tab === item.key} className={`is-${item.tone} ${tab === item.key ? "is-active" : ""}`} key={item.key} onClick={() => { setTab(item.key); navigate(1, query, shipDate, item.key); }}><span>{item.label}</span><b>{counts[item.key]}</b></button>)}</div>
     {done && <p className="to-ship-done" role="status">✓ {done}</p>}{error && !form && <p className="to-ship-error" role="alert">{error}</p>}
     {!visible.length && <p className="to-ship-empty">ไม่พบรายการที่ต้องส่งตามตัวกรองนี้</p>}

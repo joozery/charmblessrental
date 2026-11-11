@@ -25,6 +25,12 @@ export default function ReturnBoard({ rows: initial, today, page, pageCount: ini
   const [meta, setMeta] = useState({ total: initialTotal, pageCount: initialPageCount });
   const router = useRouter();
   useEffect(() => {
+    setRows(initial);
+    setQuery(filters.query);
+    setTab((filters.tab as Tab) || "all");
+    setMeta({ total: initialTotal, pageCount: initialPageCount });
+  }, [initial, initialPageCount, initialTotal, filters.query, filters.tab]);
+  useEffect(() => {
     let active = true;
     const params = new URLSearchParams(); if (filters.query.trim()) params.set("q", filters.query.trim()); if (filters.tab !== "all") params.set("tab", filters.tab);
     void fetch(`/api/admin/to-return/meta?${params}`).then(response => response.ok ? response.json() : null).then(data => { if (active && data && typeof data.total === "number") setMeta({ total: data.total, pageCount: Math.max(1, Math.ceil(data.total / 20)) }); }).catch(() => undefined);
