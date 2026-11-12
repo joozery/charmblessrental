@@ -4,6 +4,7 @@ import { database } from "@/lib/mongodb";
 import { deposits, thaiDay } from "@/lib/finance";
 import { clashGroups } from "@/lib/clash-groups";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { promoteWaitlist } from "@/lib/waitlist";
 import { can, permissionsOf } from "@/lib/permissions";
 import { getStoreSettings } from "@/lib/store-settings";
@@ -17,9 +18,11 @@ async function Workspace({ children }: { children: React.ReactNode }) {
   const admin = await currentAdmin();
   if (!admin) return children;
   const db = await database();
-  // Opening any admin page also moves the waiting list on, so the counts below are current.
+  // Opening any admin page also moves the waiting list on. It runs after the page is sent (it can write bookings and
+  // message customers on LINE), so it never holds up the page; the counts catch up on the next page opened.
   const head = await headers();
-  await promoteWaitlist(db, null, head.get("host") ? `${head.get("x-forwarded-proto") || "https"}://${head.get("host")}` : undefined);
+  const origin = head.get("host") ? `${head.get("x-forwarded-proto") || "https"}://${head.get("host")}` : undefined;
+  after(() => promoteWaitlist(db, null, origin).catch(error => console.error("Waitlist promotion failed:", error)));
   // Rentals back at the shop whose deposit is still held: the same count as the "รอคืนมัดจำ" filter on the bookings page.
   const awaitingRefund = async () => {
     const held = await deposits(db).find({ status: "held" }, { projection: { _id: 1 } }).toArray();

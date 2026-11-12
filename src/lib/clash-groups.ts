@@ -10,7 +10,7 @@ let running: Promise<ClashGroup[]> | null = null;
 
 // Every clash between open bookings, one group per piece and set of bookings, with the run of days they overlap.
 async function clashGroupsNow(db: Db) {
-  const rows = (await db.collection<Row>("bookingRequests").find({ status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, "verification.status": 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray()).map(row => ({ ...row, _id: String(row._id) }));
+  const rows = (await db.collection<Row>("bookingRequests").find({ status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, "verification.status": 1, payment: 1, holdUntil: 1, waitlist: 1, "items.id": 1, "items.sku": 1, "items.name": 1, "items.unitSku": 1 } }).toArray()).map(row => ({ ...row, _id: String(row._id) }));
   const clashes = await queueClashes(db, rows);
   const byId = new Map(rows.map(row => [row._id, row]));
   const groups = new Map<string, ClashGroup>();

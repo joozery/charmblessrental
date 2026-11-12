@@ -3,7 +3,7 @@ import { cache } from "react";
 import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 import { lastUseDay, type Extension } from "./extension";
 import type { QueueBooking, QueueClash } from "./queue";
-import { legacyHolds } from "./legacy-rentals";
+import { legacyHolds, type LegacyHold } from "./legacy-rentals";
 
 type Capacity = { productId: number; date: string; capacity: number };
 type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
@@ -29,6 +29,14 @@ export async function getReservationCounts(db: Db, productId: number, from: stri
     db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to, firmOnly), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray(),
     legacyHolds(db, from, to, productId),
   ]);
+  return tallyReservations(bookings, imported, productId, from, to, firmOnly);
+}
+
+// Only what tallyReservations reads, so bulk reads do not pull each booking's full item details.
+const reservationFields = { _id: 1, start: 1, end: 1, schedule: 1, "items.id": 1, "items.quantity": 1, "items.schedule": 1 };
+
+// Pieces of one product held on each day in [from, to), from bookings and old-sheet holds already loaded.
+function tallyReservations(bookings: BlockingBooking[], imported: LegacyHold[], productId: number, from: string, to: string, firmOnly: boolean) {
   const result = new Map<string, number>();
   for (const booking of bookings) {
     const matching = booking.items.filter(item => item.id === productId);
@@ -46,7 +54,7 @@ export async function getReservationCounts(db: Db, productId: number, from: stri
   }
   // Rentals from the old sheet hold their piece the same way; an unpaid one counts only as a hold.
   for (const hold of imported) {
-    if (firmOnly && !hold.firm) continue;
+    if (hold.productId !== productId || (firmOnly && !hold.firm)) continue;
     for (let date = hold.ship < from ? from : hold.ship; date < hold.ready && date < to; date = addDays(date, 1)) result.set(date, (result.get(date) || 0) + 1);
   }
   return result;
@@ -61,16 +69,52 @@ async function getQueueUncached(db: Db, productId: number, from: string, to: str
     getReservationCounts(db, productId, from, to, exceptId, true),
     db.collection<{ id: number; stock?: number }>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1 } }),
   ]);
-  const set = new Map(capacities.map(day => [day.date, day.capacity]));
-  const stock = product?.stock ?? 0, days: { date: string; capacity: number; remaining: number; over: number; waitable: boolean }[] = [];
+  return queueDays(from, to, capacities, reservations, firm, product?.stock ?? 0);
+}
+type QueueDay = { date: string; capacity: number; remaining: number; over: number; waitable: boolean };
+function queueDays(from: string, to: string, capacities: { date: string; capacity: number }[], reservations: Map<string, number>, firm: Map<string, number>, stock: number) {
+  const set = new Map(capacities.map(day => [day.date, day.capacity])), days: QueueDay[] = [];
   for (let date = from; date < to; date = addDays(date, 1)) { const reserved = reservations.get(date) || 0, capacity = set.get(date) ?? stock; days.push({ date, capacity, remaining: Math.max(0, capacity - reserved), over: Math.max(0, reserved - stock), waitable: reserved >= capacity && capacity - (firm.get(date) || 0) >= 1 }); }
   return days;
+}
+
+// getQueue for many products at once (the storefront's date search covers the whole catalogue): the same days and
+// counts, read in a handful of queries over the combined range instead of several queries per product.
+export async function getQueues(db: Db, requests: { productId: number; from: string; to: string }[]) {
+  const result = new Map<number, QueueDay[]>();
+  if (!requests.length) return result;
+  const ids = [...new Set(requests.map(request => request.productId))];
+  const from = requests.reduce((min, request) => request.from < min ? request.from : min, requests[0].from);
+  const to = requests.reduce((max, request) => request.to > max ? request.to : max, requests[0].to);
+  // Firm bookings are a subset of the blocking ones (blockingFilter with firmOnly), told apart in memory by isFirm.
+  const [capacities, blocking, imported, stocks] = await Promise.all([
+    db.collection<Capacity>("productAvailability").find({ productId: { $in: ids }, date: { $gte: from, $lt: to } }, { projection: { _id: 0, productId: 1, date: 1, capacity: 1 } }).toArray(),
+    db.collection<BlockingBooking & HoldState>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": { $in: ids } }, { projection: { ...reservationFields, status: 1, payment: 1, "verification.status": 1 } }).toArray(),
+    legacyHolds(db, from, to),
+    db.collection<{ id: number; stock?: number }>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, stock: 1 } }).toArray(),
+  ]);
+  const stockOf = new Map(stocks.map(product => [product.id, product.stock ?? 0]));
+  const byProduct = <T,>(rows: T[], idsOf: (row: T) => number[]) => {
+    const map = new Map<number, T[]>();
+    for (const row of rows) for (const id of new Set(idsOf(row))) map.set(id, [...map.get(id) || [], row]);
+    return map;
+  };
+  const itemIds = (row: BlockingBooking) => row.items.map(item => item.id);
+  const blockingOf = byProduct(blocking, itemIds), firmOf = byProduct(blocking.filter(isFirm), itemIds), holdsOf = byProduct(imported, hold => [hold.productId]), capacitiesOf = byProduct(capacities, day => [day.productId]);
+  for (const { productId, from: start, to: end } of requests) {
+    const holds = holdsOf.get(productId) || [];
+    result.set(productId, queueDays(start, end, (capacitiesOf.get(productId) || []).filter(day => day.date >= start && day.date < end),
+      tallyReservations(blockingOf.get(productId) || [], holds, productId, start, end, false), tallyReservations(firmOf.get(productId) || [], holds, productId, start, end, true), stockOf.get(productId) ?? 0));
+  }
+  return result;
 }
 const queueCache = new Map<string, { at: number; value: Awaited<ReturnType<typeof getQueueUncached>> }>();
 const queueRuns = new Map<string, Promise<Awaited<ReturnType<typeof getQueueUncached>>>>();
 async function getQueueCached(db: Db, productId: number, from: string, to: string, exceptId?: string) {
   const key = `${productId}:${from}:${to}:${exceptId || ""}`, now = Date.now(), cached = queueCache.get(key);
   if (cached && now - cached.at < 5000) return cached.value;
+  // Drop expired entries now and then so the cache does not grow with every range ever asked for.
+  if (queueCache.size > 2000) for (const [stale, entry] of queueCache) if (now - entry.at >= 5000) queueCache.delete(stale);
   const running = queueRuns.get(key);
   if (running) return running;
   const run = getQueueUncached(db, productId, from, to, exceptId);
@@ -109,7 +153,22 @@ export async function queueClashes(db: Db, rows: ClashRow[]) {
   if (!open.length) return result;
   const from = open.reduce((min, row) => blockRange(row).from < min ? blockRange(row).from : min, blockRange(open[0]).from);
   const to = open.reduce((max, row) => blockRange(row).to > max ? blockRange(row).to : max, blockRange(open[0]).to);
-  const productClashes = await Promise.all([...new Set(open.flatMap(row => row.items.map(item => item.id)))].map(async id => [id, (await getQueue(db, id, from, to)).filter(day => day.over > 0).map(day => day.date)] as const));
+  // One read for every product at once (the same counts getQueue makes per product): blocking bookings, old-sheet holds
+  // and stock. A day clashes when more pieces are held than the product has in service.
+  const ids = [...new Set(open.flatMap(row => row.items.map(item => item.id)))];
+  const [bookings, imported, stocks] = await Promise.all([
+    db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": { $in: ids } }, { projection: reservationFields }).toArray(),
+    legacyHolds(db, from, to),
+    db.collection<{ id: number; stock?: number }>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, stock: 1 } }).toArray(),
+  ]);
+  const stockOf = new Map(stocks.map(product => [product.id, product.stock ?? 0]));
+  const bookingsOf = new Map<number, BlockingBooking[]>(), holdsOf = new Map<number, LegacyHold[]>();
+  for (const booking of bookings) for (const id of new Set(booking.items.map(item => item.id))) bookingsOf.set(id, [...bookingsOf.get(id) || [], booking]);
+  for (const hold of imported) holdsOf.set(hold.productId, [...holdsOf.get(hold.productId) || [], hold]);
+  const productClashes = ids.map(id => {
+    const reserved = tallyReservations(bookingsOf.get(id) || [], holdsOf.get(id) || [], id, from, to, false), stock = stockOf.get(id) ?? 0;
+    return [id, [...reserved].filter(([, count]) => count > stock).map(([date]) => date).sort()] as const;
+  });
   for (const [id, clashing] of productClashes) {
     if (!clashing.length) continue;
     const holders = open.filter(row => row.items.some(item => item.id === id));

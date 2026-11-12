@@ -1,5 +1,5 @@
 import { database } from "@/lib/mongodb";
-import { getQueue } from "@/lib/availability-store";
+import { getQueues } from "@/lib/availability-store";
 import { promoteWaitlist } from "@/lib/waitlist";
 import { planFor } from "@/lib/schedule";
 import { getStoreSettings } from "@/lib/store-settings";
@@ -16,11 +16,11 @@ export async function GET(request: Request) {
   const products = await db.collection<{ id: number; stock?: number; gapDays?: number | null }>("products").find({ active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, stock: 1, gapDays: 1 } }).toArray();
   const ids = products.map(product => product.id);
   if (!ids.length) return Response.json({ availability: {} }, { headers: { "Cache-Control": "no-store" } });
-  const availability = Object.fromEntries(await Promise.all(products.map(async product => {
-    const productPlan = planFor(settings, start, end, standard, "parcel", product.gapDays ?? settings.schedule.gap.parcel);
-    const queue = await getQueue(db, product.id, productPlan.ship, productPlan.ready);
-    const full = queue.filter(day => day.remaining < 1);
+  const plans = products.map(product => ({ productId: product.id, ...planFor(settings, start, end, standard, "parcel", product.gapDays ?? settings.schedule.gap.parcel) }));
+  const queues = await getQueues(db, plans.map(plan => ({ productId: plan.productId, from: plan.ship, to: plan.ready })));
+  const availability = Object.fromEntries(products.map(product => {
+    const full = (queues.get(product.id) || []).filter(day => day.remaining < 1);
     return [product.id, !full.length ? "available" : full.some(day => !day.waitable) ? "unavailable" : "waitlist"] as const;
-  })));
+  }));
   return Response.json({ availability }, { headers: { "Cache-Control": "private, no-store" } });
 }

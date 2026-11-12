@@ -15,7 +15,7 @@ export const lateFilter = { status: { $ne: "cancelled" }, returned: { $exists: f
 // For each rental out with a customer that is late, or due within a day with the next rental right behind it:
 // the next booking that needs the same piece, and other pieces of that product free for it.
 async function lateReturnRisksNow(db: Db, today: string) {
-  const rows = await db.collection<Row>("bookingRequests").find(lateFilter, { projection: { _id: 1, name: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, customerReturn: 1, "verification.status": 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray();
+  const rows = await db.collection<Row>("bookingRequests").find(lateFilter, { projection: { _id: 1, name: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, customerReturn: 1, "verification.status": 1, payment: 1, holdUntil: 1, waitlist: 1, "items.id": 1, "items.sku": 1, "items.name": 1, "items.unitSku": 1 } }).toArray();
   const out = rows.filter(row => row.status === "confirmed" && row.shipment && !row.customerReturn);
   const waiting = rows.filter(row => !row.shipment && isBlocking(row));
   const result = new Map<string, NextRisk[]>();

@@ -61,17 +61,17 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
   }
   const projection = { _id: 1, status: 1, name: 1, phone: 1, address: 1, pin: 1, note: 1, discountCode: 1, method: 1, start: 1, end: 1, days: 1, deliveryFee: 1, estimatedTotal: 1, quote: 1, items: 1, createdAt: 1, payment: 1, billToken: 1, lineUserId: 1, lineName: 1, lineSentAt: 1, paidAt: 1, shipment: 1, returned: 1, customerReturn: 1, returnReminderSentAt: 1, lateNoticeSentAt: 1, delivery: 1, shipping: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, penalties: 1, lateReturn: 1, adjustments: 1, holdUntil: 1, waitlist: 1, slipReview: 1 };
   if (filter === "clash") {
-    const candidates = await bookings.find({ ...bookingFilter, status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray();
+    const candidates = await bookings.find({ ...bookingFilter, status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, payment: 1, holdUntil: 1, waitlist: 1, "verification.status": 1, "items.id": 1, "items.sku": 1, "items.name": 1, "items.unitSku": 1 } }).toArray();
     const clashRows = await queueClashes(db, candidates.map(row => ({ ...row, _id: String(row._id) })));
     bookingFilter._id = { $in: [...clashRows.keys()] };
   }
-  const total = await bookings.countDocuments(bookingFilter);
+  const [total, statusRows] = await Promise.all([
+    bookings.countDocuments(bookingFilter),
+    bookings.aggregate<{ _id: string; count: number }>([{ $match: statusCountFilter }, { $group: { _id: "$status", count: { $sum: 1 } } }]).toArray(),
+  ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(requestedPage, pageCount);
-  const statusCounts = Object.fromEntries((await bookings.aggregate<{ _id: string; count: number }>([
-    { $match: statusCountFilter },
-    { $group: { _id: "$status", count: { $sum: 1 } } },
-  ]).toArray()).map(row => [row._id, row.count]));
+  const statusCounts = Object.fromEntries(statusRows.map(row => [row._id, row.count]));
   const pageRows = await bookings.find(bookingFilter, { projection }).sort({ createdAt: -1 }).skip((currentPage - 1) * pageSize).limit(pageSize).toArray();
   const selectedRow = selected && !pageRows.some(row => String(row._id) === selected) ? await bookings.findOne({ _id: selected }, { projection }) : null;
   const rows = selectedRow ? [...pageRows, selectedRow] : pageRows;

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { currentAdmin } from "@/lib/admin-auth";
 import { database } from "@/lib/mongodb";
-import { getProducts, productsByLegacyIds } from "@/lib/product-store";
+import { productsByLegacyIds } from "@/lib/product-store";
 import type { Product } from "@/lib/products";
 import { webRentals } from "@/lib/web-rentals";
 import RentalCalendar from "./rental-calendar";
@@ -48,10 +48,13 @@ async function Dashboard({ from, to, date, status, denied }: PageQuery) {
     { shipDate: { $gte: new Date(`${start}T00:00:00.000Z`), $lt: new Date(`${rangeEnd}T00:00:00.000Z`) } },
     { returnDate: { $gte: new Date(`${start}T00:00:00.000Z`), $lt: new Date(`${rangeEnd}T00:00:00.000Z`) } },
   ] } : { _id: { $exists: false } };
-  const [imported, web, products] = await Promise.all([
+  // Only the product counts are shown here, so count in the database instead of loading every product.
+  const liveProducts = { deletedAt: { $exists: false } };
+  const [imported, web, productCount, missingImage] = await Promise.all([
     db.collection<Rental>("rentals").find(legacyWindow, { projection: { _id: 0, legacyId: 1, enteredAt: 1, customerName: 1, shipDate: 1, returnDate: 1, legacyStatus: 1, total: 1 } }).toArray(),
     webRentals(db, today, { from: start, to: rangeEnd }),
-    getProducts(),
+    db.collection("products").countDocuments(liveProducts),
+    db.collection("products").countDocuments({ ...liveProducts, $or: [{ imageStatus: "missing-source" }, { "images.0": { $in: [null, ""] } }] }),
   ]);
   // Imported rentals from the old sheet plus bookings made on the website, counted and listed together.
   const rentals: Rental[] = [...imported, ...web].map(rental => rental.legacyStatus === "เกินกำหนดส่ง" ? { ...rental, legacyStatus: "คืนสินค้าเลยกำหนด" } : rental);
@@ -76,7 +79,6 @@ async function Dashboard({ from, to, date, status, denied }: PageQuery) {
   for (const item of items) if (!firstItem.has(item.rentalId)) firstItem.set(item.rentalId, item);
   const productByLegacy = await productsByLegacyIds(db, [...new Set(items.map(item => item.productLegacyId).filter((id): id is string => !!id))]);
   const productFor = (rental: Rental): Product | undefined => productByLegacy.get(firstItem.get(rental.legacyId)?.productLegacyId || "");
-  const missingImage = products.filter(product => product.imageStatus === "missing-source" || !product.images?.[0]).length;
   const queue = [...shipping.map(rental => ({ rental, kind: "จัดส่ง" as const, day: sourceDay(rental.shipDate) })), ...returning.map(rental => ({ rental, kind: "คืน" as const, day: sourceDay(rental.returnDate) }))].sort((a, b) => a.day.localeCompare(b.day)).slice(0, 5);
   const statusParams = new URLSearchParams({ from: start, to: end, status: "รอชำระเงิน" });
 
@@ -113,7 +115,7 @@ async function Dashboard({ from, to, date, status, denied }: PageQuery) {
     <RentalCalendar days={calendarDays} start={start} end={end} today={today} rangeLabel={rangeLabel} rangeSize={rangeSize} todayWeekStart={todayWeekStart} rentals={[...new Map([...shipping, ...returning].map(rental => [rental.legacyId, rental])).values()].map(rental => ({ legacyId: rental.legacyId, customerName: rental.customerName, shipDate: rental.shipDate ? new Date(rental.shipDate).toISOString() : undefined, returnDate: rental.returnDate ? new Date(rental.returnDate).toISOString() : undefined, enteredAt: rental.enteredAt ? new Date(rental.enteredAt).toISOString() : undefined, legacyStatus: rental.legacyStatus, total: rental.total, items: rental.items || items.filter(item => item.rentalId === rental.legacyId).map(item => { const product = productByLegacy.get(item.productLegacyId || ""); return { productName: item.productName || product?.name, sku: item.sku || product?.sku, image: product?.imageStatus === "missing-source" ? undefined : product?.images?.[0] || product?.image || undefined }; }) }))} />
     <div className="dashboard-bottom-grid">
       <section className="dashboard-panel dashboard-review" aria-labelledby="review-title"><div className="dashboard-panel-head"><div><span className="dashboard-kicker">NEEDS ATTENTION</span><h2 id="review-title">รายการที่ควรตรวจสอบ</h2></div></div><Link href={`/admin?${statusParams.toString()}#latest-rentals-title`} className="dashboard-review-row"><span className="dashboard-review-icon is-orange"><Icon name="payment" /></span><div><strong>รอชำระเงิน {pending.length} รายการ</strong><small>ในช่วงวันที่เลือก ตามสถานะข้อมูลเดิม</small></div><Icon name="arrowRight" /></Link><Link href="/admin/products" className="dashboard-review-row"><span className="dashboard-review-icon is-pink"><Icon name="image" /></span><div><strong>สินค้าไม่มีรูปต้นฉบับ {missingImage} รายการ</strong><small>ตรวจข้อมูลในหน้าจัดการสินค้า</small></div><Icon name="arrowRight" /></Link></section>
-      <section className="dashboard-panel dashboard-inventory" aria-labelledby="inventory-title"><div className="dashboard-panel-head"><div><span className="dashboard-kicker">INVENTORY</span><h2 id="inventory-title">ข้อมูลสินค้า</h2></div><Link href="/admin/products">จัดการสินค้า<Icon name="arrowRight" /></Link></div><div className="dashboard-inventory-count"><strong>{products.length.toLocaleString("th-TH")}</strong><span>รายการสินค้าในระบบ</span></div><div className="dashboard-inventory-foot"><span>{products.filter(p => p.imageStatus !== "missing-source" && !!p.images?.[0]).length.toLocaleString("th-TH")} รายการมีรูปต้นฉบับ</span><span>{missingImage} รายการไม่มีรูป</span></div></section>
+      <section className="dashboard-panel dashboard-inventory" aria-labelledby="inventory-title"><div className="dashboard-panel-head"><div><span className="dashboard-kicker">INVENTORY</span><h2 id="inventory-title">ข้อมูลสินค้า</h2></div><Link href="/admin/products">จัดการสินค้า<Icon name="arrowRight" /></Link></div><div className="dashboard-inventory-count"><strong>{productCount.toLocaleString("th-TH")}</strong><span>รายการสินค้าในระบบ</span></div><div className="dashboard-inventory-foot"><span>{(productCount - missingImage).toLocaleString("th-TH")} รายการมีรูปต้นฉบับ</span><span>{missingImage} รายการไม่มีรูป</span></div></section>
     </div>
     <p className="dashboard-source-note">รวมรายการเช่าที่นำเข้าจากไฟล์เดิม และการจองจากเว็บ (ป้าย “เว็บ” กดเปิดหน้าคำขอจองได้) · สถานะของรายการนำเข้าเป็นสถานะเดิมตอนนำเข้า</p>
   </main>;
