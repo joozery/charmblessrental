@@ -11,13 +11,17 @@ export type Product = {
   // Lowest parcel fee when this item is in the order, for bulky items (The North Face 80).
   shippingFee?: number | null;
   gapDays?: number | null;
+  // Colour/size options of one product; each piece (unit) belongs to one of them through `variantId`.
+  variants?: ProductVariant[];
 };
+export type ProductVariant = { id: string; color: string; colorCode: string; size: string; images: string[] };
 // One physical piece of a product. `sku` is the piece code (A0002-03); the product's `sku` is the code shared by its pieces (A0002).
 // After a rental a piece goes inspection → washing (or repair) → available; only "available" may be sent to the next customer.
 export type UnitStatus = "available" | "rented" | "inspection" | "washing" | "repair" | "unavailable" | "retired";
 export type ProductUnit = {
   sku: string; cost: number | null; status: UnitStatus; note: string; addedAt: Date | string | null;
   legacyProductId?: number; legacyId?: string; legacyRevenue?: number | null; legacyProfit?: number | null; image?: string;
+  variantId?: string;
 };
 export const unitStatusLabels: Record<UnitStatus, string> = { available: "พร้อมเช่า", rented: "อยู่กับลูกค้า", inspection: "รอตรวจสภาพ", washing: "รอซัก", repair: "รอซ่อม / ชำรุด", unavailable: "ไม่พร้อมเช่า", retired: "เลิกใช้แล้ว" };
 export const prepStatuses: UnitStatus[] = ["inspection", "washing", "repair"];
@@ -26,6 +30,11 @@ export const inService = (status: UnitStatus) => status !== "unavailable" && sta
 // Products saved before pieces existed count as a single piece.
 export function unitsOf(p: Product): ProductUnit[] {
   return p.units?.length ? p.units : [{ sku: p.sku || "", cost: p.cost ?? null, status: p.active === false ? "unavailable" : "available", note: "", addedAt: null, legacyProductId: p.id, legacyId: p.legacyId, legacyRevenue: p.legacyRevenue ?? null, legacyProfit: p.legacyProfit ?? null }];
+}
+// Pieces of one colour/size; products without variants (or pieces saved before them) fall under "legacy".
+export function unitsForVariant(p: Product, variantId: string): ProductUnit[] {
+  const units = unitsOf(p);
+  return variantId === "legacy" ? units.filter(unit => !unit.variantId) : units.filter(unit => unit.variantId === variantId);
 }
 export const categoryLabels: Record<string, string> = {
   dress: "ชุดออกงาน", winter: "เสื้อกันหนาว", jacket: "แจ็กเก็ต", boots: "รองเท้า",

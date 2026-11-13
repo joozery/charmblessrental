@@ -4,9 +4,10 @@ import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 import { lastUseDay, type Extension } from "./extension";
 import type { QueueBooking, QueueClash } from "./queue";
 import { legacyHolds, type LegacyHold } from "./legacy-rentals";
+import { inService, unitsForVariant, type Product } from "./products";
 
 type Capacity = { productId: number; date: string; capacity: number };
-type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
+type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; variantId?: string; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
 
 // Who holds a piece. Firmly: a confirmed booking, a paid one, or one whose ID documents wait for the shop's review.
 // For a while: a new request has this long to pay from when it got its turn (`holdUntil`); after that it loses the
@@ -24,22 +25,24 @@ export const blockingFilter = (from: string, to: string, firmOnly = false) => ({
   { $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] },
 ] });
 
-export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string, firmOnly = false) {
+// With `variant`, only lines booked for that colour/size and old-sheet holds on its pieces count.
+type VariantScope = { id: string; unitSkus: Set<string> };
+export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string, firmOnly = false, variant?: VariantScope) {
   const [bookings, imported] = await Promise.all([
     db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to, firmOnly), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray(),
     legacyHolds(db, from, to, productId),
   ]);
-  return tallyReservations(bookings, imported, productId, from, to, firmOnly);
+  return tallyReservations(bookings, imported, productId, from, to, firmOnly, variant);
 }
 
 // Only what tallyReservations reads, so bulk reads do not pull each booking's full item details.
-const reservationFields = { _id: 1, start: 1, end: 1, schedule: 1, "items.id": 1, "items.quantity": 1, "items.schedule": 1 };
+const reservationFields = { _id: 1, start: 1, end: 1, schedule: 1, "items.id": 1, "items.variantId": 1, "items.unitSku": 1, "items.quantity": 1, "items.schedule": 1 };
 
 // Pieces of one product held on each day in [from, to), from bookings and old-sheet holds already loaded.
-function tallyReservations(bookings: BlockingBooking[], imported: LegacyHold[], productId: number, from: string, to: string, firmOnly: boolean) {
+function tallyReservations(bookings: BlockingBooking[], imported: LegacyHold[], productId: number, from: string, to: string, firmOnly: boolean, variant?: VariantScope) {
   const result = new Map<string, number>();
   for (const booking of bookings) {
-    const matching = booking.items.filter(item => item.id === productId);
+    const matching = booking.items.filter(item => item.id === productId && (!variant || item.variantId === variant.id || (!item.variantId && !!item.unitSku && variant.unitSkus.has(item.unitSku))));
     // An assigned unit is still reserved for this booking even while its
     // inventory status remains `available` before the shipment date. Count
     // every matching line instead of treating that unit as free.
@@ -55,6 +58,7 @@ function tallyReservations(bookings: BlockingBooking[], imported: LegacyHold[], 
   // Rentals from the old sheet hold their piece the same way; an unpaid one counts only as a hold.
   for (const hold of imported) {
     if (hold.productId !== productId || (firmOnly && !hold.firm)) continue;
+    if (variant && !(hold.unitSkus || [hold.unitSku]).some(sku => variant.unitSkus.has(sku))) continue;
     for (let date = hold.ship < from ? from : hold.ship; date < hold.ready && date < to; date = addDays(date, 1)) result.set(date, (result.get(date) || 0) + 1);
   }
   return result;
@@ -62,7 +66,21 @@ function tallyReservations(bookings: BlockingBooking[], imported: LegacyHold[], 
 
 // Every day in [from, to): a hand-set capacity wins, otherwise the pieces in service (stock) are the capacity.
 // `over` counts bookings beyond the pieces that exist (an extension the shop let run into the next rental): a real clash.
-async function getQueueUncached(db: Db, productId: number, from: string, to: string, exceptId?: string) {
+// With `variantId`, the queue of one colour/size: its pieces in service are the capacity (a hand-set product capacity still caps it).
+async function getQueueUncached(db: Db, productId: number, from: string, to: string, exceptId?: string, variantId?: string) {
+  if (variantId) {
+    const product = await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, units: 1, variants: 1 } });
+    if (product?.variants?.length) {
+      const units = unitsForVariant(product, variantId).filter(unit => inService(unit.status));
+      const scope = { id: variantId, unitSkus: new Set(units.map(unit => unit.sku)) };
+      const [capacities, reservations, firm] = await Promise.all([
+        db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
+        getReservationCounts(db, productId, from, to, exceptId, false, scope),
+        getReservationCounts(db, productId, from, to, exceptId, true, scope),
+      ]);
+      return queueDays(from, to, capacities.map(day => ({ ...day, capacity: Math.min(day.capacity, units.length) })), reservations, firm, units.length);
+    }
+  }
   const [capacities, reservations, firm, product] = await Promise.all([
     db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
     getReservationCounts(db, productId, from, to, exceptId),
@@ -110,14 +128,16 @@ export async function getQueues(db: Db, requests: { productId: number; from: str
 }
 const queueCache = new Map<string, { at: number; value: Awaited<ReturnType<typeof getQueueUncached>> }>();
 const queueRuns = new Map<string, Promise<Awaited<ReturnType<typeof getQueueUncached>>>>();
-async function getQueueCached(db: Db, productId: number, from: string, to: string, exceptId?: string) {
-  const key = `${productId}:${from}:${to}:${exceptId || ""}`, now = Date.now(), cached = queueCache.get(key);
+// `useCache = false` reads fresh counts (confirming a booking must not trust a 5-second-old queue).
+async function getQueueCached(db: Db, productId: number, from: string, to: string, exceptId?: string, useCache = true, variantId?: string) {
+  const key = `${productId}:${variantId || ""}:${from}:${to}:${exceptId || ""}`, now = Date.now(), cached = queueCache.get(key);
+  if (!useCache) return getQueueUncached(db, productId, from, to, exceptId, variantId);
   if (cached && now - cached.at < 5000) return cached.value;
   // Drop expired entries now and then so the cache does not grow with every range ever asked for.
   if (queueCache.size > 2000) for (const [stale, entry] of queueCache) if (now - entry.at >= 5000) queueCache.delete(stale);
   const running = queueRuns.get(key);
   if (running) return running;
-  const run = getQueueUncached(db, productId, from, to, exceptId);
+  const run = getQueueUncached(db, productId, from, to, exceptId, variantId);
   queueRuns.set(key, run);
   try { const value = await run; queueCache.set(key, { at: Date.now(), value }); return value; } finally { queueRuns.delete(key); }
 }
