@@ -9,6 +9,8 @@ import { purgeIdentity } from "@/lib/identity-store";
 import { getStoreSettings } from "@/lib/store-settings";
 import { promoteWaitlist } from "@/lib/waitlist";
 import { requestOrigin } from "@/lib/request-origin";
+import { deletePublicImage } from "@/lib/r2";
+import { receivedDeadline } from "@/lib/rental-photos";
 
 type BookingDoc = { _id: string; name?: string; start: string; end: string; schedule?: ScheduleRecord; billToken?: string; lineUserId?: string; lineOa?: string; returnReminderSentAt?: Date; lateNoticeSentAt?: Date; verification?: BookingVerification };
 const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
@@ -19,12 +21,16 @@ export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return Response.json({ error: "unauthorized" }, { status: 401 });
   const db = await database(), settings = await getStoreSettings();
+  const bookings = db.collection<BookingDoc & { photos?: Record<string, { url?: string }[]>; returned?: { at: Date } }>("bookingRequests");
+  const dueConditions = await bookings.find({ status: { $ne: "cancelled" }, shipment: { $exists: true }, returned: { $exists: false }, receivedCondition: { $exists: false } }, { projection: { _id: 1, start: 1, name: 1 } }).toArray();
+  for (const booking of dueConditions) if (new Date() > receivedDeadline(booking.start)) await bookings.updateOne({ _id: booking._id, receivedCondition: { $exists: false } }, { $set: { receivedCondition: { value: "normal", at: new Date(), by: "system", source: "automatic" }, updatedAt: new Date() } });
+  const cleanup = await bookings.find({ "returned.at": { $lte: new Date(Date.now() - 7 * 86400000) }, photos: { $exists: true } }, { projection: { _id: 1, photos: 1 } }).toArray();
+  for (const booking of cleanup) { const photos = booking.photos || {}; for (const stage of ["beforeShipment", "received", "return"]) for (const photo of photos[stage] || []) if (photo.url) await deletePublicImage(photo.url).catch(() => undefined); await bookings.updateOne({ _id: booking._id }, { $unset: { photos: "" } }); }
   await promoteWaitlist(db, request);
   const purged = await purgeIdentity(db, settings.verification);
   for (const bookingId of purged.bookings) await audit(request, null, { action: "identity.deleted", targetType: "booking", targetId: bookingId, summary: `ลบเอกสารยืนยันตัวตนอัตโนมัติ (ครบ ${settings.verification.deleteAfterDays} วันหลังจบการเช่า)`, actorEmail: "ระบบอัตโนมัติ" }).catch(() => undefined);
   if (!anyLineConfigured()) return Response.json({ ok: true, purged: purged.removed, error: "ยังไม่ได้ตั้งค่า LINE" });
   const tomorrow = thaiDay(new Date(Date.now() + 86400000));
-  const bookings = db.collection<BookingDoc>("bookingRequests");
   // Due back tomorrow, still out with the customer, and not reminded yet.
   const due = await bookings.find({ status: "confirmed", $or: [{ "schedule.returnDate": tomorrow }, { schedule: { $exists: false }, end: tomorrow }], shipment: { $exists: true }, returned: { $exists: false }, customerReturn: { $exists: false }, returnReminderSentAt: { $exists: false }, lineUserId: { $exists: true, $ne: "" } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, billToken: 1, lineUserId: 1 } }).toArray();
   const origin = requestOrigin(request);

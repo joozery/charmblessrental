@@ -11,7 +11,7 @@ import type { Permission } from "@/lib/permissions";
 import { setUnitStatuses } from "@/lib/product-store";
 import { unitStatusLabels, type UnitStatus } from "@/lib/products";
 import { assignUnits, validUnitPicks } from "@/lib/rental-units";
-import { cleanCode, customerDiscount, discountCoupons, validCoupon } from "@/lib/discounts";
+import { cleanCode, couponDiscountAmount, couponType, customerDiscount, discountCoupons, validCoupon } from "@/lib/discounts";
 import { claimBill } from "@/lib/bill-owner";
 import { requestOrigin } from "@/lib/request-origin";
 import { legacyRentalCount } from "@/lib/legacy-rentals";
@@ -20,7 +20,7 @@ const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; variantId?: string; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -28,7 +28,7 @@ const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "num
 type QuoteInput = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string };
 const validQuote = (quote: unknown): quote is QuoteInput => { if (!quote || typeof quote !== "object") return false; const value = quote as Record<string, unknown>; return ["rental", "deposit", "shipping"].every(key => typeof value[key] === "number" && Number.isFinite(value[key]) && (value[key] as number) >= 0) && ["bank", "accountName", "accountNumber", "returnAddress", "returnPhone", "returnMethod"].every(key => typeof value[key] === "string" && (value[key] as string).length <= 500) && typeof value.qrImage === "string" && value.qrImage.length <= 2000; };
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim().length <= max;
-const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping", delete: "bookings" };
+const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping", ackCondition: "shipping", setCondition: "shipping", delete: "bookings" };
 const quoteFields = ["rental", "deposit", "shipping", "bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod", "rentalBeforeDiscount", "discountAmount", "discountPercent", "discountLabel", "discountCode"];
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     const customer = booking.lineUserId ? await db.collection<{ _id: string; bookingCount?: number; completedCount?: number; reviewCount?: number }>("customers").findOne({ _id: booking.lineUserId }) : null;
     // Rentals through the old sheet count too, matched by the phone number on this booking.
     const loyalty = customerDiscount((customer?.completedCount ?? customer?.bookingCount ?? 0) + await legacyRentalCount(db, booking.phone), customer?.reviewCount ?? 0);
-    const percent = Math.min(100, (coupon?.percent || 0) + loyalty.percent), discountAmount = Math.round(before * percent / 100 * 100) / 100;
+    const percent = Math.min(100, (couponType(coupon) === "percent" ? (coupon?.value ?? coupon?.percent ?? 0) : 0) + loyalty.percent), discountAmount = Math.min(before, couponDiscountAmount(coupon, before) + Math.round(before * loyalty.percent / 100 * 100) / 100);
     const quote = Object.fromEntries(quoteFields.map(key => [key, body.quote[key]])) as QuoteInput;
     quote.rentalBeforeDiscount = before; quote.discountPercent = percent; quote.discountAmount = discountAmount; quote.rental = Math.max(0, Math.round((before - discountAmount) * 100) / 100); quote.discountLabel = [loyalty.label, coupon?.label].filter(Boolean).join(" + "); quote.discountCode = coupon?.code || "";
     await bookings.updateOne({ _id: body.id }, { $set: { quote: { ...quote, updatedAt: new Date(), updatedBy: by } } });
@@ -115,10 +115,23 @@ export async function POST(request: Request) {
     if (coupon && booking.quote?.discountCode !== coupon.code) await discountCoupons(db).updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $set: { updatedAt: new Date() } });
     return Response.json({ ok: true, quote });
   }
+  if (body.action === "setCondition") {
+    if (!["normal", "damaged"].includes(body.condition) || (body.note !== undefined && !text(body.note, 500))) return Response.json({ error: "ข้อมูลสภาพสินค้าไม่ถูกต้อง" }, { status: 400 });
+    await bookings.updateOne({ _id: body.id }, { $set: { receivedCondition: { value: body.condition, at: new Date(), by: "admin", note: String(body.note || "").trim() }, updatedAt: new Date(), updatedBy: by } });
+    await log("booking.condition_updated", `แอดมินบันทึกสภาพสินค้า: ${body.condition === "damaged" ? "ชำรุด" : "ปกติ"}`);
+    return Response.json({ ok: true, receivedCondition: { value: body.condition, at: new Date().toISOString(), by: "admin", note: String(body.note || "").trim() } });
+  }
+  if (body.action === "ackCondition") {
+    if ((booking as BookingDoc & { receivedCondition?: { value?: string } }).receivedCondition?.value !== "damaged") return Response.json({ error: "รายการนี้ไม่ได้แจ้งชำรุด" }, { status: 409 });
+    await bookings.updateOne({ _id: body.id }, { $set: { "receivedCondition.acknowledgedAt": new Date(), "receivedCondition.acknowledgedBy": by, updatedAt: new Date(), updatedBy: by } });
+    await log("booking.condition_acknowledged", "แอดมินรับทราบการแจ้งชำรุด");
+    return Response.json({ ok: true, acknowledgedAt: new Date().toISOString(), acknowledgedBy: by });
+  }
   if (body.action === "ship") {
     if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
     if (booking.method !== "pickup" && !body.trackingNumber.trim()) return Response.json({ error: "กรุณากรอกเลขพัสดุ" }, { status: 400 });
     if (booking.returned) return Response.json({ error: "รับคืนสินค้ารายการนี้แล้ว" }, { status: 409 });
+    if (!((booking as BookingDoc & { photos?: { beforeShipment?: unknown[] } }).photos?.beforeShipment?.length)) return Response.json({ error: "กรุณาอัปโหลดรูปก่อนจัดส่งก่อนบันทึกเลขพัสดุ" }, { status: 409 });
     const picks = body.units === undefined ? booking.items.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
     if (!picks) return Response.json({ error: "ชิ้นสินค้าที่เลือกไม่ถูกต้อง กรุณาโหลดหน้าใหม่" }, { status: 400 });
     // No deposit was taken, so the piece only leaves once the customer's identity has been checked.
@@ -162,7 +175,7 @@ export async function POST(request: Request) {
     // The piece is out from the shipping day to the end of the gap, not only on the days of use.
     const range = blockRange(booking);
     for (const item of booking.items) {
-      const full = (await getQueue(db, item.id, range.from, range.to, booking._id)).find(day => day.remaining < 1);
+      const full = (await getQueue(db, item.id, range.from, range.to, booking._id, false, item.variantId)).find(day => day.remaining < 1);
       if (full) return Response.json({ error: `คิวของ ${item.name || "สินค้าบางรายการ"} เต็มวันที่ ${dayLabel(full.date)} (ช่วงที่ต้องใช้ชุด ${dayLabel(range.from)} – ${dayLabel(addDays(range.to, -1))} รวมวันจัดส่งและ Gap)` }, { status: 409 });
     }
   }

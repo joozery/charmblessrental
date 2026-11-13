@@ -27,6 +27,9 @@
 .to-ship-actions a{color:#79516c;font-size:12px}
 .to-ship-form label{display:grid;gap:3px;color:#8a7f87;font-size:11px}
 .to-ship-form input{height:34px;padding:0 8px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;font-size:13px}
+.to-ship-form input[type=file]{height:auto;min-width:230px;padding:8px;border:1px dashed #c89ab4;background:#fff8fb;color:#79516c;cursor:pointer}
+.to-ship-form input[type=file]::file-selector-button{margin-right:8px;padding:7px 11px;border:0;border-radius:6px;background:#79516c;color:#fff;font:inherit;font-size:12px;font-weight:650;cursor:pointer}
+.to-ship-form>small{align-self:center;color:#79516c;font-size:12px;font-weight:650}
 .to-ship-page button{height:34px;padding:0 14px;border:1px solid #d9cfd6;border-radius:8px;background:#fff;color:#604a5b;font:inherit;font-size:13px;cursor:pointer}
 .to-ship-page button.is-primary{border-color:#79516c;background:#79516c;color:#fff}.to-ship-page button:disabled{opacity:.5;cursor:default}
 .to-ship-error{color:#b42318;font-size:12px}.to-ship-done{margin:0;padding:10px 14px;border-radius:10px;background:#ecfdf3;color:#067647;font-size:13px}
@@ -41,3 +44,5 @@
 .to-ship-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;color:#667085;font-size:12px}.to-ship-pagination>div{display:flex;align-items:center;gap:5px}.to-ship-pagination button{min-width:34px;padding:0 9px}.to-ship-pagination button.is-active{border-color:#79516c;background:#79516c;color:#fff}.to-ship-pagination em{font-style:normal;color:#98a2b3}
 .to-ship-image-caption{display:grid;gap:2px;padding:8px 4px 2px;text-align:center}.to-ship-image-caption strong{color:#344054;font-size:13px}.to-ship-image-caption span{color:#667085;font-size:11px}.to-ship-image-caption small{color:#98a2b3;font-size:10px}.to-ship-image-nav{position:absolute;top:50%;display:grid!important;place-items:center;width:34px!important;height:34px!important;padding:0!important;border:0!important;border-radius:50%!important;background:#fff!important;color:#344054!important;font-size:28px!important;line-height:1;box-shadow:0 3px 12px rgb(0 0 0 / 22%);cursor:pointer!important;transform:translateY(-50%)}.to-ship-image-nav.is-prev{left:-17px}.to-ship-image-nav.is-next{right:-17px}
 .to-ship-legacy{justify-self:start;width:max-content;padding:1px 7px;border-radius:999px;background:#f2f4f7;color:#475467!important;font-size:10px;font-weight:650}
+.to-ship-photo-links { display: flex; gap: 5px; flex-wrap: wrap; }
+.to-ship-photo-links a { color: #8a4b28; text-decoration: underline; }

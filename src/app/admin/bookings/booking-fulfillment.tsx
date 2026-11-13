@@ -67,6 +67,32 @@ function IdentityReview({ row, canReview, onChange }: { row: FulfillmentRow; can
   </div></div>;
 }
 
+function AdminConditionEditor({ bookingId, canEdit, onChange }: { bookingId: string; canEdit: boolean; onChange: (patch: Partial<FulfillmentRow>) => void }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!canEdit) return null;
+  async function save() {
+    if (!files.length) { setError("กรุณาแนบรูปสินค้าที่ชำรุด"); return; }
+    setBusy(true); setError("");
+    try {
+      const photos: { url: string }[] = [];
+      for (const file of files.slice(0, 5)) {
+        const form = new FormData(); form.set("bookingId", bookingId); form.set("stage", "received"); form.set("image", file);
+        const response = await fetch("/api/admin/bookings/photos", { method: "POST", body: form }); const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "อัปโหลดรูปไม่สำเร็จ");
+        photos.push(data.photo);
+      }
+      const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: bookingId, action: "setCondition", condition: "damaged", note }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || "บันทึกสภาพสินค้าไม่สำเร็จ");
+      onChange({ receivedCondition: data.receivedCondition, photos: { received: photos } } as never); setOpen(false); setFiles([]); setNote("");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); }
+  }
+  return <div className="bookings-condition-editor">{!open ? <button type="button" disabled={busy} onClick={() => setOpen(true)}>บันทึกชำรุดภายหลังพร้อมรูป</button> : <div className="bookings-inline-form"><label>รูปสินค้าที่ชำรุด<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={busy} onChange={event => setFiles(Array.from(event.target.files || []).slice(0, 5))} /></label><label>หมายเหตุ<input value={note} maxLength={500} onChange={event => setNote(event.target.value)} placeholder="รายละเอียดความชำรุด" /></label><div><button type="button" disabled={busy} onClick={() => setOpen(false)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || !files.length} onClick={() => { void save(); }}>{busy ? "กำลังบันทึก…" : "บันทึกชำรุด"}</button></div>{error && <p className="admin-error" role="alert">{error}</p>}</div>}</div>;
+}
+
 export default function BookingFulfillment({ row, permissions, unitChoices, finePerDay = 0, onChange }: { row: FulfillmentRow; permissions: Permission[]; unitChoices: Record<number, UnitChoice[]>; finePerDay?: number; onChange: (patch: Partial<FulfillmentRow>) => void }) {
   const canShip = permissions.includes("shipping"), canRefund = permissions.includes("deposits"), canReview = permissions.includes("identity");
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
@@ -87,6 +113,9 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
   const [penaltyForm, setPenaltyForm] = useState<{ amount: string; reason: string } | null>(null);
   const [logs, setLogs] = useState<Log[] | null>(null);
   const pickup = row.method === "pickup";
+  const conditionData = (row as FulfillmentRow & { receivedCondition?: { value: "normal" | "damaged"; at: string; by: string; note?: string; acknowledgedAt?: string; acknowledgedBy?: string }; photos?: { beforeShipment?: { url: string }[]; received?: { url: string }[]; return?: { url: string }[] } }).receivedCondition;
+  const rentalPhotos = (row as FulfillmentRow & { photos?: { beforeShipment?: { url: string }[]; received?: { url: string }[]; return?: { url: string }[] } }).photos || {};
+  const acknowledgeCondition = () => run(async () => { const data = await send("/api/admin/bookings", { id: row._id, action: "ackCondition" }); onChange({ receivedCondition: { ...conditionData, acknowledgedAt: data.acknowledgedAt, acknowledgedBy: data.acknowledgedBy } } as never); setNotice("รับทราบการแจ้งชำรุดแล้ว"); await refreshLogs(); });
 
   async function run(task: () => Promise<void>) { setBusy(true); setError(""); try { await task(); } catch (cause) { setError(cause instanceof Error ? cause.message : "ทำรายการไม่สำเร็จ"); } finally { setBusy(false); } }
   const refreshLogs = async () => { if (logs) setLogs((await (await fetch(`/api/admin/activity?targetId=${encodeURIComponent(row._id)}`, { cache: "no-store" })).json()).logs || []); };
@@ -109,6 +138,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
   const deducted = refundForm && row.deposit ? Math.max(0, row.deposit.amount - (Number(refundForm.refund) || 0)) : 0;
 
   return <>
+    {(conditionData || rentalPhotos.beforeShipment?.length || rentalPhotos.received?.length || rentalPhotos.return?.length) && <div className="bookings-detail-section bookings-rental-photos"><Icon name="image" /><div><h3>หลักฐานรูปภาพการเช่า</h3>{conditionData && <p><strong>สภาพตอนลูกค้าได้รับ: {conditionData.value === "damaged" ? "ชำรุด" : "ปกติ"}</strong>{conditionData.note ? ` · ${conditionData.note}` : ""}{conditionData.value === "damaged" && !conditionData.acknowledgedAt && <button type="button" disabled={busy} onClick={acknowledgeCondition}>รับทราบ</button>}</p>}<AdminConditionEditor bookingId={row._id} canEdit={canShip} onChange={onChange} /><div className="bookings-photo-groups">{([ ["ก่อนจัดส่ง", rentalPhotos.beforeShipment], ["ตอนลูกค้าได้รับ", rentalPhotos.received], ["ตอนส่งคืน", rentalPhotos.return] ] as [string, { url: string }[] | undefined][]).map(([label, photos]) => photos?.length ? <div key={label}><small>{label}</small><div>{photos.map(photo => <a key={photo.url} href={photo.url} target="_blank" rel="noopener noreferrer"><img src={photo.url} alt={label} /></a>)}</div></div> : null)}</div></div></div>}
     {!!row.risks?.length && <div className="bookings-clash bookings-clash-banner" role="alert"><strong>⚠️ {row.lateDays ? `ชุดยังไม่กลับ เลยกำหนดคืน ${row.lateDays} วัน` : "ใกล้ถึงกำหนดคืน แต่ลูกค้ายังไม่ได้แจ้งส่งคืน"} · กระทบลูกค้าคนต่อไป</strong>{row.risks.map(risk => { const left = Math.round((Date.parse(`${risk.next.ship}T00:00:00Z`) - Date.parse(`${todayKey()}T00:00:00Z`)) / 86400000); return <p key={`${risk.item}-${risk.next.id}`}>{risk.unitSku || risk.item} · ลูกค้าคนต่อไป <a href={`/admin/bookings?id=${encodeURIComponent(risk.next.id)}`}>{risk.next.name || risk.next.id} ({risk.next.id})</a> ต้องส่ง {day(`${risk.next.ship}T00:00:00Z`)} {left > 0 ? `เหลืออีก ${left} วัน` : left === 0 ? "คือวันนี้" : `เลยวันส่งมาแล้ว ${-left} วัน`}{risk.swap.length ? <b className="bookings-risk-swap"> · สลับไปใช้ชิ้น {risk.swap.slice(0, 3).join(", ")} ได้</b> : " · ไม่มีชิ้นอื่นว่าง"}</p>; })}<small>ติดต่อลูกค้าที่ยังไม่คืนชุด ถ้าจะคืนช้าให้กด &quot;ขยายวันเช่า&quot; เพื่อคิดค่าวันที่เกิน และเตรียมสลับชิ้นหรือแจ้งลูกค้าคนต่อไป</small></div>}
     {!!row.clashes?.length && <div className="bookings-clash bookings-clash-banner" role="alert"><strong>⚠️ คิวซ้อน: ชุดมีคนจองทับกันเกินจำนวนที่มี</strong>{row.clashes.map(clash => <p key={`${clash.item}-${clash.date}`}>{day(`${clash.date}T00:00:00Z`)} · {clash.item} · ชนกับ{clash.with.length ? clash.with.map(other => <a key={other.id} href={`/admin/bookings?id=${encodeURIComponent(other.id)}`}> {other.name || other.id} ({other.id})</a>) : " คำขอที่ไม่อยู่ในรายการนี้"}</p>)}<small>ติดต่อลูกค้าเพื่อสลับชุด เลื่อนวัน หรือยกเลิกคิวใดคิวหนึ่ง ป้ายนี้จะหายเมื่อคิวไม่ซ้อนแล้ว</small></div>}
     {row.verification && row.status !== "cancelled" && <IdentityReview row={row} canReview={canReview} onChange={verification => onChange({ verification })} />}

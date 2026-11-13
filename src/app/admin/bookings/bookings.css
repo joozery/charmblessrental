@@ -273,7 +273,7 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .queue-day-head{display:flex;justify-content:space-between;align-items:baseline;gap:4px}.queue-day-head b{font-size:12px}.queue-day-head small{color:#277c51;font-size:10px;white-space:nowrap}.queue-day.is-full .queue-day-head small{color:#b42318;font-weight:600}
 .queue-chip{display:block;padding:2px 5px;border-radius:5px;background:var(--chip);color:#3b313e;font-size:10px;line-height:1.4;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-chip.is-hold{background:repeating-linear-gradient(45deg,var(--chip) 0 4px,#fff 4px 8px)}.queue-chip.is-self{outline:2px solid #8b5d7b;outline-offset:-1px;font-weight:600}
 @media(max-width:620px){.queue-day{min-height:58px;padding:3px}.queue-chip{font-size:9px;padding:1px 3px}.queue-day-head small{display:none}}
-.bookings-clash{display:grid;gap:4px;margin:8px 0;padding:10px 12px;border:1px solid #f4b7b0;border-radius:9px;background:#fef3f2;color:#b42318;font-size:12px}.bookings-clash strong{font-size:13px}.bookings-clash p{margin:0}.bookings-clash a{color:inherit;font-weight:600;text-decoration:underline}.bookings-clash small{color:#912018}.bookings-clash label{display:flex;align-items:flex-start;gap:6px;margin-top:4px;color:#7a271a;font-weight:600;cursor:pointer}.bookings-clash label input{margin-top:2px}
+.bookings-clash{display:grid;gap:6px;margin:8px 0;padding:10px 12px;border:1px solid #f4b7b0;border-radius:9px;background:#fef3f2;color:#b42318;font-size:12px}.bookings-clash strong{font-size:13px}.bookings-clash p{margin:0;padding:7px 8px;border:1px solid #f6cbc6;border-radius:7px;background:#fffafa;line-height:1.65}.bookings-clash a{display:block;margin-top:4px;padding:5px 7px;border-radius:5px;background:#fff0ee;color:#912018;font-weight:700;text-decoration:none}.bookings-clash a::before{content:"เปิดออเดอร์คู่ชน · ";font-weight:500}.bookings-clash a:hover{background:#ffe2de;text-decoration:underline}.bookings-clash small{color:#912018}.bookings-clash label{display:flex;align-items:flex-start;gap:6px;margin-top:4px;color:#7a271a;font-weight:600;cursor:pointer}.bookings-clash label input{margin-top:2px}
 .bookings-clash-banner{margin:0 0 12px}
 .bookings-row-status small.is-clash,.bookings-clash-text{color:#b42318;font-weight:700}
 .bookings-extension-note{color:#475467!important;font-style:italic}
@@ -304,3 +304,8 @@ body:has(.bookings-page),body:has(.bookings-page) .chrome-shell,body:has(.bookin
 .bookings-extension-discount{color:#a24d70!important;font-weight:600}
 .bookings-penalty-line{color:#b42318!important;font-weight:650}
 .bookings-pagination-numbered{justify-content:center;flex-wrap:wrap;margin-top:10px}.bookings-pagination-numbered button{min-width:30px}.bookings-pagination-numbered button.is-active{border-color:#79516c;background:#79516c;color:#fff;font-weight:700;box-shadow:0 0 0 2px #79516c26}.bookings-pagination-numbered span{padding:4px 2px;color:#98a2b3}.bookings-inbox-list-footer .bookings-pagination{display:none}
+.bookings-rental-photos .bookings-photo-groups { display: grid; gap: 12px; margin-top: 10px; }
+.bookings-photo-groups > div > div { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
+.bookings-photo-groups img { width: 72px; height: 88px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
+.bookings-rental-photos button { margin-left: 10px; }
+.bookings-inbox-header + .bookings-inbox-filters{display:none}

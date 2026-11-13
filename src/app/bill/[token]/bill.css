@@ -20,10 +20,13 @@ body:has(.bill-page){background:#f5f6f8}
 @media print{body > *:not(.rental-print-only){display:revert!important}.bill-paper{overflow:visible}}
 .bill-track{margin-bottom:14px;padding:16px 20px;border:1px solid #e4e7ec;border-radius:12px;background:#fff}
 .bill-track h2{margin:0 0 12px;font-size:16px;font-weight:650}
-.bill-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:0 0 6px;padding:0;list-style:none}
-.bill-steps li{display:grid;justify-items:center;gap:5px;color:#98a2b3;font-size:12px;line-height:1.35;text-align:center}
-.bill-steps span{display:grid;place-items:center;width:26px;height:26px;border:1px solid #d0d5dd;border-radius:50%;background:#fff;font-size:12px;font-weight:650}
-.bill-steps li.is-done{color:#79516c;font-weight:600}.bill-steps li.is-done span{border-color:#79516c;background:#79516c;color:#fff}
+.bill-steps{display:grid;grid-template-columns:repeat(7,minmax(70px,1fr));gap:0;margin:18px 0 8px;padding:0 4px;list-style:none;overflow:hidden}
+.bill-steps li{position:relative;display:grid;justify-items:center;gap:8px;color:#98a2b3;font-size:11px;line-height:1.35;text-align:center}
+.bill-steps li:not(:last-child)::after{content:"";position:absolute;z-index:0;top:15px;left:calc(50% + 16px);width:calc(100% - 32px);height:2px;background:#e4e7ec}
+.bill-steps span{position:relative;z-index:1;display:grid;place-items:center;width:32px;height:32px;border:2px solid #d0d5dd;border-radius:50%;background:#fff;box-shadow:0 0 0 4px #fff;font-size:12px;font-weight:700}
+.bill-steps b{max-width:90px;font-weight:500}
+.bill-steps li.is-done{color:#79516c}.bill-steps li.is-done span{border-color:#79516c;background:#79516c;color:#fff}.bill-steps li.is-done:not(:last-child)::after{background:#c9a9bb}.bill-steps li.is-done b{font-weight:650}
+.bill-steps li.is-current span{box-shadow:0 0 0 4px #fff,0 0 0 7px #ecdde6}.bill-steps li.is-current b{color:#79516c;font-weight:750}
 .bill-track-box{margin-top:12px;padding:12px 14px;border-radius:10px;background:#faf7f9;font-size:14px;line-height:1.7}
 .bill-track-box strong{display:block;margin-bottom:4px}
 .bill-track-box p{margin:0}
@@ -37,6 +40,7 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-return-form>div,.bill-return-form .bill-error{grid-column:1/-1}.bill-return-form>div{display:flex;flex-wrap:wrap;gap:8px}
 .bill-error{margin:0;color:#b42318;font-size:13px}
 .bill-link-button{margin-top:6px;padding:0;border:0;background:none;color:#79516c;font:inherit;font-size:13px;font-weight:600;text-decoration:underline;cursor:pointer}
+@media(max-width:700px){.bill-steps{display:flex;overflow-x:auto;justify-content:flex-start;gap:0;padding:18px 4px 8px;scroll-snap-type:x proximity}.bill-steps li{flex:0 0 92px;scroll-snap-align:start}.bill-steps li:not(:last-child)::after{width:60px}}
 @media(max-width:560px){.bill-track{padding:14px}.bill-steps li{font-size:10px}.bill-return-form{grid-template-columns:1fr}}
 @media print{.bill-track{display:none!important}}
 .bill-identity strong{display:block;margin-bottom:4px}.bill-identity p{margin:0 0 6px;font-size:14px;line-height:1.7}.bill-identity.is-approved{background:#ecf8f1}.bill-identity.is-submitted{background:#eef4ff}
@@ -66,3 +70,6 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-slip-form small{color:#7a6a4f;font-size:12px}
 .bill-slip-form .bill-button{justify-self:start}
 .bill-slip-note{margin:0;padding:8px 10px;border-radius:8px;background:#fff3d6;color:#7a5a12;font-size:13px}
+.bill-condition-form { display: grid; gap: 10px; margin-top: 12px; }
+.bill-condition-options { display: flex; gap: 16px; flex-wrap: wrap; }
+.bill-condition-form label { display: grid; gap: 5px; }

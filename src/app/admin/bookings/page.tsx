@@ -11,6 +11,7 @@ import { database } from "@/lib/mongodb";
 import { getStoreSettings } from "@/lib/store-settings";
 import type { ScheduleRecord } from "@/lib/schedule";
 import type { BookingVerification } from "@/lib/identity";
+import type { QueueClash } from "@/lib/queue";
 import BookingRequests from "./booking-requests";
 import "./bookings.css";
 import { depositFor } from "@/lib/pricing";
@@ -18,11 +19,11 @@ import type { Adjustment } from "@/lib/adjustment";
 import type { BookingPenalty } from "@/lib/penalty";
 
 export const metadata = { title: "คำขอจอง | Charm Bless", robots: { index: false, follow: false } };
-type BookingDoc = { slipReview?: { at: Date; reason: string }; _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; discountCode?: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; quote?: Partial<{ rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string }>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; unitSku?: string; deposit?: number | null }[]; createdAt: Date; payment?: "unpaid" | "paid"; billToken?: string; lineUserId?: string; lineName?: string; lineSentAt?: Date; paidAt?: Date | null; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date; byName: string }; returned?: { at: Date; condition: string; note: string; byName: string }; customerReturn?: { carrier: string; trackingNumber: string; at: Date; via?: "line" | "bill" }; returnReminderSentAt?: Date; lateNoticeSentAt?: Date; schedule?: ScheduleRecord; verification?: BookingVerification; refundAccount?: RefundAccount & { updatedAt: Date }; extensions?: Extension[]; penalties?: BookingPenalty[]; lateReturn?: LateReturn; adjustments?: Adjustment[]; holdUntil?: Date; waitlist?: { since: Date }; shipping?: { label: string; base: number | null; discount: number }; delivery?: { km?: number; fee?: number; inBill?: boolean; address?: string; error?: string } };
+type BookingDoc = { slipReview?: { at: Date; reason: string }; clashes?: QueueClash[]; _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; discountCode?: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; quote?: Partial<{ rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string }>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; unitSku?: string; deposit?: number | null }[]; createdAt: Date; payment?: "unpaid" | "paid"; billToken?: string; lineUserId?: string; lineName?: string; lineSentAt?: Date; paidAt?: Date | null; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date; byName: string }; returned?: { at: Date; condition: string; note: string; byName: string }; customerReturn?: { carrier: string; trackingNumber: string; at: Date; via?: "line" | "bill" }; returnReminderSentAt?: Date; lateNoticeSentAt?: Date; schedule?: ScheduleRecord; verification?: BookingVerification; refundAccount?: RefundAccount & { updatedAt: Date }; extensions?: Extension[]; penalties?: BookingPenalty[]; lateReturn?: LateReturn; adjustments?: Adjustment[]; holdUntil?: Date; waitlist?: { since: Date }; shipping?: { label: string; base: number | null; discount: number }; delivery?: { km?: number; fee?: number; inBill?: boolean; address?: string; error?: string } };
 type Query = { id?: string | string[]; page?: string | string[]; status?: string | string[]; q?: string | string[]; period?: string | string[] };
 const one = (value?: string | string[]) => Array.isArray(value) ? value[0] : value;
 const pageSize = 20;
-const validStatuses = new Set(["all", "new", "contacted", "confirmed", "cancelled", "refund", "late", "clash"]);
+const validStatuses = new Set(["all", "new", "contacted", "confirmed", "cancelled", "refund", "late", "clash", "damaged"]);
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const iso = (value?: Date | null) => value ? new Date(value).toISOString() : "";
 async function Content({ searchParams }: { searchParams: Promise<Query> }) {
@@ -42,8 +43,8 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
     bookingFilter.$or = [{ _id: expression }, { name: expression }, { phone: expression }, { "items.name": expression }, { "items.sku": expression }];
   }
   if (period !== "all") { const cutoff = new Date(); cutoff.setTime(cutoff.getTime() - Number(period) * 86400000); bookingFilter.createdAt = { $gte: cutoff }; }
-  const statusCountFilter = { ...bookingFilter };
-  delete statusCountFilter.status;
+  const statsFilter: Record<string, unknown> = {};
+  if (period !== "all") { const cutoff = new Date(); cutoff.setTime(cutoff.getTime() - Number(period) * 86400000); statsFilter.createdAt = { $gte: cutoff }; }
   if (filter === "refund") {
     const held = await deposits(db).find({ status: "held" }, { projection: { _id: 1 } }).toArray();
     bookingFilter._id = { $in: held.map(row => row._id) };
@@ -59,17 +60,19 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
     const lateClause = [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }];
     if (bookingFilter.$or) { bookingFilter.$and = [{ $or: bookingFilter.$or as object[] }, { $or: lateClause }]; delete bookingFilter.$or; } else bookingFilter.$or = lateClause;
   }
-  const projection = { _id: 1, status: 1, name: 1, phone: 1, address: 1, pin: 1, note: 1, discountCode: 1, method: 1, start: 1, end: 1, days: 1, deliveryFee: 1, estimatedTotal: 1, quote: 1, items: 1, createdAt: 1, payment: 1, billToken: 1, lineUserId: 1, lineName: 1, lineSentAt: 1, paidAt: 1, shipment: 1, returned: 1, customerReturn: 1, returnReminderSentAt: 1, lateNoticeSentAt: 1, delivery: 1, shipping: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, penalties: 1, lateReturn: 1, adjustments: 1, holdUntil: 1, waitlist: 1, slipReview: 1 };
+  const projection = { _id: 1, status: 1, name: 1, phone: 1, address: 1, pin: 1, note: 1, discountCode: 1, method: 1, start: 1, end: 1, days: 1, deliveryFee: 1, estimatedTotal: 1, quote: 1, items: 1, createdAt: 1, payment: 1, billToken: 1, lineUserId: 1, lineName: 1, lineSentAt: 1, paidAt: 1, shipment: 1, returned: 1, customerReturn: 1, returnReminderSentAt: 1, lateNoticeSentAt: 1, delivery: 1, shipping: 1, schedule: 1, verification: 1, refundAccount: 1, extensions: 1, penalties: 1, lateReturn: 1, adjustments: 1, holdUntil: 1, waitlist: 1, slipReview: 1, photos: 1, receivedCondition: 1 };
   if (filter === "clash") {
     const candidates = await bookings.find({ ...bookingFilter, status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, payment: 1, holdUntil: 1, waitlist: 1, "verification.status": 1, "items.id": 1, "items.sku": 1, "items.name": 1, "items.unitSku": 1 } }).toArray();
     const clashRows = await queueClashes(db, candidates.map(row => ({ ...row, _id: String(row._id) })));
     bookingFilter._id = { $in: [...clashRows.keys()] };
   }
-  const [total, statusRows] = await Promise.all([
+  if (filter === "damaged") { bookingFilter["receivedCondition.value"] = "damaged"; bookingFilter["receivedCondition.acknowledgedAt"] = { $exists: false }; }
+  const [listTotal, total, statusRows] = await Promise.all([
     bookings.countDocuments(bookingFilter),
-    bookings.aggregate<{ _id: string; count: number }>([{ $match: statusCountFilter }, { $group: { _id: "$status", count: { $sum: 1 } } }]).toArray(),
+    bookings.countDocuments(statsFilter),
+    bookings.aggregate<{ _id: string; count: number }>([{ $match: statsFilter }, { $group: { _id: "$status", count: { $sum: 1 } } }]).toArray(),
   ]);
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const pageCount = Math.max(1, Math.ceil(listTotal / pageSize));
   const currentPage = Math.min(requestedPage, pageCount);
   const statusCounts = Object.fromEntries(statusRows.map(row => [row._id, row.count]));
   const pageRows = await bookings.find(bookingFilter, { projection }).sort({ createdAt: -1 }).skip((currentPage - 1) * pageSize).limit(pageSize).toArray();
@@ -79,6 +82,22 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
   // Bookings confirmed before pieces were tracked get a suggested piece per item; it is saved once the admin ships.
   const [settings, depositRows] = await Promise.all([getStoreSettings(), deposits(db).find({ _id: { $in: rows.map(row => String(row._id)) } }).toArray()]);
   const today = thaiDay();
+  const held = await deposits(db).find({ status: "held" }, { projection: { _id: 1 } }).toArray();
+  const [refundCount, lateCount, clashCandidates] = await Promise.all([
+    held.length ? bookings.countDocuments({ ...statsFilter, _id: { $in: held.map(row => row._id) }, returned: { $exists: true }, status: { $ne: "cancelled" } }) : 0,
+    bookings.countDocuments({ ...statsFilter, status: "confirmed", shipment: { $exists: true }, returned: { $exists: false }, customerReturn: { $exists: false }, $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] }),
+    bookings.find({ ...statsFilter, status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, phone: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, payment: 1, holdUntil: 1, waitlist: 1, "verification.status": 1, "items.id": 1, "items.sku": 1, "items.name": 1, "items.unitSku": 1 } }).toArray(),
+  ]);
+  const statsClashes = await queueClashes(db, clashCandidates.map(row => ({ ...row, _id: String(row._id) })));
+  statusCounts.refund = refundCount;
+  statusCounts.damaged = await bookings.countDocuments({ ...statsFilter, "receivedCondition.value": "damaged", "receivedCondition.acknowledgedAt": { $exists: false } });
+  statusCounts.late = lateCount;
+  statusCounts.clash = statsClashes.size;
+  statusCounts.all = total;
+  for (const row of rows) {
+    const clashes = statsClashes.get(String(row._id));
+    if (clashes?.length) row.clashes = clashes;
+  }
   // Each item's deposit as the shop sets it now (product, else its category), so an unsaved quote adds up current figures.
   const missing = [...new Set(rows.flatMap(row => row.items.map(item => item.id)))];
   const productDeposits = new Map(missing.length ? (await db.collection<{ id: number; deposit?: number | null; category?: string }>("products").find({ id: { $in: missing } }, { projection: { _id: 0, id: 1, deposit: 1, category: 1 } }).toArray()).map(product => [product.id, depositFor(product, settings.categoryDeposits)]) : []);

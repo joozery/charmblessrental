@@ -15,8 +15,8 @@ const PAGE_SIZE = 20;
 
 export const metadata = { title: "รายการที่ต้องส่ง | Charm Bless", robots: { index: false, follow: false } };
 type BookingDoc = {
-  _id: string; name: string; phone: string; address: string; method: string; start: string; end: string; schedule?: ScheduleRecord; paidAt?: Date | null;
-  shipping?: { label: string }; verification?: BookingVerification; items: { id: number; name: string; sku: string; image: string; unitSku?: string }[];
+  _id: string; name: string; phone: string; address: string; method: string; start: string; end: string; schedule?: ScheduleRecord; paidAt?: Date | null; photos?: { beforeShipment?: { url: string }[] };
+  shipping?: { label: string }; verification?: BookingVerification; items: { id: number; variantId?: string; color?: string; size?: string; name: string; sku: string; image: string; unitSku?: string }[];
 };
 
 async function Content({ page, query = "", shipDate = "", tab = "all" }: { page: number; query?: string; shipDate?: string; tab?: string }) {
@@ -33,7 +33,7 @@ async function Content({ page, query = "", shipDate = "", tab = "all" }: { page:
   if (bucketClause) clauses.push(bucketClause);
   const webFilter = clauses.length ? { $and: [toShipFilter, ...clauses] } : toShipFilter;
   const skip = Math.max(0, page - 1) * PAGE_SIZE;
-  const projection = { _id: 1, name: 1, phone: 1, address: 1, method: 1, start: 1, end: 1, schedule: 1, paidAt: 1, shipping: 1, verification: 1, items: 1 };
+  const projection = { _id: 1, name: 1, phone: 1, address: 1, method: 1, start: 1, end: 1, schedule: 1, paidAt: 1, shipping: 1, verification: 1, items: 1, photos: 1 };
   const [bookings, bookingTotal] = await Promise.all([
     db.collection<BookingDoc>("bookingRequests").find(webFilter, { projection }).sort({ "schedule.ship": 1, start: 1, _id: 1 }).limit(skip + PAGE_SIZE).toArray(),
     db.collection<BookingDoc>("bookingRequests").countDocuments(webFilter),
@@ -46,8 +46,8 @@ async function Content({ page, query = "", shipDate = "", tab = "all" }: { page:
   const rows: ShipRow[] = bookings.map(row => ({
     id: row._id, name: row.name, phone: row.phone, address: row.address, pickup: row.method === "pickup", methodLabel: row.method === "pickup" ? "รับเองที่ร้าน" : row.shipping?.label || row.method,
     shipDay: row.schedule?.ship || row.start, start: row.start, returnDay: returnDay(row), paidAt: row.paidAt ? new Date(row.paidAt).toISOString() : "",
-    identityPending: row.verification?.mode === "identity" && row.verification.status !== "approved",
-    items: row.items.map(item => { const status = item.unitSku ? unitStatus.get(item.unitSku) : undefined; return { name: item.name, sku: item.unitSku || item.sku, image: item.image, ready: !item.unitSku || status === "available" || status === undefined, state: status ? unitStatusLabels[status] : "" }; }),
+    identityPending: row.verification?.mode === "identity" && row.verification.status !== "approved", beforeShipmentPhotos: row.photos?.beforeShipment?.map(photo => photo.url) || [],
+    items: row.items.map(item => { const status = item.unitSku ? unitStatus.get(item.unitSku) : undefined; return { name: `${item.name}${item.color || item.size ? ` · ${item.color || ""}${item.color && item.size ? " / " : ""}${item.size || ""}` : ""}`, sku: item.unitSku || item.sku, image: item.image, ready: !item.unitSku || status === "available" || status === undefined, state: status ? unitStatusLabels[status] : "" }; }),
   }));
   rows.sort((a, b) => a.shipDay.localeCompare(b.shipDay) || a.start.localeCompare(b.start));
   const total = bookingTotal;

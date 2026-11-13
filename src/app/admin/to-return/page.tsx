@@ -17,6 +17,7 @@ type BookingDoc = {
   _id: string; name: string; phone: string; method: string; start: string; end: string;
   schedule?: ScheduleRecord; items: { name: string; sku: string; image: string; unitSku?: string }[];
   customerReturn?: { carrier: string; trackingNumber: string; at: Date };
+  photos?: { beforeShipment?: { url: string }[]; received?: { url: string }[]; return?: { url: string }[] };
 };
 
 async function Content({ page, query = "", tab = "all" }: { page: number; query?: string; tab?: string }) {
@@ -40,7 +41,7 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   if (tab === "later") legacyClauses.push({ returnDate: { $gt: new Date(`${tomorrow}T23:59:59.999Z`) } });
   const legacyFilter = legacyClauses.length ? { $and: [legacyBase, ...legacyClauses] } : legacyBase;
   const [bookings, legacy, bookingTotal, legacyTotal] = await Promise.all([db.collection<BookingDoc>("bookingRequests").find(webFilter, {
-    projection: { _id: 1, name: 1, phone: 1, method: 1, start: 1, end: 1, schedule: 1, items: 1, customerReturn: 1 },
+    projection: { _id: 1, name: 1, phone: 1, method: 1, start: 1, end: 1, schedule: 1, items: 1, customerReturn: 1, photos: 1 },
   }).sort({ "schedule.returnDate": 1, end: 1, _id: 1 }).limit(skip + PAGE_SIZE).toArray(), legacyRentals(db).find(legacyFilter, {
     projection: { _id: 0, legacyId: 1, customerName: 1, phone: 1, shipDate: 1, returnDate: 1, days: 1, shipment: 1 },
   }).sort({ returnDate: 1, legacyId: 1 }).limit(skip + PAGE_SIZE).toArray(), db.collection("bookingRequests").countDocuments(webFilter), legacyRentals(db).countDocuments(legacyFilter)]);
@@ -48,7 +49,7 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
     id: row._id, name: row.name, phone: row.phone, pickup: row.method === "pickup",
     returnDay: returnDay(row), start: row.start,
     items: row.items.map(item => ({ name: item.name, sku: item.unitSku || item.sku, image: item.image })),
-    customerReturn: row.customerReturn ? { carrier: row.customerReturn.carrier, trackingNumber: row.customerReturn.trackingNumber, at: new Date(row.customerReturn.at).toISOString() } : null,
+    customerReturn: row.customerReturn ? { carrier: row.customerReturn.carrier, trackingNumber: row.customerReturn.trackingNumber, at: new Date(row.customerReturn.at).toISOString() } : null, photos: row.photos || {},
   })).sort((a, b) => a.returnDay.localeCompare(b.returnDay) || a.start.localeCompare(b.start));
   const legacyItemsRows = legacy.length ? await legacyItems(db).find({ rentalId: { $in: legacy.map(row => row.legacyId) } }, { projection: { _id: 0, rentalId: 1, productLegacyId: 1, productName: 1, sku: 1 } }).toArray() : [];
   const legacyItemsByRental = new Map<string, typeof legacyItemsRows>();

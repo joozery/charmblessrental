@@ -18,7 +18,7 @@ import SlipPanel from "./slip-panel";
 
 type RequestRow = DocRow & { slipReview?: { at: string; reason: string }; status: string; pin: string; note: string; discountCode?: string; method: string; estimatedTotal: number | null; payment?: "unpaid" | "paid"; billToken?: string; lineLinked?: boolean; lineName?: string; lineSentAt?: string; paidAt?: string; delivery?: { km?: number; fee?: number; inBill?: boolean; address?: string; error?: string }; shipping?: { label: string; base: number | null; discount: number } } & Omit<FulfillmentRow, "_id" | "method" | "status" | "payment" | "end" | "items">;
 const thaiToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-const statuses = [{ key: "new", label: "ใหม่" }, { key: "contacted", label: "ติดต่อแล้ว" }, { key: "confirmed", label: "ยืนยันแล้ว" }, { key: "cancelled", label: "ยกเลิก" }];
+const statuses = [{ key: "new", label: "ใหม่" }, { key: "contacted", label: "ติดต่อแล้ว" }, { key: "confirmed", label: "ยืนยันแล้ว" }, { key: "cancelled", label: "ยกเลิก" }, { key: "damaged", label: "ชำรุด" }];
 const methodLabel = (value: string) => value === "pickup" ? "รับเองที่ร้าน" : value === "ems" ? "ไปรษณีย์ / EMS" : "แมสเซนเจอร์";
 const paginationItems = (page: number, pageCount: number): (number | "ellipsis-start" | "ellipsis-end")[] => {
   if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
@@ -31,17 +31,23 @@ const paginationItems = (page: number, pageCount: number): (number | "ellipsis-s
   return items;
 };
 
-export default function BookingRequests({ initial, store, permissions, selected, unitChoices, finePerDay = 0, page, pageCount, total, statusCounts, filter: initialFilter, query: initialQuery, period: initialPeriod }: { initial: RequestRow[]; store: StoreInfo; permissions: Permission[]; selected: string; unitChoices: Record<number, UnitChoice[]>; finePerDay?: number; page: number; pageCount: number; total: number; statusCounts: Record<string, number>; filter: string; query: string; period: string }) {
+export default function BookingRequests({ initial, store, permissions, selected, unitChoices, finePerDay = 0, page, pageCount, total: listTotal, statusCounts, filter: initialFilter, query: initialQuery, period: initialPeriod }: { initial: RequestRow[]; store: StoreInfo; permissions: Permission[]; selected: string; unitChoices: Record<number, UnitChoice[]>; finePerDay?: number; page: number; pageCount: number; total: number; statusCounts: Record<string, number>; filter: string; query: string; period: string }) {
   const router = useRouter();
   const canPrice = permissions.includes("pricing"), canPay = permissions.includes("payments");
   const [payForm, setPayForm] = useState<{ id: string; paid: boolean; day: string; reason: string } | null>(null);
   const [rows, setRows] = useState(initial); const [choices, setChoices] = useState(unitChoices); const [filter, setFilterState] = useState(initialFilter); const [busy, setBusy] = useState<string | null>(null); const [error, setError] = useState("");
   const [detailId, setDetailId] = useState<string | null>(initial.find(row => row._id === selected)?._id || initial[0]?._id || null);
   const [query, setQuery] = useState(initialQuery); const [period, setPeriodState] = useState(initialPeriod); const [, setCutoff] = useState("");
+  const [isComposing, setIsComposing] = useState(false);
   const [quoteRow, setQuoteRow] = useState<RequestRow | null>(null); const [quote, setQuote] = useState<Quote | null>(null); const [savingQuote, setSavingQuote] = useState(false);
   const [deleteRow, setDeleteRow] = useState<RequestRow | null>(null);
-  const refunds = rows.filter(awaitingRefund).length, late = rows.filter(row => row.lateDays).length, clash = rows.filter(row => row.risks?.length || row.clashes?.length).length;
+  const refunds = statusCounts.refund || 0, late = statusCounts.late || 0, clash = statusCounts.clash || 0, damaged = statusCounts.damaged || 0;
   const pageRows = rows, currentPage = page;
+  useEffect(() => {
+    if (!selected) return;
+    const timer = window.setTimeout(() => setDetailId(selected), 0);
+    return () => window.clearTimeout(timer);
+  }, [selected]);
   const navigate = useCallback((next: { page?: number; status?: string; q?: string; period?: string }) => {
     const params = new URLSearchParams();
     const nextPage = next.page ?? currentPage;
@@ -57,20 +63,24 @@ export default function BookingRequests({ initial, store, permissions, selected,
   const setFilter = (value: string) => { setFilterState(value); navigate({ page: 1, status: value }); };
   const setPeriod = (value: string) => { setPeriodState(value); navigate({ page: 1, period: value }); };
   const setPage = (value: number | ((current: number) => number)) => navigate({ page: typeof value === "function" ? value(currentPage) : value });
-  const visible = { length: total };
+  const total = statusCounts.all ?? listTotal;
+  const visible = { length: listTotal };
   useEffect(() => {
     let active = true;
     if (!initial.length) return () => { active = false; };
     void fetch("/api/admin/bookings/enrichment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: initial.map(row => row._id) }) }).then(async response => response.ok ? response.json() : null).then(data => {
       if (!active || !data) return;
       const details = new Map<string, { suggestedUnits?: string[]; risks?: unknown[]; clashes?: unknown[] }>((data.rows || []).map((row: { id: string; suggestedUnits?: string[]; risks?: unknown[]; clashes?: unknown[] }) => [row.id, row]));
-      setRows(current => current.map(row => { const extra = details.get(row._id); return extra ? { ...row, ...(extra.suggestedUnits ? { suggestedUnits: extra.suggestedUnits } : {}), ...(extra.risks ? { risks: extra.risks } : {}), ...(extra.clashes ? { clashes: extra.clashes } : {}) } as RequestRow : row; }));
+      setRows(current => {
+        const currentIds = new Set(current.map(row => row._id));
+        const source = [...current, ...initial.filter(row => !currentIds.has(row._id))];
+        return source.map(row => { const extra = details.get(row._id); return extra ? { ...row, suggestedUnits: extra.suggestedUnits || [], risks: extra.risks || [], clashes: extra.clashes || [] } as RequestRow : row; });
+      });
+      if (selected) setDetailId(selected);
       setChoices(data.unitChoices || {});
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [initial]);
-  // Search is submitted after a short pause so each keystroke does not trigger a full navigation.
-  useEffect(() => { if (query === initialQuery) return; const timer = window.setTimeout(() => navigate({ page: 1, q: query }), 350); return () => window.clearTimeout(timer); }, [query, initialQuery, navigate]);
+  }, [initial, selected]);
   useEffect(() => {
     const layout = document.querySelector<HTMLElement>(".bookings-inbox-layout"), list = layout?.querySelector<HTMLElement>(".bookings-inbox-list"), panel = layout?.querySelector<HTMLElement>(".bookings-detail-panel");
     if (!layout || !list || !panel) return;
@@ -83,7 +93,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
     };
     place(); window.addEventListener("resize", place); return () => window.removeEventListener("resize", place);
   }, [detailId, currentPage, rows.length]);
-  const detail = detailId ? rows.find(row => row._id === detailId) || null : null;
+  const detail = (detailId ? rows.find(row => row._id === detailId) : null) || (selected ? rows.find(row => row._id === selected) || initial.find(row => row._id === selected) : null);
   const statusLabel = (key: string) => statuses.find(status => status.key === key)?.label || key;
   const [copied, setCopied] = useState("");
   async function post(body: Record<string, unknown>) { const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "ทำรายการไม่สำเร็จ"); return data; }
@@ -142,8 +152,9 @@ export default function BookingRequests({ initial, store, permissions, selected,
       <div><span className="bookings-eyebrow">BOOKING INBOX</span><h1>คำขอจองจากหน้าร้าน</h1><p>คำขอใหม่ยังไม่ใช่การยืนยันจอง กรุณาตรวจสอบคิวและติดต่อยืนยันกับลูกค้า</p></div><Link href="/admin/bookings/new" className="bookings-new-button">+ สร้างรายการใหม่</Link>
       <div className="bookings-inbox-stats" aria-label="จำนวนคำขอตามสถานะ"><button type="button" className={filter === "all" ? "is-active" : ""} onClick={() => setFilter("all")}><span>ทั้งหมด</span><strong>{total.toLocaleString("th-TH")}</strong><small>รายการ</small></button>{statuses.map(status => <button type="button" key={status.key} className={filter === status.key ? "is-active is-" + status.key : "is-" + status.key} onClick={() => setFilter(status.key)}><span>{status.label}</span><strong>{(statusCounts[status.key] || 0).toLocaleString("th-TH")}</strong><small>รายการ</small></button>)}<button type="button" className={filter === "refund" ? "is-active is-refund" : refunds ? "is-refund has-alert" : "is-refund"} onClick={() => setFilter("refund")}><span>รอคืนมัดจำ</span><strong>{refunds.toLocaleString("th-TH")}</strong><small>รายการ</small></button><button type="button" className={filter === "late" ? "is-active is-late" : late ? "is-late has-danger" : "is-late"} onClick={() => setFilter("late")}><span>คืนช้า</span><strong>{late.toLocaleString("th-TH")}</strong><small>รายการ</small></button><button type="button" className={filter === "clash" ? "is-active is-late" : clash ? "is-late has-danger" : "is-late"} onClick={() => setFilter("clash")}><span>กระทบคิว</span><strong>{clash.toLocaleString("th-TH")}</strong><small>รายการ</small></button></div>
     </header>
+    <div className="bookings-inbox-filters"><button type="button" className={filter === "damaged" ? "is-active is-damaged" : damaged ? "is-damaged has-danger" : "is-damaged"} onClick={() => setFilter("damaged")}>ชำรุด <b>{damaged}</b></button></div>
     {error && <p className="admin-error" role="alert">{error}</p>}
-    <div className="bookings-inbox-toolbar"><label className="bookings-search"><Icon name="search" /><input type="search" placeholder="ค้นหาเลขคำขอ ชื่อลูกค้า หรือสินค้า" value={query} onChange={event => setQuery(event.target.value)} /></label><label className="bookings-period"><Icon name="calendar" /><select value={period} onChange={event => { const value = event.target.value; setPeriod(value); setCutoff(value === "all" ? "" : new Date(Date.now() - Number(value) * 86400000).toISOString()); }}><option value="all">ทุกช่วงเวลา</option><option value="7">7 วันล่าสุด</option><option value="30">30 วันล่าสุด</option></select></label><button type="button" className="bookings-refresh" onClick={() => window.location.reload()} aria-label="รีเฟรชคำขอ"><Icon name="success" /></button></div>
+    <div className="bookings-inbox-toolbar"><label className="bookings-search"><Icon name="search" /><input type="search" placeholder="ค้นหาเลขคำขอ ชื่อลูกค้า หรือสินค้า" value={query} onChange={event => setQuery(event.target.value)} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} onKeyDown={event => { if (event.key === "Enter" && !isComposing) { event.preventDefault(); navigate({ page: 1, q: query }); } }} /></label><label className="bookings-period"><Icon name="calendar" /><select value={period} onChange={event => { const value = event.target.value; setPeriod(value); setCutoff(value === "all" ? "" : new Date(Date.now() - Number(value) * 86400000).toISOString()); }}><option value="all">ทุกช่วงเวลา</option><option value="7">7 วันล่าสุด</option><option value="30">30 วันล่าสุด</option></select></label><button type="button" className="bookings-refresh" onClick={() => window.location.reload()} aria-label="รีเฟรชคำขอ"><Icon name="success" /></button></div>
     <div className="bookings-inbox-layout">
       <section className="bookings-inbox-list" aria-label="รายการคำขอจอง">
         <div className="bookings-inbox-filters"><button type="button" className={filter === "all" ? "is-active" : ""} onClick={() => setFilter("all")}>ทั้งหมด <b>{rows.length}</b></button>{statuses.map(status => <button type="button" key={status.key} className={filter === status.key ? "is-active" : ""} onClick={() => setFilter(status.key)}>{status.label} <b>{rows.filter(row => row.status === status.key).length}</b></button>)}<button type="button" className={filter === "refund" ? "is-active" : ""} onClick={() => setFilter("refund")}>รอคืนมัดจำ <b>{refunds}</b></button><button type="button" className={filter === "late" ? "is-active" : ""} onClick={() => setFilter("late")}>คืนช้า <b>{late}</b></button><button type="button" className={filter === "clash" ? "is-active" : ""} onClick={() => setFilter("clash")}>กระทบคิว <b>{clash}</b></button></div>
@@ -163,7 +174,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
         {detail.status !== "cancelled" && <div className="bookings-status-steps" aria-label="ความคืบหน้าคำขอ">{statuses.slice(0, 3).map((status, index) => <div key={status.key} className={statuses.findIndex(item => item.key === detail.status) >= index ? "is-current" : ""}><span>{index + 1}</span><small>{status.label}</small></div>)}</div>}
         <div className="bookings-detail-section"><Icon name="users" /><div><h3>ข้อมูลลูกค้า</h3><strong>{detail.name}</strong><a href={"tel:" + detail.phone.replace(/[^+\d]/g, "")}>{detail.phone}</a>{detail.address && <p>{detail.address}</p>}{safeUrl(detail.pin) && <a href={safeUrl(detail.pin)} target="_blank" rel="noopener noreferrer">เปิดหมุดแผนที่</a>}</div></div>
         <div className="bookings-detail-section"><Icon name="calendar" /><div><h3>ช่วงวันเช่า</h3><strong>{dateLabel(detail.start)} – {dateLabel(detail.end)}</strong><p>{detail.days} วัน | {(detail.shipping?.label || methodLabel(detail.method))}</p>{detail.method === "messenger" && detail.delivery && <p className="bookings-line-state">{detail.delivery.error ? `ค่าส่งแมส: คำนวณอัตโนมัติไม่ได้ (${detail.delivery.error})` : `ค่าส่งแมส ${money(detail.delivery.fee ?? 0)} บาท · ${detail.delivery.km} กม.${detail.delivery.inBill ? " · รวมในบิล" : " · ลูกค้าจ่ายแมสปลายทาง"}`}</p>}</div></div>
-        <div className="bookings-detail-section"><Icon name="box" /><div><h3>สินค้า</h3><div className="bookings-detail-products">{detail.items.map(item => <div key={item.id}>{item.image && <Image unoptimized src={item.image} alt="" width={44} height={56} />}<span><strong>{item.sku || item.name}</strong><small>{item.name}</small></span></div>)}</div></div></div>
+        <div className="bookings-detail-section"><Icon name="box" /><div><h3>สินค้า</h3><div className="bookings-detail-products">{detail.items.map(item => <div key={`${item.id}:${item.variantId || "legacy"}`}>{item.image && <Image unoptimized src={item.image} alt="" width={44} height={56} />}<span><strong>{item.sku || item.name}</strong><small>{item.name}{item.color || item.size ? ` · ${item.color || ""}${item.color && item.size ? " / " : ""}${item.size || ""}` : ""}</small></span></div>)}</div></div></div>
         <div className="bookings-detail-section"><Icon name="booking" /><div className="bookings-detail-amount"><h3>ยอดประมาณการ</h3><strong>{detail.estimatedTotal === null ? "สอบถามราคา" : money(detail.estimatedTotal) + " บาท"}</strong><p>ค่าจัดส่ง {money(detail.deliveryFee)} บาท{detail.shipping?.discount ? ` · ส่วนลดค่าส่ง ${money(detail.shipping.discount)} บาท (โปรส่งฟรี)` : ""}</p>{detail.penalties?.map(item => <p className="bookings-penalty-line" key={item.id}>ค่าปรับ {money(item.amount)} บาท · {item.reason}</p>)}</div></div>
         {detail.discountCode && <div className="bookings-detail-section"><Icon name="booking" /><div><h3>โค้ดส่วนลดจากลูกค้า</h3><strong>{detail.discountCode}</strong><p>ระบบตรวจสอบโค้ดแล้ว ร้านจะนำไปคำนวณในใบสรุป</p></div></div>}
         {detail.note && <div className="bookings-detail-section"><Icon name="chat" /><div><h3>หมายเหตุจากลูกค้า</h3><p>{detail.note}</p></div></div>}
