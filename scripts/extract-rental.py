@@ -1,8 +1,8 @@
 from zipfile import ZipFile
 import xml.etree.ElementTree as E
 from pathlib import Path
-import json,hashlib
-source=Path('backup/Rental.CharmBless.xlsx'); ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+import json,hashlib,sys
+source=Path(sys.argv[1]) if len(sys.argv)>1 else Path('backup/Rental.CharmBless.xlsx'); ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 with ZipFile(source) as z:
  strings=[''.join(t.itertext()) for t in E.fromstring(z.read('xl/sharedStrings.xml')).findall('s:si',ns)]
  sheets=[]
@@ -26,6 +26,6 @@ with ZipFile(source) as z:
    if cells or formulas:rows.append({'row':int(r.attrib['r']),'cells':cells,'formulas':formulas,'types':types,'hyperlinks':links})
   sheets.append({'name':sheet.attrib['name'],'rows':rows})
  manifest={'file':source.name,'sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'sheets':sheets}
- output=Path('.local/rental-import/source.json');output.parent.mkdir(parents=True,exist_ok=True)
+ output=Path(sys.argv[2]) if len(sys.argv)>2 else Path('.local/rental-import/source.json');output.parent.mkdir(parents=True,exist_ok=True)
  output.write_text(json.dumps(manifest,ensure_ascii=False))
  print(json.dumps({'file':str(output),'sheets':{s['name']:len(s['rows']) for s in sheets}},ensure_ascii=False))

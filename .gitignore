@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Private migration sources and database backups
 /.local/
+
+# Raw sheet exports with customer names, phones and addresses
+/backup/

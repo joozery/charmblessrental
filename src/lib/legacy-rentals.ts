@@ -7,7 +7,9 @@ import { getStoreSettings } from "./store-settings";
 // Rentals imported from the old sheet (`rentals` + one `rentalItems` row per piece). They keep holding their pieces
 // in the queue until the shop marks them returned or cancelled. The sheet's dates follow the shop's chart, as in
 // planRental(): returnDate is the day after the last day of use, and the piece is free again `gap` days after that.
-export const legacyOpen = ["รอชำระเงิน", "รอจัดส่ง", "จัดส่งแล้ว"];
+// The sheet flips "รอจัดส่ง" to "เกินกำหนดส่ง" once the ship date passes, so those still hold their pieces until the
+// return date and gap run out (legacyHolds drops them after that).
+export const legacyOpen = ["รอชำระเงิน", "รอจัดส่ง", "จัดส่งแล้ว", "เกินกำหนดส่ง"];
 // Rentals due to ship before this day were sent from the old sheet; later ones go out from the to-ship page.
 export const legacyShipFrom = "2026-10-27";
 export type LegacyRental = {
