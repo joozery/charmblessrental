@@ -61,9 +61,9 @@ export default function Home() {
   }).sort((a,b) => sort === "name" ? a.thai.localeCompare(b.thai,"th") : sort === "new" ? b.id-a.id : a.id-b.id);
   function productCard(p: Product, featured = false) { return (
     <article className="shop-card" key={p.id}>
-      <div className="shop-card-image"><Link href={`/products/${p.image}`} aria-label={`ดู ${p.thai}`}><FashionPhoto image={p.images[0]} label={p.thai} /></Link>{featured && <span className="shop-badge">แนะนำ</span>}</div>
-      <div className="shop-card-info"><h3><Link href={`/products/${p.image}`}>{p.thai}</Link></h3><p className="shop-price">{(tier => <><strong>{tier ? `฿${tier.price.toLocaleString("th-TH")}` : "สอบถามราคา"}</strong>{tier && <span> / {tier.days} วัน</span>}</>)(startingTier(p.pricing))}</p>
-      <Link href={`/products/${p.image}`} className="product-details">ดูรายละเอียด <UiIcon name="arrowRight" /></Link></div>
+      <div className="shop-card-image"><Link href={`/products/${p.id}`} aria-label={`ดู ${p.thai}`}><FashionPhoto image={p.images[0]} label={p.thai} /></Link>{featured && <span className="shop-badge">แนะนำ</span>}</div>
+      <div className="shop-card-info"><h3><Link href={`/products/${p.id}`}>{p.thai}</Link></h3><p className="shop-price">{(tier => <><strong>{tier ? `฿${tier.price.toLocaleString("th-TH")}` : "สอบถามราคา"}</strong>{tier && <span> / {tier.days} วัน</span>}</>)(startingTier(p.pricing))}</p>
+      <Link href={`/products/${p.id}`} className="product-details">ดูรายละเอียด <UiIcon name="arrowRight" /></Link></div>
     </article>
   ); }
   return (<>

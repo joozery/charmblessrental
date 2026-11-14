@@ -2,7 +2,7 @@ import { unitsOf, type Product, type ProductVariant } from "@/lib/products";
 import { isProductImage } from "@/lib/product-images";
 import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
 import { audit, diff } from "@/lib/audit";
-import { createProduct, createProductCategory, createProductColor, getProductCategories, getProducts, mergeProducts, resetProductColors, updateProduct, updateProductColor, type ProductFields, type ProductMergeRow } from "@/lib/product-store";
+import { convertProduct, createProduct, createProductCategory, createProductColor, getProductCategories, getProducts, mergeProducts, migrateProductSkuReferences, resetProductColors, updateProduct, updateProductColor, type ProductFields, type ProductMergeRow } from "@/lib/product-store";
 import { database } from "@/lib/mongodb";
 import { revalidateTag } from "next/cache";
 import { cleanPricing, validPricing } from "@/lib/pricing";
@@ -36,11 +36,11 @@ export async function POST(request: Request) {
   if (!body || typeof body !== "object") return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   if (body.action === "product.merge") {
     const text = (key: string) => typeof body[key] === "string" ? body[key].trim() : "";
-    const sku = text("sku").toUpperCase(), name = text("name"), category = text("category");
+    const sku = text("sku").toUpperCase().replace(/\./g, ""), name = text("name"), category = text("category");
     const rawRows = (Array.isArray(body.rows) ? body.rows : []) as Record<string, unknown>[];
     const rows = rawRows.map(row => ({ sourceProductId: Number(row.sourceProductId), color: typeof row.color === "string" ? row.color.trim() : "", colorCode: typeof row.colorCode === "string" ? row.colorCode.trim().toUpperCase() : "", size: typeof row.size === "string" ? row.size.trim() : "", cost: row.cost === null || row.cost === undefined ? null : Number(row.cost) }));
     const categories = await getProductCategories(), categoryLabels = Object.fromEntries(categories.map(item => [item, item]));
-    const validRows = rows.length >= 2 && rows.length <= 100 && new Set(rows.map(row => row.sourceProductId)).size === rows.length && rows.every(row => Number.isSafeInteger(row.sourceProductId) && row.sourceProductId > 0 && row.color.length <= 100 && row.size.length <= 100 && /^[A-Z0-9]{0,2}$/.test(row.colorCode) && (row.color || row.size) && (row.cost === null || typeof row.cost === "number" && Number.isFinite(row.cost) && row.cost >= 0)) && new Set(rows.map(row => `${row.colorCode}:${row.size.toUpperCase()}`)).size === rows.length;
+    const validRows = rows.length >= 1 && rows.length <= 100 && new Set(rows.map(row => row.sourceProductId)).size === rows.length && rows.every(row => Number.isSafeInteger(row.sourceProductId) && row.sourceProductId > 0 && row.color.length <= 100 && row.size.length <= 100 && /^[A-Z0-9]{0,2}$/.test(row.colorCode) && (row.color || row.size) && (row.cost === null || typeof row.cost === "number" && Number.isFinite(row.cost) && row.cost >= 0)) && new Set(rows.map(row => `${row.colorCode}:${row.size.toUpperCase()}`)).size === rows.length;
     if (!name || name.length > 3000 || !Object.hasOwn(categoryLabels, category) || (sku && !/^\S{1,50}$/.test(sku)) || !validRows) return Response.json({ error: "กรุณาตรวจสอบข้อมูลสินค้าที่จะรวม" }, { status: 400 });
     const db = await database(), sources = await db.collection<Product>("products").find({ id: { $in: rows.map(row => row.sourceProductId) }, deletedAt: { $exists: false } }, { projection: { _id: 0 } }).toArray();
     if (sources.length !== rows.length) return Response.json({ error: "พบสินค้าต้นทางบางรายการไม่อยู่แล้ว กรุณาโหลดหน้าใหม่" }, { status: 409 });
@@ -51,14 +51,16 @@ export async function POST(request: Request) {
       customPricing: first.customPricing ?? null, shippingFee: first.shippingFee ?? null, gapDays: first.gapDays ?? null, variants: [],
     };
     try {
-      const merged = await mergeProducts(fields, rows as ProductMergeRow[], sku || undefined);
+      const merged = rows.length === 1 ? await convertProduct(fields, rows[0] as ProductMergeRow) : await mergeProducts(fields, rows as ProductMergeRow[], sku || undefined);
       await audit(request, auth.admin, { action: "product.merge", targetType: "product", targetId: String(merged.id), summary: `รวมสินค้า ${rows.map(row => sources.find(source => source.id === row.sourceProductId)?.sku || row.sourceProductId).join(", ")} เป็น ${merged.code}`, changes: [{ field: "sources", before: rows.map(row => row.sourceProductId), after: merged.id }] });
       revalidateTag("catalog", { expire: 0 });
       return Response.json({ products: await getProducts() });
     } catch (error) {
+      console.error("[admin.products.merge]", error);
       if (error instanceof Error && error.message === "MERGE_HAS_BOOKINGS") return Response.json({ error: "รวมไม่ได้ เพราะสินค้าต้นทางมีรายการจองที่ยังไม่ยกเลิก" }, { status: 409 });
       if (error instanceof Error && error.message === "SKU_TAKEN") return Response.json({ error: "รหัสสินค้าแม่นี้ถูกใช้แล้ว กรุณาใช้รหัสอื่น" }, { status: 409 });
       if (error instanceof Error && error.message === "MERGE_SOURCE_NOT_FOUND") return Response.json({ error: "สินค้าต้นทางเปลี่ยนแปลง กรุณาโหลดหน้าใหม่" }, { status: 409 });
+      if (error && typeof error === "object" && "code" in error && error.code === 11000) return Response.json({ error: "รวมไม่ได้ เพราะมีรหัสสินค้า/รหัสชิ้นซ้ำ กรุณาเว้นรหัสสินค้าใหม่เพื่อให้ระบบสร้างรหัสอัตโนมัติ" }, { status: 409 });
       return Response.json({ error: "รวมสินค้าไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
     }
   }
@@ -102,8 +104,8 @@ export async function POST(request: Request) {
   const validAmount = (value: unknown) => value === null || typeof value === "number" && Number.isFinite(value) && value >= 0;
   const images = Array.isArray(body.images) ? body.images.filter((image: unknown) => typeof image === "string" && image) : [];
   const rawVariants = (Array.isArray(body.variants) ? body.variants : []) as Record<string, unknown>[];
-  const variants = rawVariants.map((variant: Record<string, unknown>, index: number) => ({ id: typeof variant.id === "string" ? variant.id.trim().toLowerCase() : `v${index + 1}`, color: typeof variant.color === "string" ? variant.color.trim() : "", colorCode: typeof variant.colorCode === "string" ? variant.colorCode.trim().toUpperCase() : "", size: typeof variant.size === "string" ? variant.size.trim() : "", images: Array.isArray(variant.images) ? variant.images.filter((image: unknown) => typeof image === "string" && image) : [], count: Number(variant.count), cost: variant.cost === null || variant.cost === undefined ? null : Number(variant.cost) }));
-  const validVariants = variants.length >= 1 && variants.length <= 100 && new Set(variants.map(variant => variant.id)).size === variants.length && new Set(variants.map(variant => `${variant.colorCode}:${variant.size.toUpperCase()}`)).size === variants.length && variants.every(variant => /^[a-z0-9-]{1,40}$/.test(variant.id) && /^[A-Z0-9]{0,2}$/.test(variant.colorCode) && (variant.color || variant.size) && variant.color.length <= 100 && variant.size.length <= 100 && variant.images.length <= 12 && variant.images.every(isProductImage) && Number.isSafeInteger(variant.count) && variant.count >= 1 && variant.count <= 50 && validAmount(variant.cost));
+  const variants = rawVariants.map((variant: Record<string, unknown>, index: number) => ({ id: typeof variant.id === "string" ? variant.id.trim().toLowerCase() : `v${index + 1}`, color: typeof variant.color === "string" ? variant.color.trim() : "", colorCode: typeof variant.colorCode === "string" ? variant.colorCode.trim().toUpperCase() : "", size: typeof variant.size === "string" ? variant.size.trim() : "", images: Array.isArray(variant.images) ? variant.images.filter((image: unknown) => typeof image === "string" && image) : [], count: Number(variant.count), cost: variant.cost === null || variant.cost === undefined ? null : Number(variant.cost), costMixed: variant.costMixed === true }));
+  const validVariants = variants.length >= 1 && variants.length <= 100 && new Set(variants.map(variant => variant.id)).size === variants.length && new Set(variants.map(variant => `${variant.colorCode}:${variant.size.toUpperCase()}`)).size === variants.length && variants.every(variant => /^[a-z0-9-]{1,40}$/.test(variant.id) && /^[A-Z0-9]{0,2}$/.test(variant.colorCode) && (variant.color || variant.size) && variant.color.length <= 100 && variant.size.length <= 100 && variant.images.length <= 12 && variant.images.every(isProductImage) && Number.isSafeInteger(variant.count) && variant.count >= (body.id === undefined ? 1 : 0) && variant.count <= 50 && validAmount(variant.cost));
   if ((sku && !/^\S{1,50}$/.test(sku)) || !text("name") || !Object.hasOwn(categoryLabels, text("category")) || !validAmount(body.dailyRate) || !validAmount(body.deposit) || typeof body.depositRequired !== "boolean" || typeof body.active !== "boolean" || ["name", "color", "size", "description"].some(key => text(key).length > 3000) || !images.length || images.length > 12 || !images.every(isProductImage) || (body.id !== undefined && (!Number.isSafeInteger(body.id) || body.id < 1)) || (rawVariants.length > 0 && !validVariants)) return Response.json({ error: "ข้อมูลสินค้าไม่ถูกต้อง หรือรหัสสินค้าไม่ถูกต้อง" }, { status: 400 });
   if (!(body.shippingFee === null || body.shippingFee === undefined || (Number.isSafeInteger(body.shippingFee) && body.shippingFee >= 0 && body.shippingFee <= 10000))) return Response.json({ error: "ค่าส่งเฉพาะสินค้าต้องเป็นจำนวนเต็มบาท" }, { status: 400 });
   if (!(body.gapDays === null || body.gapDays === undefined || (Number.isSafeInteger(body.gapDays) && body.gapDays >= 0 && body.gapDays <= 14))) return Response.json({ error: "Gap ของสินค้าต้องเป็นจำนวนเต็ม 0–14 วัน" }, { status: 400 });
@@ -114,7 +116,7 @@ export async function POST(request: Request) {
     color: text("color"), size: text("size"), dailyRate: body.dailyRate, deposit: body.deposit, depositRequired: body.depositRequired,
     description: text("description"), notes: text("description"), images: [...new Set<string>(images)], active: body.active,
     customPricing: body.customPricing?.tiers.length ? cleanPricing(body.customPricing) : null, shippingFee: body.shippingFee ?? null, gapDays: body.gapDays ?? null,
-    ...(validVariants ? { variants: variants.map(({ id, color, colorCode, size, images }): ProductVariant => ({ id, color, colorCode, size, images: [...new Set(images)] })) } : {}),
+    ...(validVariants ? { variants: variants.map(({ id, color, colorCode, size, images, cost }): ProductVariant => ({ id, color, colorCode, size, images: [...new Set(images)], cost })) } : {}),
   };
   const db = await database();
   try {
@@ -125,16 +127,27 @@ export async function POST(request: Request) {
     } else {
       const current = await db.collection<Product>("products").findOne({ id: body.id }, { projection: { _id: 0, sku: 1 } });
       const skuChanged = !!current && !!sku && sku !== current.sku;
-      const activeBookings = skuChanged ? await db.collection<{ _id: string }>("bookingRequests").countDocuments({ status: { $ne: "cancelled" }, "items.id": body.id }) : 0;
-      if (activeBookings && body.confirmSkuChange !== true) return Response.json({ code: "PRODUCT_IN_USE", bookingCount: activeBookings, error: `สินค้านี้มีรายการจองที่ยังไม่ยกเลิก ${activeBookings} รายการ หากเปลี่ยนรหัส รายการจองเดิมจะยังเก็บรหัสเดิมไว้ ต้องการดำเนินการต่อหรือไม่?` }, { status: 409 });
-      const before = await updateProduct(body.id, fields, sku || undefined);
+      const before = await updateProduct(body.id, fields, sku || undefined, validVariants ? variants : undefined);
+      const migrated = skuChanged ? await migrateProductSkuReferences(body.id, before.sku || "", sku) : { bookings: 0, rentalItems: 0 };
       const changes = diff({ ...before, sku: before.sku }, { ...fields, sku: sku || before.sku }, ["sku", "name", "category", "color", "size", "dailyRate", "customPricing", "deposit", "depositRequired", "shippingFee", "gapDays", "active", "description", "images"]);
-      if (changes.length) await audit(request, auth.admin, { action: changes.some(change => ["dailyRate", "customPricing", "deposit"].includes(change.field)) ? "product.price" : "product.update", targetType: "product", targetId: String(body.id), summary: `แก้ไขสินค้า ${before.sku || ""} ${fields.name}`.trim(), changes });
+      const auditChanges = migrated.bookings || migrated.rentalItems
+        ? [...changes, { field: "skuReferences", before: { bookings: migrated.bookings, rentalItems: migrated.rentalItems }, after: { sku } }]
+        : changes;
+      if (auditChanges.length) {
+        await audit(request, auth.admin, {
+          action: changes.some(change => ["dailyRate", "customPricing", "deposit"].includes(change.field)) ? "product.price" : "product.update",
+          targetType: "product",
+          targetId: String(body.id),
+          summary: `แก้ไขสินค้า ${before.sku || ""} ${fields.name}`.trim(),
+          changes: auditChanges,
+        });
+      }
     }
     revalidateTag("catalog", { expire: 0 });
     return Response.json({ products: await getProducts() });
   } catch (error) {
     if (error instanceof Error && error.message === "SKU_TAKEN") return Response.json({ error: "รหัสสินค้านี้ถูกใช้แล้ว กรุณาใช้รหัสอื่น" }, { status: 409 });
+    if (error instanceof Error && error.message === "VARIANT_HAS_STOCK") return Response.json({ error: "ลบสี/ไซซ์นี้ไม่ได้ เพราะยังมีชิ้นสินค้าอยู่ กรุณาเลิกใช้หรือลบชิ้นสินค้าก่อน" }, { status: 409 });
     if (error instanceof Error && error.message === "PRODUCT_NOT_FOUND") return Response.json({ error: "ไม่พบสินค้า กรุณาโหลดหน้าใหม่" }, { status: 404 });
     return Response.json({ error: "บันทึกไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
   }

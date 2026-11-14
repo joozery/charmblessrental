@@ -15,7 +15,7 @@ export type Product = {
   // Colour/size options of one product; each piece (unit) belongs to one of them through `variantId`.
   variants?: ProductVariant[];
 };
-export type ProductVariant = { id: string; color: string; colorCode?: string; size: string; images: string[]; stock?: number };
+export type ProductVariant = { id: string; color: string; colorCode?: string; size: string; images: string[]; stock?: number; cost?: number | null };
 // One physical piece of a product. `sku` is the piece code (A0002-03); the product's `sku` is the code shared by its pieces (A0002).
 // After a rental a piece goes inspection → washing (or repair) → available; only "available" may be sent to the next customer.
 export type UnitStatus = "available" | "rented" | "inspection" | "washing" | "repair" | "unavailable" | "retired";
@@ -30,7 +30,7 @@ export const prepStatuses: UnitStatus[] = ["inspection", "washing", "repair"];
 export const inService = (status: UnitStatus) => status !== "unavailable" && status !== "retired";
 // Products saved before pieces existed count as a single piece.
 export function unitsOf(p: Product): ProductUnit[] {
-  return p.units?.length ? p.units : [{ sku: p.sku || "", cost: p.cost ?? null, status: p.active === false ? "unavailable" : "available", note: "", addedAt: null, legacyProductId: p.id, legacyId: p.legacyId, legacyRevenue: p.legacyRevenue ?? null, legacyProfit: p.legacyProfit ?? null }];
+  return Array.isArray(p.units) ? p.units : [{ sku: p.sku || "", cost: p.cost ?? null, status: p.active === false ? "unavailable" : "available", note: "", addedAt: null, legacyProductId: p.id, legacyId: p.legacyId, legacyRevenue: p.legacyRevenue ?? null, legacyProfit: p.legacyProfit ?? null }];
 }
 export const variantsOf = (p: Product): ProductVariant[] => p.variants?.length ? p.variants : [{ id: "legacy", color: p.color || "", size: p.size || "", images: p.images || [] }];
 export const variantOf = (p: Product, variantId?: string) => variantsOf(p).find(variant => variant.id === variantId) || variantsOf(p)[0];
@@ -39,12 +39,17 @@ export const unitsForVariant = (p: Product, variantId?: string) => {
   const units = unitsOf(p);
   return units.filter(unit => target === "legacy" ? !unit.variantId || unit.variantId === "legacy" : unit.variantId === target);
 };
+// Variant stock must come from units assigned to that variant; aggregate stock cannot be copied to every colour.
+export const stockForVariant = (p: Product, variantId?: string) => {
+  if (!variantId || variantId === "legacy") return p.stock ?? unitsForVariant(p, "legacy").filter(unit => inService(unit.status)).length;
+  return unitsForVariant(p, variantId).filter(unit => inService(unit.status)).length;
+};
 export const categoryLabels: Record<string, string> = {
   dress: "ชุดออกงาน", winter: "เสื้อกันหนาว", jacket: "แจ็กเก็ต", boots: "รองเท้า",
   ...Object.fromEntries(["ชุดเซ็ต", "ขนเฟอร์", "เสื้อ", "หนัง", "ชุดเดรส", "สเวตเตอร์", "กางเกง", "JACKET", "ผ้าพันคอ", "กระเป๋า", "กล้อง", "รองเท้า", "หมวก", "กระโปรง", "โปรโมชั่น", "ฝากร้าน", "ค่าปรับ", "เครดิต", "การจ่ายเงิน"].map(c => [c,c])),
 };
 export function publicProduct(p: Product, shopPricing?: RentalPricing | null, extras?: ExtraDayRates): Product {
-  const variants = variantsOf(p).map(variant => ({ ...variant, images: variant.images.length ? variant.images : p.images, stock: unitsForVariant(p, variant.id).filter(unit => inService(unit.status)).length }));
+  const variants = variantsOf(p).map(variant => { const publicVariant = { ...variant }; delete publicVariant.cost; return { ...publicVariant, images: variant.images.length ? variant.images : p.images, stock: stockForVariant(p, variant.id) }; });
   const colors = [...new Set(variants.map(variant => variant.color).filter(Boolean))], sizes = [...new Set(variants.map(variant => variant.size).filter(Boolean))];
   return { id: p.id, name: p.name, thai: p.thai, category: p.category, color: colors.join(" / ") || p.color, dailyRate: p.dailyRate,
     image: p.image, images: p.images, tag: p.tag, description: p.description, active: p.active, stock: p.stock,

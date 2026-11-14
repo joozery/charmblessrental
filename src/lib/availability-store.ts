@@ -4,7 +4,7 @@ import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 import { lastUseDay, type Extension } from "./extension";
 import type { QueueBooking, QueueClash } from "./queue";
 import { legacyHolds, type LegacyHold } from "./legacy-rentals";
-import { inService, unitsForVariant, type Product } from "./products";
+import { inService, stockForVariant, unitsForVariant, type Product } from "./products";
 
 type Capacity = { productId: number; date: string; capacity: number };
 type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; variantId?: string; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
@@ -72,13 +72,13 @@ async function getQueueUncached(db: Db, productId: number, from: string, to: str
     const product = await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, units: 1, variants: 1 } });
     if (product?.variants?.length) {
       const units = unitsForVariant(product, variantId).filter(unit => inService(unit.status));
-      const scope = { id: variantId, unitSkus: new Set(units.map(unit => unit.sku)) };
+      const stock = stockForVariant(product, variantId), scope = { id: variantId, unitSkus: new Set(units.map(unit => unit.sku)) };
       const [capacities, reservations, firm] = await Promise.all([
         db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
         getReservationCounts(db, productId, from, to, exceptId, false, scope),
         getReservationCounts(db, productId, from, to, exceptId, true, scope),
       ]);
-      return queueDays(from, to, capacities.map(day => ({ ...day, capacity: Math.min(day.capacity, units.length) })), reservations, firm, units.length);
+      return queueDays(from, to, capacities.map(day => ({ ...day, capacity: Math.min(day.capacity, stock) })), reservations, firm, stock);
     }
   }
   const [capacities, reservations, firm, product] = await Promise.all([

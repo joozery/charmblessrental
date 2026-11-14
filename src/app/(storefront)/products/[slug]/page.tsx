@@ -8,13 +8,13 @@ type ProductPageProps = { params: Promise<{ slug: string }> };
 // Every product page is built ahead as static HTML; one added later renders on its first visit.
 export async function generateStaticParams() {
   const { products } = await getCatalog();
-  return products.map(product => ({ slug: product.image }));
+  return products.map(product => ({ slug: String(product.id) }));
 }
 
 async function ProductContent({ params }: ProductPageProps) {
   const { slug } = await params;
   const { products } = await getCatalog();
-  const product = products.find((item) => item.image === slug);
+  const product = products.find(item => String(item.id) === slug || item.image === slug);
   if (!product) notFound();
   return <ProductDetail product={product} />;
 }

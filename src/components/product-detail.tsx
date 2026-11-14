@@ -42,7 +42,7 @@ export default function ProductDetail({ product: p }: { product: Product }) {
         <details className="detail-calendar" open><summary>ดูวันว่างและวางแผนวันเช่า</summary><ProductCalendar productId={p.id} variantId={item.variantId} value={choice} onChange={setChoice} /></details>
         <details className="detail-terms"><summary>เงื่อนไขการเช่า & มัดจำ</summary><RentalRules rules={settings.rentalRules} /><p>จำนวนมัดจำและเงื่อนไขคืนมัดจำ กรุณาสอบถามร้านก่อนชำระเงิน</p><Link href="/#how-to-rent" className="text-link">อ่านวิธีเช่าทั้งหมด <Icon name="arrowRight" /></Link></details>
       </div></div>
-      <section className="detail-related"><h2>ลุคอื่นที่คุณอาจชอบ</h2><div>{products.filter(item => item.id !== p.id).slice(0, 8).map(item => <Link href={`/products/${item.image}`} key={item.id}><Image src={item.images[0]} alt={item.thai} width={240} height={360} /><h3>{item.thai}</h3></Link>)}</div></section>
+      <section className="detail-related"><h2>ลุคอื่นที่คุณอาจชอบ</h2><div>{products.filter(item => item.id !== p.id).slice(0, 8).map(item => <Link href={`/products/${item.id}`} key={item.id}><Image src={item.images[0]} alt={item.thai} width={240} height={360} /><h3>{item.thai}</h3></Link>)}</div></section>
     </main>
   </>;
 }

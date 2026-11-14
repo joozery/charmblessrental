@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { pageAdmin } from "@/lib/admin-auth";
 import { getProductCategories, getProductColors, getProducts } from "@/lib/product-store";
 import "./inventory.css";
+import "./inventory-variants.css";
+import "./inventory-variants-preview.css";
 import AdminProducts from "./products-manager";
 export const metadata = { title: "จัดการสินค้า | Charm Bless Admin", robots: { index: false, follow: false } };
 async function Content() {
