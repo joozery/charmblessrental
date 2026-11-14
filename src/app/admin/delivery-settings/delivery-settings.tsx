@@ -21,7 +21,7 @@ const slug = (label: string, taken: string[]) => { const base = label.toLowerCas
 
 function ShippingSettings({ initial, categories }: { initial: { options: ShippingOption[]; free: FreeShipping; schedule: ScheduleSettings; categoryRules: CategoryShippingRule[] }; categories: string[] }) {
   const [rows, setRows] = useState<OptionRow[]>(initial.options.map(option => ({ ...option, fee: String(option.fee) })));
-  const [free, setFree] = useState({ enabled: initial.free.enabled, minItems: String(initial.free.minItems) });
+  const [free, setFree] = useState({ enabled: initial.free.enabled, minItems: String(initial.free.minItems), discountAmount: String(initial.free.discountAmount ?? 50) });
   const [schedule, setSchedule] = useState(initial.schedule);
   const [categoryRules, setCategoryRules] = useState(initial.categoryRules);
   const dayInput = (value: number, change: (value: number) => void, label: string) => <label>{label}<input type="number" min="0" max="14" step="1" value={value} onChange={event => change(Math.max(0, Math.min(14, Math.round(Number(event.target.value) || 0))))} /></label>;
@@ -32,7 +32,7 @@ function ShippingSettings({ initial, categories }: { initial: { options: Shippin
     try {
       const options = rows.map(row => ({ ...row, id: row.id || slug(row.label, rows.map(item => item.id)), fee: Number(row.fee) }));
       if (options.some(option => !option.label.trim() || !Number.isFinite(option.fee) || option.fee < 0)) throw new Error("กรอกชื่อและราคาขนส่งให้ครบ");
-      await post({ action: "shipping", options, free: { enabled: free.enabled, minItems: Number(free.minItems) }, schedule, categoryRules });
+      await post({ action: "shipping", options, free: { enabled: free.enabled, minItems: Number(free.minItems), discountAmount: Number(free.discountAmount) }, schedule, categoryRules });
       setRows(options.map(option => ({ ...option, fee: String(option.fee) })));
       setNotice("บันทึกแล้ว ฟอร์มจองจะแสดงราคาขนส่งใหม่ภายในไม่กี่นาที");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); }
@@ -47,7 +47,7 @@ function ShippingSettings({ initial, categories }: { initial: { options: Shippin
       {dayInput(row.leadDays, leadDays => set(index, { leadDays }), "ส่งล่วงหน้า (วัน)")}
       <label className="is-wide">คำอธิบาย<input value={row.description} maxLength={200} onChange={event => set(index, { description: event.target.value })} placeholder="เช่น ถึงใน 1–2 วัน" /></label>
       <label className="delivery-check"><input type="checkbox" checked={row.enabled} onChange={event => set(index, { enabled: event.target.checked })} />เปิดให้เลือก</label>
-      <label className="delivery-check"><input type="checkbox" checked={row.standard} onChange={event => set(index, { standard: event.target.checked })} />แบบมาตรฐาน (ส่งฟรีเมื่อเข้าโปร)</label>
+      <label className="delivery-check"><input type="checkbox" checked={row.standard} onChange={event => set(index, { standard: event.target.checked })} />ร่วมโปรส่วนลดค่าส่ง</label>
       {rows.length > 1 && <button type="button" className="shipping-remove" onClick={() => setRows(rows.filter((_, at) => at !== index))}>ลบ</button>}
     </div>)}</div>
     <h2>กฎค่าส่งตามหมวดหมู่</h2>
@@ -66,9 +66,10 @@ function ShippingSettings({ initial, categories }: { initial: { options: Shippin
     <div className="delivery-grid">{dayInput(schedule.pickupLead, pickupLead => setSchedule({ ...schedule, pickupLead }), "รับที่ร้าน: เตรียมล่วงหน้า (วัน)")}{dayInput(schedule.messengerLead, messengerLead => setSchedule({ ...schedule, messengerLead }), "แมส: ส่งล่วงหน้า (วัน)")}{returnMethods.map(item => <span key={item.key}>{dayInput(schedule.gap[item.key], value => setSchedule({ ...schedule, gap: { ...schedule.gap, [item.key]: value } as Record<ReturnMethod, number> }), `Gap เมื่อ${item.label} (วัน)`)}</span>)}</div>
     <p className="delivery-help">ตัวอย่าง: ใช้งาน 19–28 พ.ย. ส่ง Flash ({rows.find(row => row.standard)?.leadDays ?? 3} วัน) คืนพัสดุ → {(() => { const plan = planRental("2026-11-19", "2026-11-28", rows.find(row => row.standard)?.leadDays ?? 3, schedule.gap.parcel); const d = (day: string) => `${Number(day.slice(8))}/${Number(day.slice(5, 7))}`; return `ส่ง ${d(plan.ship)} · คืน ${d(plan.returnDate)} · รับคิวใหม่ได้ ${d(plan.ready)}`; })()}</p>
     <h2>โปรส่งฟรี</h2>
-    <label className="delivery-check"><input type="checkbox" checked={free.enabled} onChange={event => setFree({ ...free, enabled: event.target.checked })} />เปิดโปรส่งฟรี</label>
+    <label className="delivery-check"><input type="checkbox" checked={free.enabled} onChange={event => setFree({ ...free, enabled: event.target.checked })} />เปิดโปรส่วนลดค่าส่ง</label>
     <label>เมื่อเช่าครบ (ตัว)<input type="number" min="1" max="20" step="1" value={free.minItems} onChange={event => setFree({ ...free, minItems: event.target.value })} /></label>
-    <p className="delivery-help">ส่งฟรีเฉพาะขนส่งที่ติ๊ก &ldquo;แบบมาตรฐาน&rdquo;{standard.length ? ` · ถ้าเลือกขนส่งอื่นหรือแมส ลดให้ ${Math.min(...standard)} บาท แล้วจ่ายส่วนต่าง` : " · ยังไม่มีขนส่งแบบมาตรฐานที่เปิดอยู่"}</p>
+    <label>ลดค่าส่ง (บาท)<input type="number" min="0" max="100000" step="1" value={free.discountAmount} onChange={event => setFree({ ...free, discountAmount: event.target.value })} /></label>
+    <p className="delivery-help">ลดตามจำนวนเงินที่กรอก เฉพาะขนส่งที่ติ๊ก “ร่วมโปรส่วนลดค่าส่ง”{standard.length ? ` · ขนส่งที่ไม่ร่วมโปรคิดราคาเต็ม` : " · ยังไม่มีขนส่งที่ร่วมโปรส่วนลดค่าส่ง"}</p>
     {error && <p className="admin-error" role="alert">{error}</p>}
     {notice && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
     <div className="rental-pricing-actions"><Button type="submit" variant="primary" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกขนส่ง"}</Button></div>

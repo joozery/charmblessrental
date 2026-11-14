@@ -1,0 +1,10 @@
+ .to-return-page .to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(4),
+  .to-return-page .to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(5),
+  .to-return-page .to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(8),
+  .to-return-page .to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(9) {
+    grid-column: 1 / -1;
+  }
+  .to-return-page .to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(6),
+  .to-return-page .to-ship-table tbody > tr:not(.to-ship-form-row) > td:nth-child(7) {
+    grid-column: auto;
+  }

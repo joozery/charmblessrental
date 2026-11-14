@@ -38,7 +38,7 @@ async function promoteWaitlistNow(db: Db, request: Request | null, origin: strin
   let promoted = 0;
   for (const row of waiting) {
     const range = blockRange(row);
-    const free = (await Promise.all([...new Set(row.items.map(item => item.id))].map(async id => (await getQueue(db, id, range.from, range.to, row._id)).every(day => day.remaining >= 1)))).every(Boolean);
+  const free = (await Promise.all(row.items.map(async (item: { id: number; variantId?: string }) => (await getQueue(db, item.id, range.from, range.to, row._id, false, item.variantId)).every(day => day.remaining >= 1)))).every(Boolean);
     if (!free) continue;
     const holdUntil = new Date(Date.now() + holdMinutes * 60000);
     const result = await bookings.updateOne({ _id: row._id, waitlist: { $exists: true } }, { $set: { holdUntil, promotedAt: new Date() }, $unset: { waitlist: "" } });

@@ -109,7 +109,6 @@ export async function mergeProducts(fields: ProductFields, rows: ProductMergeRow
   const sourceIds = rows.map(row => row.sourceProductId);
   const sources = await products(db).find({ id: { $in: sourceIds }, deletedAt: { $exists: false } }).sort({ id: 1 }).toArray();
   if (sources.length !== sourceIds.length) throw new Error("MERGE_SOURCE_NOT_FOUND");
-  if (await db.collection<{ _id: string }>("bookingRequests").findOne({ status: { $ne: "cancelled" }, "items.id": { $in: sourceIds } }, { projection: { _id: 1 } })) throw new Error("MERGE_HAS_BOOKINGS");
   const code = requestedSku || await nextProductCode(db), now = new Date();
   if (await skuTaken(db, code)) throw new Error("SKU_TAKEN");
   const variants = rows.map((row, index) => {
@@ -123,7 +122,9 @@ export async function mergeProducts(fields: ProductFields, rows: ProductMergeRow
     const variant = variants[index], unitCode = variantUnitCode(code, variant);
     return unitsOf(source).map(unit => {
       const number = (counters.get(unitCode) || 0) + 1; counters.set(unitCode, number);
-      return { ...unit, sku: pieceCode(unitCode, number), cost: row.cost, variantId: variant.id, legacyProductId: source.id };
+      // Keep the physical piece code stable. Existing bookings and legacy rentals
+      // may already point at this unitSku; only the parent product is changing.
+      return { ...unit, sku: unit.sku || pieceCode(unitCode, number), cost: row.cost, variantId: variant.id, legacyProductId: source.id };
     });
   });
   const idCounter = await db.collection<{ _id: string; sequence: number }>("counters").findOneAndUpdate(
@@ -133,6 +134,31 @@ export async function mergeProducts(fields: ProductFields, rows: ProductMergeRow
   const first = sources[0], images = variants[0]?.images || first.images || (first.image ? [first.image] : []);
   const product: Product = { ...fields, variants, images, image: images[0] || `rental-${id}`, sku: code, id, legacyId: `PD-${code}`, inventoryStatus: "อยู่ที่ร้าน", ...derived(units) };
   await products(db).insertOne(product);
+
+  // Move references before hiding the source products. Keep the old item
+  // snapshot (name/sku/image) in a booking so historical bills remain unchanged.
+  const variantBySource = new Map(rows.map((row, index) => [row.sourceProductId, variants[index].id]));
+  const bookingCollection = db.collection<{ _id: string; items?: { id: number; variantId?: string }[] }>("bookingRequests");
+  const bookings = await bookingCollection
+    .find({ "items.id": { $in: sourceIds } }, { projection: { _id: 1, items: 1 } }).toArray();
+  if (bookings.length) await bookingCollection.bulkWrite(bookings.map(booking => ({
+    updateOne: {
+      filter: { _id: booking._id },
+      update: { $set: { items: (booking.items || []).map(item => { const variantId = variantBySource.get(item.id); return variantId ? { ...item, id, variantId } : item; }) } },
+    },
+  })));
+
+  await db.collection("rentalItems").updateMany({ productId: { $in: sourceIds } }, { $set: { productId: id } });
+
+  const availability = db.collection<{ productId: number; date: string; capacity: number; updatedAt?: Date; updatedBy?: string }>("productAvailability");
+  const oldAvailability = await availability.find({ productId: { $in: sourceIds } }).toArray();
+  if (oldAvailability.length) {
+    const byDate = new Map<string, number>();
+    for (const row of oldAvailability) byDate.set(row.date, (byDate.get(row.date) || 0) + row.capacity);
+    await availability.deleteMany({ productId: { $in: sourceIds } });
+    await availability.insertMany([...byDate].map(([date, capacity]) => ({ productId: id, date, capacity, updatedAt: now })));
+  }
+
   await products(db).updateMany({ id: { $in: sourceIds }, deletedAt: { $exists: false } }, { $set: { active: false, deletedAt: now, mergedIntoId: id, mergedIntoSku: code } });
   return { id, code, units, sources };
 }

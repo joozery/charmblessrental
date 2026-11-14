@@ -22,11 +22,14 @@ export async function POST(request: Request) {
   if (!ids.length) return Response.json({ rows: [], unitChoices: {} });
   const db = await database();
   const rows = await db.collection<Booking>("bookingRequests").find({ _id: { $in: ids } }, { projection: { _id: 1, name: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, customerReturn: 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray();
+  // Clash details must include the other booking even when it is on another
+  // page or hidden by the current search/filter.
+  const allOpenRows = (await db.collection<Booking>("bookingRequests").find({ status: { $ne: "cancelled" }, returned: { $exists: false } }, { projection: { _id: 1, name: 1, status: 1, createdAt: 1, start: 1, end: 1, schedule: 1, shipment: 1, returned: 1, customerReturn: 1, payment: 1, holdUntil: 1, waitlist: 1, items: 1 } }).toArray()).filter(row => row.start && row.end && Array.isArray(row.items) && row.items.length > 0 && row.items.every(item => Number.isSafeInteger(item.id)));
   const open = rows.filter(row => row.status !== "cancelled" && !row.returned);
   const suggested = new Map(await Promise.all(open.filter(row => row.status === "confirmed" && row.items.some(item => !item.unitSku)).map(async row => [String(row._id), (await assignUnits(db, row)).map(item => item.unitSku || "")] as const)));
   const [choices, clashes, risks] = await Promise.all([
     unitChoices(db, open.flatMap(row => row.items.map(item => item.id))),
-    queueClashes(db, rows),
+    queueClashes(db, allOpenRows),
     lateReturnRisks(db, thaiDay()),
   ]);
   return Response.json({

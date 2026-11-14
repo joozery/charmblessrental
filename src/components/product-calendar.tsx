@@ -12,7 +12,7 @@ const shiftMonth = (date: Date, count: number) => new Date(Date.UTC(date.getUTCF
 const long = (day: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`));
 
 // Pick the first and last day of use; the calendar shades the whole span the piece is away (shipping → gap) and flags any full day in it.
-export default function ProductCalendar({ productId, value, onChange }: { productId: number; value: CalendarChoice; onChange: (value: CalendarChoice) => void }) {
+export default function ProductCalendar({ productId, variantId, value, onChange }: { productId: number; variantId?: string; value: CalendarChoice; onChange: (value: CalendarChoice) => void }) {
   const settings = useStoreSettings();
   const today = useToday();
   const [picked, setMonth] = useState<Date | null>(null);
@@ -25,12 +25,12 @@ export default function ProductCalendar({ productId, value, onChange }: { produc
   useEffect(() => {
     if (!today) return;
     const controller = new AbortController();
-    fetch(`/api/availability?productId=${productId}&month=${monthKey(shiftMonth(month, -1))}&months=3`, { signal: controller.signal, cache: "no-store" })
+    fetch(`/api/availability?productId=${productId}${variantId ? `&variantId=${encodeURIComponent(variantId)}` : ""}&month=${monthKey(shiftMonth(month, -1))}&months=3`, { signal: controller.signal, cache: "no-store" })
       .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error); return data.days as { date: string; capacity: number; remaining: number; waitable?: boolean }[]; })
       .then(days => { setLeft(Object.fromEntries(days.map(day => [day.date, day.remaining]))); setCapacity(Object.fromEntries(days.map(day => [day.date, day.capacity]))); setWaitable(Object.fromEntries(days.map(day => [day.date, !!day.waitable]))); setLoaded(true); })
       .catch(error => { if (error.name !== "AbortError") setLoaded(true); });
     return () => controller.abort();
-  }, [productId, today, monthKey(month)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [productId, variantId, today, monthKey(month)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The month grid needs today's date, which only the browser knows.
   if (!today) return <div className="product-calendar" aria-busy="true" />;

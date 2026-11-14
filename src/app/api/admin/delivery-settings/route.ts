@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     if (!validShipping(body.options, body.free) || !validSchedule(body.schedule) || (body.categoryRules !== undefined && !validCategoryShippingRules(body.categoryRules))) return Response.json({ error: "ตรวจสอบชื่อขนส่ง ราคา และเงื่อนไขส่งฟรีอีกครั้ง" }, { status: 400 });
     const shippingOptions: ShippingOption[] = (body.options as ShippingOption[]).map(option => ({ id: option.id, label: option.label.trim(), fee: Math.round(option.fee), description: option.description.trim(), enabled: option.enabled, standard: option.standard, leadDays: option.leadDays }));
     const schedule: ScheduleSettings = { pickupLead: body.schedule.pickupLead, messengerLead: body.schedule.messengerLead, gap: { parcel: body.schedule.gap.parcel, messenger: body.schedule.gap.messenger, shop: body.schedule.gap.shop } };
-    const freeShipping: FreeShipping = { enabled: body.free.enabled, minItems: body.free.minItems };
+    const freeShipping: FreeShipping = { enabled: body.free.enabled, minItems: body.free.minItems, discountAmount: Math.round(body.free.discountAmount) };
     const before = await getStoreSettings();
     const categoryShippingRules: CategoryShippingRule[] = body.categoryRules === undefined ? before.categoryShippingRules : (body.categoryRules as CategoryShippingRule[]).map(rule => ({ category: rule.category.trim(), method: rule.method, fee: Math.round(rule.fee), enabled: rule.enabled }));
     // {{emsFee}} in the storefront shipping text keeps showing the EMS price set here.

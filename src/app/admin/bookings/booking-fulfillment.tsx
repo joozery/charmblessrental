@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { money } from "@/components/rental-document";
 import type { Permission } from "@/lib/permissions";
@@ -33,6 +33,25 @@ export const depositStatus: Record<Deposit["status"], string> = { held: "ถื�
 const stamp = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(value));
 const todayKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const photoLimit = 5 * 1024 * 1024;
+
+async function prepareConditionPhoto(file: File) {
+  if (/^image\/(png|jpeg|webp)$/.test(file.type) && file.size <= photoLimit) return file;
+  const source = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => { const value = new Image(); value.onload = () => resolve(value); value.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์รูปนี้ได้ กรุณาใช้ PNG, JPG หรือ WebP")); value.src = source; });
+    const scale = Math.min(1, 2400 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(image.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d"); if (!context) throw new Error("ไม่สามารถเตรียมไฟล์รูปได้"); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    let quality = 0.85;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (blob && blob.size <= photoLimit) return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "photo"}.jpg`, { type: "image/jpeg" });
+      quality -= 0.12;
+    }
+    throw new Error("ลดขนาดรูปให้ไม่เกิน 5 MB ไม่สำเร็จ");
+  } finally { URL.revokeObjectURL(source); }
+}
 
 async function send(url: string, body: Record<string, unknown>) {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -67,12 +86,14 @@ function IdentityReview({ row, canReview, onChange }: { row: FulfillmentRow; can
   </div></div>;
 }
 
-function AdminConditionEditor({ bookingId, canEdit, onChange }: { bookingId: string; canEdit: boolean; onChange: (patch: Partial<FulfillmentRow>) => void }) {
+function AdminConditionEditor({ bookingId, canEdit, existingReceived = [], onChange }: { bookingId: string; canEdit: boolean; existingReceived?: { url: string }[]; onChange: (patch: Partial<FulfillmentRow>) => void }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const filePreviews = useMemo(() => files.map(file => ({ name: file.name, url: URL.createObjectURL(file) })), [files]);
+  useEffect(() => () => filePreviews.forEach(file => URL.revokeObjectURL(file.url)), [filePreviews]);
   if (!canEdit) return null;
   async function save() {
     if (!files.length) { setError("กรุณาแนบรูปสินค้าที่ชำรุด"); return; }
@@ -80,17 +101,19 @@ function AdminConditionEditor({ bookingId, canEdit, onChange }: { bookingId: str
     try {
       const photos: { url: string }[] = [];
       for (const file of files.slice(0, 5)) {
-        const form = new FormData(); form.set("bookingId", bookingId); form.set("stage", "received"); form.set("image", file);
+        const prepared = await prepareConditionPhoto(file);
+        const form = new FormData(); form.set("bookingId", bookingId); form.set("stage", "received"); form.set("image", prepared);
         const response = await fetch("/api/admin/bookings/photos", { method: "POST", body: form }); const data = await response.json();
         if (!response.ok) throw new Error(data.error || "อัปโหลดรูปไม่สำเร็จ");
         photos.push(data.photo);
       }
       const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: bookingId, action: "setCondition", condition: "damaged", note }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "บันทึกสภาพสินค้าไม่สำเร็จ");
-      onChange({ receivedCondition: data.receivedCondition, photos: { received: photos } } as never); setOpen(false); setFiles([]); setNote("");
+      const existing = existingReceived.map(photo => photo.url);
+      onChange({ receivedCondition: data.receivedCondition, photos: { received: [...existing, ...photos.filter(photo => !existing.includes(photo.url))] } } as never); setOpen(false); setFiles([]); setNote("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ"); } finally { setBusy(false); }
   }
-  return <div className="bookings-condition-editor">{!open ? <button type="button" disabled={busy} onClick={() => setOpen(true)}>บันทึกชำรุดภายหลังพร้อมรูป</button> : <div className="bookings-inline-form"><label>รูปสินค้าที่ชำรุด<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={busy} onChange={event => setFiles(Array.from(event.target.files || []).slice(0, 5))} /></label><label>หมายเหตุ<input value={note} maxLength={500} onChange={event => setNote(event.target.value)} placeholder="รายละเอียดความชำรุด" /></label><div><button type="button" disabled={busy} onClick={() => setOpen(false)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || !files.length} onClick={() => { void save(); }}>{busy ? "กำลังบันทึก…" : "บันทึกชำรุด"}</button></div>{error && <p className="admin-error" role="alert">{error}</p>}</div>}</div>;
+  return <div className="bookings-condition-editor">{!open ? <button type="button" disabled={busy} onClick={() => setOpen(true)}>บันทึกชำรุดภายหลังพร้อมรูป</button> : <div className="bookings-inline-form"><label>รูปสินค้าที่ชำรุด<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={busy} onChange={event => setFiles(Array.from(event.target.files || []).slice(0, 5))} /></label>{filePreviews.length > 0 && <div className="bookings-selected-photo-preview" aria-label="ตัวอย่างรูปที่เลือก">{filePreviews.map((file, index) => <span key={`${file.name}-${index}`}><img src={file.url} alt={`รูปที่เลือก ${index + 1}`} /><button type="button" onClick={() => setFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`ลบรูปที่เลือก ${index + 1}`}>×</button></span>)}</div>}<small className="bookings-selected-photo-count">เลือกแล้ว {files.length} รูป จากสูงสุด 5 รูป</small><label>หมายเหตุ<input value={note} maxLength={500} onChange={event => setNote(event.target.value)} placeholder="รายละเอียดความชำรุด" /></label><div><button type="button" disabled={busy} onClick={() => setOpen(false)}>ยกเลิก</button><button type="button" className="is-primary" disabled={busy || !files.length} onClick={() => { void save(); }}>{busy ? "กำลังบันทึก…" : "บันทึกชำรุด"}</button></div>{error && <p className="admin-error" role="alert">{error}</p>}</div>}</div>;
 }
 
 export default function BookingFulfillment({ row, permissions, unitChoices, finePerDay = 0, onChange }: { row: FulfillmentRow; permissions: Permission[]; unitChoices: Record<number, UnitChoice[]>; finePerDay?: number; onChange: (patch: Partial<FulfillmentRow>) => void }) {
@@ -98,7 +121,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [shipForm, setShipForm] = useState<{ carrier: string; trackingNumber: string; units: string[] } | null>(null);
   const [returnForm, setReturnForm] = useState<{ condition: string; note: string; units: string[] } | null>(null);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(""), [photoPreview, setPhotoPreview] = useState("");
   const assigned = row.items.map(item => item.unitSku || "");
   const defaults = row.items.map((item, index) => item.unitSku || row.suggestedUnits?.[index] || "");
   const stage = rentalStage(row);
@@ -138,7 +161,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
   const deducted = refundForm && row.deposit ? Math.max(0, row.deposit.amount - (Number(refundForm.refund) || 0)) : 0;
 
   return <>
-    {(conditionData || rentalPhotos.beforeShipment?.length || rentalPhotos.received?.length || rentalPhotos.return?.length) && <div className="bookings-detail-section bookings-rental-photos"><Icon name="image" /><div><h3>หลักฐานรูปภาพการเช่า</h3>{conditionData && <p><strong>สภาพตอนลูกค้าได้รับ: {conditionData.value === "damaged" ? "ชำรุด" : "ปกติ"}</strong>{conditionData.note ? ` · ${conditionData.note}` : ""}{conditionData.value === "damaged" && !conditionData.acknowledgedAt && <button type="button" disabled={busy} onClick={acknowledgeCondition}>รับทราบ</button>}</p>}<AdminConditionEditor bookingId={row._id} canEdit={canShip} onChange={onChange} /><div className="bookings-photo-groups">{([ ["ก่อนจัดส่ง", rentalPhotos.beforeShipment], ["ตอนลูกค้าได้รับ", rentalPhotos.received], ["ตอนส่งคืน", rentalPhotos.return] ] as [string, { url: string }[] | undefined][]).map(([label, photos]) => photos?.length ? <div key={label}><small>{label}</small><div>{photos.map(photo => <a key={photo.url} href={photo.url} target="_blank" rel="noopener noreferrer"><img src={photo.url} alt={label} /></a>)}</div></div> : null)}</div></div></div>}
+    {(conditionData || rentalPhotos.beforeShipment?.length || rentalPhotos.received?.length || rentalPhotos.return?.length) && <div className="bookings-detail-section bookings-rental-photos"><Icon name="image" /><div><h3>หลักฐานรูปภาพการเช่า</h3>{conditionData && <p><strong>สภาพตอนลูกค้าได้รับ: {conditionData.value === "damaged" ? "ชำรุด" : "ปกติ"}</strong>{conditionData.note ? ` · ${conditionData.note}` : ""}{conditionData.value === "damaged" && !conditionData.acknowledgedAt && <button type="button" disabled={busy} onClick={acknowledgeCondition}>รับทราบ</button>}</p>}<AdminConditionEditor bookingId={row._id} canEdit={canShip} existingReceived={rentalPhotos.received} onChange={onChange} /><div className="bookings-photo-groups">{([ ["ก่อนจัดส่ง", rentalPhotos.beforeShipment], ["ตอนลูกค้าได้รับ", rentalPhotos.received], ["ตอนส่งคืน", rentalPhotos.return] ] as [string, { url: string }[] | undefined][]).map(([label, photos]) => photos?.length ? <div key={label}><small>{label}</small><div>{photos.map(photo => <button type="button" className="bookings-photo-thumb" key={photo.url} onClick={() => setPhotoPreview(photo.url)}><img src={photo.url} alt={label} /></button>)}</div></div> : null)}</div></div></div>}
     {!!row.risks?.length && <div className="bookings-clash bookings-clash-banner" role="alert"><strong>⚠️ {row.lateDays ? `ชุดยังไม่กลับ เลยกำหนดคืน ${row.lateDays} วัน` : "ใกล้ถึงกำหนดคืน แต่ลูกค้ายังไม่ได้แจ้งส่งคืน"} · กระทบลูกค้าคนต่อไป</strong>{row.risks.map(risk => { const left = Math.round((Date.parse(`${risk.next.ship}T00:00:00Z`) - Date.parse(`${todayKey()}T00:00:00Z`)) / 86400000); return <p key={`${risk.item}-${risk.next.id}`}>{risk.unitSku || risk.item} · ลูกค้าคนต่อไป <a href={`/admin/bookings?id=${encodeURIComponent(risk.next.id)}`}>{risk.next.name || risk.next.id} ({risk.next.id})</a> ต้องส่ง {day(`${risk.next.ship}T00:00:00Z`)} {left > 0 ? `เหลืออีก ${left} วัน` : left === 0 ? "คือวันนี้" : `เลยวันส่งมาแล้ว ${-left} วัน`}{risk.swap.length ? <b className="bookings-risk-swap"> · สลับไปใช้ชิ้น {risk.swap.slice(0, 3).join(", ")} ได้</b> : " · ไม่มีชิ้นอื่นว่าง"}</p>; })}<small>ติดต่อลูกค้าที่ยังไม่คืนชุด ถ้าจะคืนช้าให้กด &quot;ขยายวันเช่า&quot; เพื่อคิดค่าวันที่เกิน และเตรียมสลับชิ้นหรือแจ้งลูกค้าคนต่อไป</small></div>}
     {!!row.clashes?.length && <div className="bookings-clash bookings-clash-banner" role="alert"><strong>⚠️ คิวซ้อน: ชุดมีคนจองทับกันเกินจำนวนที่มี</strong>{row.clashes.map(clash => <p key={`${clash.item}-${clash.date}`}>{day(`${clash.date}T00:00:00Z`)} · {clash.item} · ชนกับ{clash.with.length ? clash.with.map(other => <a key={other.id} href={`/admin/bookings?id=${encodeURIComponent(other.id)}`}> {other.name || other.id} ({other.id})</a>) : " คำขอที่ไม่อยู่ในรายการนี้"}</p>)}<small>ติดต่อลูกค้าเพื่อสลับชุด เลื่อนวัน หรือยกเลิกคิวใดคิวหนึ่ง ป้ายนี้จะหายเมื่อคิวไม่ซ้อนแล้ว</small></div>}
     {row.verification && row.status !== "cancelled" && <IdentityReview row={row} canReview={canReview} onChange={verification => onChange({ verification })} />}
@@ -181,6 +204,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
     </div></div>}
     {error && <p className="admin-error" role="alert">{error}</p>}
     {notice && !error && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
+    {photoPreview && <div className="bookings-photo-popup" role="dialog" aria-modal="true" aria-label="ดูรูปหลักฐาน" onClick={() => setPhotoPreview("")}><div className="bookings-photo-popup-content" onClick={event => event.stopPropagation()}><button type="button" className="bookings-photo-popup-close" onClick={() => setPhotoPreview("")} aria-label="ปิด">×</button><img src={photoPreview} alt="รูปหลักฐานการเช่า" /></div></div>}
     <div className="bookings-detail-section bookings-timeline"><Icon name="history" /><div>
       <h3>ประวัติการทำรายการ</h3>
       {!logs ? <button type="button" className="bookings-timeline-load" disabled={busy} onClick={loadLogs}>ดูว่าใครทำอะไรกับคำขอนี้</button>

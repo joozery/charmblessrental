@@ -15,7 +15,8 @@ export async function POST(request: Request) {
   try {
     if (body.action === "add") {
       if (!Number.isSafeInteger(body.count) || body.count < 1 || body.count > 50) return Response.json({ error: "เติมสต๊อกได้ครั้งละ 1–50 ชิ้น" }, { status: 400 });
-      const { before, added } = await addUnits(body.productId, body.count, body.cost, body.note.trim());
+      const variantId = typeof body.variantId === "string" && /^[a-z0-9-]{1,40}$/.test(body.variantId) ? body.variantId : undefined;
+      const { before, added } = await addUnits(body.productId, body.count, body.cost, body.note.trim(), variantId);
       await audit(request, auth.admin, { action: "product.restock", targetType: "product", targetId: String(body.productId), summary: `เติมสต๊อก ${before.name} +${added.length} ชิ้น (${added.map(unit => unit.sku).join(", ")})`, changes: [{ field: "stock", before: before.stock ?? null, after: (before.stock ?? 0) + added.length }] });
     } else if (body.action === "update") {
       if (typeof body.sku !== "string" || body.sku.length > 100 || !Object.hasOwn(unitStatusLabels, body.status)) return Response.json({ error: "ข้อมูลชิ้นไม่ถูกต้อง" }, { status: 400 });
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
       const db = await database();
       const bookingCount = await db.collection("bookingRequests").countDocuments({ status: { $ne: "cancelled" }, "items.unitSku": body.sku });
       if (bookingCount) return Response.json({ error: `ลบไม่ได้ เพราะชิ้นนี้ผูกกับรายการจองที่ยังไม่ยกเลิก ${bookingCount} รายการ` }, { status: 409 });
-      const { before } = await deleteUnit(body.productId, body.sku);
+      await deleteUnit(body.productId, body.sku);
       await audit(request, auth.admin, { action: "product.unit", targetType: "product", targetId: String(body.productId), summary: `ลบชิ้น ${body.sku}`, changes: [{ field: "unit", before: body.sku, after: null }] });
     } else return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
     revalidateTag("catalog", { expire: 0 });

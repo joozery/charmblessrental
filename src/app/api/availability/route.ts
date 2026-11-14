@@ -7,6 +7,7 @@ const validMonth = (value: string | null) => !!value && /^\d{4}-(0[1-9]|1[0-2])$
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const productId = Number(url.searchParams.get("productId"));
+  const variantId = url.searchParams.get("variantId") || undefined;
   const month = url.searchParams.get("month");
   const months = Number(url.searchParams.get("months") || 1);
   if (!Number.isSafeInteger(productId) || productId < 1 || !validMonth(month) || ![1, 2, 3].includes(months)) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
@@ -14,6 +15,6 @@ export async function GET(request: Request) {
   const date = new Date(`${from}T12:00:00Z`); date.setUTCMonth(date.getUTCMonth() + months);
   const db = await database();
   await promoteWaitlist(db, request);
-  const days = await getQueue(db, productId, from, date.toISOString().slice(0, 10));
+  const days = await getQueue(db, productId, from, date.toISOString().slice(0, 10), undefined, false, variantId);
   return Response.json({ days }, { headers: { "Cache-Control": "public, max-age=30, stale-while-revalidate=120" } });
 }

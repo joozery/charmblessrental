@@ -1,0 +1,4 @@
+.discount-item{grid-template-columns:minmax(0,1.5fr) minmax(100px,.7fr) minmax(150px,1fr) auto}
+.discount-edit{padding:7px 10px;border:1px solid #d9cfd6;border-radius:7px;background:#fff;color:#79516c;font:inherit;font-size:11px;cursor:pointer}
+.discount-edit:hover{background:#fbf1f5}
+@media(max-width:600px){.discount-item{grid-template-columns:1fr}.discount-edit{width:100%}}

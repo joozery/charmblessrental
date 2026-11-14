@@ -2,14 +2,14 @@ import type { Db } from "mongodb";
 import { inService, unitsOf, type Product, type UnitStatus } from "./products";
 import { blockRange, type ScheduleRecord } from "./schedule";
 
-type Item = { id: number; unitSku?: string };
+type Item = { id: number; variantId?: string; unitSku?: string };
 type BookingLike = { _id: string; start: string; end: string; items: Item[]; schedule?: ScheduleRecord | null };
-export type UnitChoice = { sku: string; status: UnitStatus };
+export type UnitChoice = { sku: string; status: UnitStatus; variantId?: string };
 
 // Pieces each booked product can be fulfilled with, keyed by product id.
 export async function unitChoices(db: Db, productIds: number[]) {
   const rows = await db.collection<Product>("products").find({ id: { $in: [...new Set(productIds)] } }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, legacyId: 1, units: 1 } }).toArray();
-  return new Map(rows.map(product => [product.id, unitsOf(product).filter(unit => inService(unit.status)).map(unit => ({ sku: unit.sku, status: unit.status }))]));
+  return new Map(rows.map(product => [product.id, unitsOf(product).filter(unit => inService(unit.status)).map(unit => ({ sku: unit.sku, status: unit.status, variantId: unit.variantId }))]));
 }
 
 // Pieces promised to other open bookings: those overlapping these dates cannot be used, the rest are only avoided.
@@ -27,7 +27,7 @@ export async function assignUnits(db: Db, booking: BookingLike) {
   const taken = new Set(booking.items.map(item => item.unitSku).filter(Boolean));
   const items = booking.items.map(item => {
     if (item.unitSku) return item;
-    const free = (choices.get(item.id) || []).filter(unit => !busy.has(unit.sku) && !taken.has(unit.sku));
+    const free = (choices.get(item.id) || []).filter(unit => (!item.variantId || item.variantId === "legacy" ? !unit.variantId || unit.variantId === "legacy" : unit.variantId === item.variantId) && !busy.has(unit.sku) && !taken.has(unit.sku));
     const unit = free.find(choice => choice.status === "available" && !promised.has(choice.sku)) || free.find(choice => !promised.has(choice.sku)) || free.find(choice => choice.status === "available") || free[0];
     if (!unit) return item;
     taken.add(unit.sku);
@@ -42,5 +42,9 @@ export async function validUnitPicks(db: Db, booking: BookingLike, picks: unknow
   const choices = await unitChoices(db, booking.items.map(item => item.id));
   const chosen = (picks as string[]).filter(Boolean);
   if (new Set(chosen).size !== chosen.length) return null;
-  return (picks as string[]).every((sku, index) => !sku || (choices.get(booking.items[index].id) || []).some(unit => unit.sku === sku)) ? picks as string[] : null;
+  return (picks as string[]).every((sku, index) => {
+    if (!sku) return true;
+    const item = booking.items[index], unit = (choices.get(item.id) || []).find(candidate => candidate.sku === sku);
+    return !!unit && (!item.variantId || item.variantId === "legacy" ? !unit.variantId || unit.variantId === "legacy" : unit.variantId === item.variantId);
+  }) ? picks as string[] : null;
 }

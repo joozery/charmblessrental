@@ -8,7 +8,7 @@ import { Dialog } from "radix-ui";
 import { useStoreSettings } from "@/components/store-settings-provider";
 import { priceFor, tiersOf, type RentalPricing } from "@/lib/pricing";
 import { mapsLink } from "@/lib/delivery";
-import { categoryShippingRuleFor, enabledOptions, freeEligible, shippingFor, standardFee } from "@/lib/shipping";
+import { categoryShippingRuleFor, enabledOptions, freeEligible, shippingFor } from "@/lib/shipping";
 import { addDays, planFor, returnMethods, countUseDays, type ReturnMethod } from "@/lib/schedule";
 import { useToday } from "@/lib/use-today";
 import RentalTimeline from "./rental-timeline";
@@ -16,7 +16,7 @@ import { identityAllowed } from "@/lib/identity";
 import { cleanRefundAccount, emptyRefundAccount, refundAccountError, refundBanks } from "@/lib/refund-account";
 import { useProducts } from "@/components/products-provider";
 
-export type BookingItem = { id: number; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; category?: string; depositRequired?: boolean; unavailable?: boolean };
+export type BookingItem = { id: number; variantId?: string; color?: string; size?: string; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; category?: string; depositRequired?: boolean; unavailable?: boolean };
 
 // Days of use, both ends counted: 19–28 Nov is 10 days.
 export const rentalDays = countUseDays;
@@ -39,7 +39,7 @@ const shortDate = (value: string) => {
   return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
 };
 
-export default function BookingForm({ items, initialStart = "", initialEnd = "", initialReturn, initialMethod, trigger, onRemove }: { items: BookingItem[]; initialStart?: string; initialEnd?: string; initialReturn?: ReturnMethod; initialMethod?: string; trigger?: ReactNode; onRemove?: (id: number) => void }) {
+export default function BookingForm({ items, initialStart = "", initialEnd = "", initialReturn, initialMethod, trigger, onRemove }: { items: BookingItem[]; initialStart?: string; initialEnd?: string; initialReturn?: ReturnMethod; initialMethod?: string; trigger?: ReactNode; onRemove?: (id: number, variantId?: string) => void }) {
   const products = useProducts();
   const [step, setStep] = useState(0);
   const [start, setStart] = useState(initialStart);
@@ -139,7 +139,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   async function sendRequest() {
     setSubmitting(true); setError("");
     try {
-      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id })), start, end, name, phone, method, returnMethod, depositMode: mode, ...(mode === "deposit" ? { refundAccount } : {}), address, pin, note, discountCode, acceptPrivacy: accepted }) });
+      const response = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(item => ({ id: item.id, ...(item.variantId ? { variantId: item.variantId } : {}) })), start, end, name, phone, method, returnMethod, depositMode: mode, ...(mode === "deposit" ? { refundAccount } : {}), address, pin, note, discountCode, acceptPrivacy: accepted }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่");
       saveContact({ name: name.trim(), phone: phone.trim(), address: address.trim(), pin: pin.trim(), method, returnMethod });
@@ -156,7 +156,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const success = <div className="booking-review booking-success"><p className="booking-notice" role="status">ส่งคำขอเรียบร้อยแล้ว · ยังไม่ใช่การยืนยันจอง ร้านจะตรวจสอบคิวก่อน</p>{queued?.waitlisted ? <p className="booking-queue-note is-waitlist">⏳ คุณอยู่ใน<b>คิวสำรอง</b> ชุดนี้มีลูกค้าจองไว้ก่อนและยังไม่ได้ชำระเงิน ถ้าไม่ชำระภายในเวลาที่กำหนด สิทธิ์จะเลื่อนมาที่คุณ และร้านจะแจ้งทาง LINE</p> : queued && <p className="booking-queue-note">⏱ ร้านกันคิวให้ {queued.minutes} นาที กรุณาแอด LINE รับบิลและชำระเงินภายในเวลานี้ ไม่เช่นนั้นสิทธิ์จะเลื่อนไปยังคิวถัดไป</p>}<div className="booking-request-code"><span>เลขที่คำขอของคุณ</span><strong>{requestId}</strong><button type="button" onClick={() => { void navigator.clipboard?.writeText(requestId).then(() => { setCopiedId(true); setTimeout(() => setCopiedId(false), 2000); }).catch(() => undefined); }}>{copiedId ? "คัดลอกแล้ว ✓" : "คัดลอก"}</button></div><ol className="booking-next-steps"><li><b>1</b><span><strong>แอด LINE ร้าน</strong><small>กดปุ่มด้านล่างเพื่อเปิด LINE</small></span></li><li><b>2</b><span><strong>แจ้งเบอร์โทรที่ใช้จอง ({phone})</strong><small>พร้อมส่งเลขที่คำขอทางแชทเพื่อให้ร้านตรวจสอบ</small></span></li>{mode === "identity" && <li><b>✓</b><span><strong>ยืนยันตัวตนแทนเงินมัดจำ</strong><small>ร้านจะส่งลิงก์ให้ส่งรูปบัตรประชาชน แคปหน้าโปรไฟล์ Instagram และที่อยู่ ก่อนวันจัดส่ง</small></span></li>}<li><b>3</b><span><strong>รับใบรายละเอียดการเช่าและลิงก์ชำระเงิน</strong><small>ร้านจะส่งลิงก์บิลให้ทาง LINE ตรวจสอบยอดแล้วชำระเงินเพื่อยืนยันการจอง</small></span></li></ol><a href={settings.lineUrl} target="_blank" rel="noopener noreferrer" className="pill pill-pink w-full">แอด LINE และแจ้งเบอร์โทร</a></div>;
 
   const dates = <>
-    <div className="booking-items">{items.length === 0 && <p className="booking-help" role="status">ตะกร้ายังว่าง กรุณาเลือกสินค้าและเพิ่มลงตะกร้าก่อนขอจอง</p>}{items.map(item => <div key={item.id}>{item.image && <Image className="booking-product-photo" src={item.image} alt={item.name} width={60} height={78} />}<div className="booking-product-text"><strong>{item.name}</strong>{onRemove && <button type="button" className="booking-remove" aria-label={`นำ ${item.name} ออก`} onClick={() => onRemove(item.id)}>นำออก</button>}<span>{item.unavailable ? "ช่วงนี้เต็ม" : "ร้านจะตรวจสอบคิวก่อนยืนยัน"}</span></div></div>)}</div>
+    <div className="booking-items">{items.length === 0 && <p className="booking-help" role="status">ตะกร้ายังว่าง กรุณาเลือกสินค้าและเพิ่มลงตะกร้าก่อนขอจอง</p>}{items.map(item => <div key={`${item.id}:${item.variantId || "legacy"}`}>{item.image && <Image className="booking-product-photo" src={item.image} alt={item.name} width={60} height={78} />}<div className="booking-product-text"><strong>{item.name}{item.color || item.size ? ` · ${item.color || ""}${item.color && item.size ? " / " : ""}${item.size || ""}` : ""}</strong>{onRemove && <button type="button" className="booking-remove" aria-label={`นำ ${item.name} ออก`} onClick={() => onRemove(item.id, item.variantId)}>นำออก</button>}<span>{item.unavailable ? "ช่วงนี้เต็ม" : "ร้านจะตรวจสอบคิวก่อนยืนยัน"}</span></div></div>)}</div>
     <label>วันเริ่มใช้งาน *<input type="date" min={todayKey} value={start} onChange={e => { const value = e.target.value; const length = days; setStart(value); setEnd(value && length ? addDays(value, length - 1) : end && end < value ? "" : end); }} /></label>
     <fieldset><legend>เช่ากี่วัน</legend><div className="booking-packages">{packages.map(item => <button type="button" key={item.days} className={days === item.days ? "is-selected" : ""} disabled={!start} aria-pressed={days === item.days} onClick={() => { setEnd(addDays(start, item.days - 1)); setError(""); }}><strong>{item.days} วัน</strong><small>{item.price === null ? "สอบถามราคา" : baht(item.price)}</small></button>)}</div>{!start && <p className="booking-help">เลือกวันเริ่มใช้งานก่อน แล้วกดเลือกแพ็กเกจ</p>}</fieldset>
     <label>วันใช้งานวันสุดท้าย *<input type="date" min={start || undefined} value={end} onChange={e => setEnd(e.target.value)} /></label>
@@ -164,8 +164,8 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   </>;
 
   const receive = <>
-    {settings.freeShipping.enabled && <p className={`booking-free${free ? " is-active" : ""}`}>{free ? `🎉 เช่าครบ ${settings.freeShipping.minItems} ตัว ส่งฟรีแบบมาตรฐาน · ขนส่งอื่นลด ${baht(standardFee(settings, items))}` : missing > 0 && `เช่าอีก ${missing} ตัว ส่งฟรีแบบมาตรฐาน`}</p>}
-    <fieldset><legend>อยากรับชุดยังไง</legend>{[...(categoryRule ? [] : [["pickup", "รับเองที่ร้าน", "ไม่มีค่าส่ง"]]), ...carriers.map(option => [option.id, option.label, `${option.description}${option.description ? " · " : ""}${option.standard ? "แบบมาตรฐาน" : "ร้านส่งให้"} บวกค่าส่งในบิล`]), ...((!categoryRule || categoryRule.method === "messenger") ? [["messenger", "แมสเซนเจอร์ (Grab / LINE MAN)", autoFee ? `คิดตามระยะทางจากร้าน · ${messenger.inBill ? "รวมในบิล" : "จ่ายแมสปลายทาง"}` : "ค่าส่งตามระยะทาง · ลูกค้าจ่ายปลายทาง"]] : [])].map(([value, title, description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{feeText(value)}</b></label>)}</fieldset>
+    {settings.freeShipping.enabled && <p className={`booking-free${free && shipping?.discount ? " is-active" : ""}`}>{free ? shipping?.discount ? `🎉 เช่าครบ ${settings.freeShipping.minItems} ตัว ลดค่าส่ง ${baht(shipping.discount)}` : "โปรส่วนลดค่าส่งใช้เฉพาะขนส่งที่ร่วมรายการ" : missing > 0 && `เช่าอีก ${missing} ตัว จึงจะได้ส่วนลดค่าส่ง ${baht(settings.freeShipping.discountAmount)}`}</p>}
+    <fieldset><legend>อยากรับชุดยังไง</legend>{[...(categoryRule ? [] : [["pickup", "รับเองที่ร้าน", "ไม่มีค่าส่ง"]]), ...carriers.map(option => [option.id, option.label, `${option.description}${option.description ? " · " : ""}${option.standard ? "ร่วมโปรส่งฟรีเมื่อครบจำนวน" : "ไม่ร่วมโปรส่งฟรี"}`]), ...((!categoryRule || categoryRule.method === "messenger") ? [["messenger", "แมสเซนเจอร์ (Grab / LINE MAN)", autoFee ? `คิดตามระยะทางจากร้าน · ${messenger.inBill ? "รวมในบิล" : "จ่ายแมสปลายทาง"}` : "ค่าส่งตามระยะทาง · ลูกค้าจ่ายปลายทาง"]] : [])].map(([value, title, description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{feeText(value)}</b></label>)}</fieldset>
     {method !== "pickup" && <>
       <label>ที่อยู่จัดส่ง *<textarea autoComplete="street-address" value={address} onChange={e => setAddress(e.target.value)} onBlur={() => void priceDelivery()} placeholder="บ้านเลขที่ อาคาร ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด และรหัสไปรษณีย์" /></label>
       <label>หมุดตำแหน่ง {method === "messenger" ? "(แนะนำ ช่วยให้คิดค่าส่งแม่นขึ้น)" : "(ไม่บังคับ)"}<input type="url" value={pin} onChange={e => setPin(e.target.value)} onBlur={() => void priceDelivery()} placeholder="วางลิงก์หมุดจาก Google Maps" /></label>
