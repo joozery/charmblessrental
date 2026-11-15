@@ -14,7 +14,9 @@ import { useToday } from "@/lib/use-today";
 import RentalTimeline from "./rental-timeline";
 import { identityAllowed } from "@/lib/identity";
 import { cleanRefundAccount, emptyRefundAccount, refundAccountError, refundBanks } from "@/lib/refund-account";
+import { bankByName } from "@/lib/banks";
 import { useProducts } from "@/components/products-provider";
+import BankBadge from "./bank-badge";
 
 export type BookingItem = { id: number; variantId?: string; color?: string; size?: string; name: string; image?: string; pricing?: RentalPricing | null; shippingFee?: number | null; category?: string; depositRequired?: boolean; unavailable?: boolean };
 
@@ -100,6 +102,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const requiresDeposit = items.some(item => item.depositRequired || products.find(product => product.id === item.id)?.depositRequired === true);
   const canSkipDeposit = identityAllowed(settings.verification, rentalTotal, items.map(item => item.category || ""), requiresDeposit);
   const mode = canSkipDeposit ? depositMode : "deposit";
+  const selectedRefundBank = bankByName(refundAccount.bank);
   const carriers = enabledOptions(settings).filter(option => !categoryRule || option.id === categoryRule.method);
   const free = freeEligible(settings, items.length);
   const missing = settings.freeShipping.enabled ? settings.freeShipping.minItems - items.length : 0;
@@ -191,7 +194,7 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
       <label className={`booking-method ${mode === "identity" ? "selected" : ""}`}><input type="radio" name="deposit" checked={mode === "identity"} onChange={() => setDepositMode("identity")} /><span><strong>ไม่วางเงินมัดจำ · ยืนยันตัวตนแทน</strong><small>{settings.verification.note}</small></span></label>
     </div>{mode === "identity" && <p className="booking-help">หลังส่งคำขอ ร้านจะส่งลิงก์ให้ยืนยันตัวตนทาง LINE ต้องส่งเอกสารก่อนวันจัดส่ง ข้อมูลใช้เพื่อการเช่านี้เท่านั้น และลบอัตโนมัติหลังจบการเช่า {settings.verification.deleteAfterDays} วัน</p>}</fieldset>}
     {mode === "deposit" && <fieldset><legend>บัญชีรับเงินมัดจำคืน *</legend><div className="booking-refund-account">
-      <label>ธนาคาร<select value={refundAccount.bank} onChange={e => setRefundAccount({ ...refundAccount, bank: e.target.value })}><option value="">เลือกธนาคาร</option>{refundBanks.map(bank => <option key={bank}>{bank}</option>)}</select></label>
+      <label className="booking-refund-bank">ธนาคาร<div className="booking-refund-bank-picker"><BankBadge code={selectedRefundBank?.code || ""} size={28} /><select value={refundAccount.bank} onChange={e => setRefundAccount({ ...refundAccount, bank: e.target.value })}><option value="">เลือกธนาคาร</option>{refundBanks.map(bank => <option key={bank}>{bank}</option>)}</select></div></label>
       <label>ชื่อบัญชี<input maxLength={120} value={refundAccount.accountName} onChange={e => setRefundAccount({ ...refundAccount, accountName: e.target.value })} placeholder="ชื่อ-นามสกุลเจ้าของบัญชี" /></label>
       <label>เลขบัญชี / พร้อมเพย์<input inputMode="numeric" maxLength={20} value={refundAccount.accountNumber} onChange={e => setRefundAccount({ ...refundAccount, accountNumber: e.target.value })} placeholder="xxx-x-xxxxx-x" /></label>
     </div><p className="booking-help">ร้านโอนเงินมัดจำคืนเข้าบัญชีนี้หลังได้รับชุดคืนและตรวจสภาพแล้ว แก้ไขภายหลังได้ในลิงก์บิล</p></fieldset>}

@@ -114,5 +114,11 @@
 @media(max-width:480px) { .booking-return-options { grid-template-columns: 1fr; } }
 .booking-deposit-options { display: grid; gap: 8px; }
 .booking-refund-account { display: grid; gap: 8px; }
+.booking-form fieldset:has(.booking-refund-account) { margin: 2px 0; padding: 14px; border: 1px solid #e8d6df; border-radius: 12px; background: #fffafb; }
+.booking-form fieldset:has(.booking-refund-account) legend { padding: 0 6px; color: #604a5b; font-size: 13px; font-weight: 650; }
+.booking-refund-account label { color: #604a5b; }
+.booking-refund-bank-picker { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 8px; border: 1px solid #e8d6df; border-radius: 10px; background: #fffafb; }
+.booking-refund-bank-picker select { flex: 1; min-width: 0; margin-top: 0!important; padding: 5px 4px!important; border: 0!important; background: transparent!important; }
+@media(min-width:520px) { .booking-refund-account { grid-template-columns: repeat(2, minmax(0, 1fr)); } .booking-refund-account label:last-child { grid-column: 1 / -1; } }
 .booking-queue-note { margin: 8px 0; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-size: 12px; line-height: 1.7; }
 .booking-queue-note.is-waitlist { background: #eff6ff; color: #1d4ed8; }
