@@ -40,12 +40,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     </div>
     <div style={{ display: "flex", gap: 14 }}>
       {card("ข้อมูลลูกค้า", [field("ชื่อ–นามสกุลผู้เช่า", doc.name), field("เบอร์โทรศัพท์", doc.phone), field("ที่อยู่สำหรับจัดส่ง", doc.address || "รับเองที่ร้าน")], 1.25)}
-      {card("ข้อมูลการเช่า", [field("วันที่จอง", dateLabel(doc.createdAt)), field("วันใช้งาน", `${dateLabel(doc.start)} – ${dateLabel(doc.end)}`), field("ระยะเวลาเช่า", `${doc.days} วัน`), field("กำหนดคืน", dateLabel(returnDay(doc)))], 1)}
+      {card("ข้อมูลการเช่า", [field("วันที่จอง", dateLabel(doc.createdAt)), field("วันที่จัดส่ง", doc.schedule?.ship ? dateLabel(doc.schedule.ship) : "ยังไม่ระบุ"), field("วันใช้งาน", `${dateLabel(doc.start)} – ${dateLabel(doc.end)}`), field("ระยะเวลาเช่า", `${doc.days} วัน`), field("กำหนดคืน", dateLabel(returnDay(doc)))], 1)}
     </div>
     {card("รายการสินค้าเช่า", doc.items.map((item, index) => <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "4px 0", borderBottom: index < doc.items.length - 1 ? `1px solid ${soft}` : "none" }}>
       <span style={{ display: "flex", width: 28, fontSize: 20, color: "#7a6f78" }}>{index + 1}</span>
       {item.image && /^https?:/.test(item.image) ? <img src={item.image} width={46} height={58} style={{ objectFit: "cover", borderRadius: 6 }} alt="" /> : <div style={{ display: "flex", width: 46, height: 58, borderRadius: 6, background: soft }} />}
-      <div style={{ display: "flex", flexDirection: "column", flex: 1 }}><span style={{ fontSize: 21, fontWeight: 700 }}>{item.sku || item.name}</span><span style={{ fontSize: 16, color: "#7a6f78" }}>{item.name}</span></div>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1 }}><span style={{ fontSize: 21, fontWeight: 700 }}>{item.sku || item.name}</span><span style={{ fontSize: 16, color: "#7a6f78" }}>{item.name} · จำนวน {item.quantity ?? 1} ชิ้น</span></div>
       <span style={{ fontSize: 21, fontWeight: 700 }}>{prices[index] === null ? "สอบถาม" : `${money(prices[index]!)} บาท`}</span>
     </div>))}
     <div style={{ display: "flex", gap: 14 }}>
@@ -56,5 +56,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   </div>, { width: W, height, fonts: [
     { name: "Noto Sans Thai", data: font_400, weight: 400, style: "normal" }, { name: "Noto Sans Thai", data: font_700, weight: 700, style: "normal" },
     { name: "Noto Latin", data: font_latin_400, weight: 400, style: "normal" }, { name: "Noto Latin", data: font_latin_700, weight: 700, style: "normal" },
-  ], headers: { "Cache-Control": "private, max-age=300" } });
+  ], headers: { "Cache-Control": "private, no-store" } });
 }

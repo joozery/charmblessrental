@@ -9,7 +9,7 @@ import { audit, diff } from "@/lib/audit";
 import { deposits, recordBookingPayment, thaiDay, validDay, voidBookingPayment } from "@/lib/finance";
 import type { Permission } from "@/lib/permissions";
 import { setUnitStatuses } from "@/lib/product-store";
-import { unitStatusLabels, type UnitStatus } from "@/lib/products";
+import { type UnitStatus } from "@/lib/products";
 import { assignUnits, validUnitPicks } from "@/lib/rental-units";
 import { cleanCode, couponDiscountAmount, couponType, customerDiscount, discountCoupons, validCoupon } from "@/lib/discounts";
 import { claimBill } from "@/lib/bill-owner";
@@ -18,7 +18,8 @@ import { legacyRentalCount } from "@/lib/legacy-rentals";
 const statuses = ["new", "contacted", "confirmed", "cancelled"];
 const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
-type Returned = { at: Date; condition: string; note: string; by: string; byName: string };
+type ReturnedItem = { unitSku: string; condition: string; note: string };
+type Returned = { at: Date; condition: string; note: string; items?: ReturnedItem[]; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
 type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; variantId?: string; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
@@ -28,12 +29,14 @@ const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "num
 type QuoteInput = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string };
 const validQuote = (quote: unknown): quote is QuoteInput => { if (!quote || typeof quote !== "object") return false; const value = quote as Record<string, unknown>; return ["rental", "deposit", "shipping"].every(key => typeof value[key] === "number" && Number.isFinite(value[key]) && (value[key] as number) >= 0) && ["bank", "accountName", "accountNumber", "returnAddress", "returnPhone", "returnMethod"].every(key => typeof value[key] === "string" && (value[key] as string).length <= 500) && typeof value.qrImage === "string" && value.qrImage.length <= 2000; };
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim().length <= max;
+const validReturnItems = (value: unknown) => Array.isArray(value) && value.every((item: unknown) => !!item && typeof item === "object" && typeof (item as { unitSku?: unknown }).unitSku === "string" && conditions.includes((item as { condition?: string }).condition || "") && text((item as { note?: unknown }).note, 500));
+const validReceive = (body: Record<string, unknown>) => body.itemConditions !== undefined ? validReturnItems(body.itemConditions) : conditions.includes(body.condition as string) && text(body.note, 500);
 const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping", ackCondition: "shipping", setCondition: "shipping", delete: "bookings" };
 const quoteFields = ["rental", "deposit", "shipping", "bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod", "rentalBeforeDiscount", "discountAmount", "discountPercent", "discountLabel", "discountCode"];
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.id !== "string" || body.id.length > 100 || (!statuses.includes(body.status) && !Object.hasOwn(actions, body.action)) || (body.action === "saveQuote" && !validQuote(body.quote)) || (body.action === "setPayment" && (typeof body.paid !== "boolean" || (body.paidOn !== undefined && !validDay(body.paidOn)))) || (body.action === "ship" && (!text(body.carrier, 60) || !text(body.trackingNumber, 60))) || (body.action === "receiveReturn" && (!conditions.includes(body.condition) || !text(body.note, 500)))) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
+  if (!body || typeof body.id !== "string" || body.id.length > 100 || (!statuses.includes(body.status) && !Object.hasOwn(actions, body.action)) || (body.action === "saveQuote" && !validQuote(body.quote)) || (body.action === "setPayment" && (typeof body.paid !== "boolean" || (body.paidOn !== undefined && !validDay(body.paidOn)))) || (body.action === "ship" && (!text(body.carrier, 60) || !text(body.trackingNumber, 60))) || (body.action === "receiveReturn" && !validReceive(body))) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   const auth = await requireAdmin(body.action ? actions[body.action] : "bookings");
   if (auth.error) return auth.error;
   const admin = auth.admin, by = admin.email || admin.username;
@@ -160,15 +163,20 @@ export async function POST(request: Request) {
   if (body.action === "receiveReturn") {
     if (!booking.shipment) return Response.json({ error: "กรุณาบันทึกการจัดส่งก่อนรับคืนสินค้า" }, { status: 409 });
     if (booking.returned) return Response.json({ error: "รับคืนสินค้ารายการนี้แล้ว" }, { status: 409 });
-    const picks = body.units === undefined ? booking.items.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
+    const picks = booking.items.map(item => item.unitSku || "");
     if (!picks || picks.some((sku, index) => booking.items[index].unitSku && sku !== booking.items[index].unitSku)) return Response.json({ error: "ชิ้นสินค้าที่เลือกไม่ถูกต้อง กรุณาโหลดหน้าใหม่" }, { status: 400 });
+    if (Array.isArray(body.itemConditions) && (body.itemConditions.length !== booking.items.length || body.itemConditions.some((item: { unitSku: string }, index: number) => item.unitSku !== (booking.items[index].unitSku || "")))) return Response.json({ error: "ข้อมูลชิ้นสินค้าที่รับคืนไม่ตรงกับออเดอร์ กรุณาโหลดหน้าใหม่" }, { status: 400 });
     const items = booking.items.map((item, index) => withUnit(item, picks[index]));
-    const returned: Returned = { at: new Date(), condition: body.condition, note: body.note.trim(), by, byName: admin.name };
-    const status = afterReturn[body.condition];
+    const returnedItems: ReturnedItem[] = booking.items.map((item, index) => {
+      const selected = Array.isArray(body.itemConditions) ? body.itemConditions[index] : null;
+      return { unitSku: item.unitSku || "", condition: selected?.condition || body.condition, note: selected?.note?.trim() || body.note.trim() };
+    });
+    const returned: Returned = { at: new Date(), condition: returnedItems.every(item => item.condition === returnedItems[0]?.condition) ? returnedItems[0]?.condition || "good" : "mixed", note: returnedItems.every(item => item.note === returnedItems[0]?.note) ? returnedItems[0]?.note || "" : "", items: returnedItems, by, byName: admin.name };
     await bookings.updateOne({ _id: body.id }, { $set: { returned, items, updatedAt: new Date(), updatedBy: by } });
-    const before = await setUnitStatuses(db, picks.filter(Boolean).map(sku => ({ sku, status, ...(body.note.trim() ? { note: `คืนจาก ${booking._id}: ${body.note.trim()}`.slice(0, 500) } : {}) })));
-    await log("booking.returned", `รับคืนสินค้า · ${body.condition === "good" ? "สภาพปกติ" : body.condition === "damaged" ? "ชำรุด" : "สูญหาย/ไม่ครบ"}${before.size ? ` · ${[...before.keys()].join(", ")} → ${unitStatusLabels[status]}` : ""}`, diff(booking.returned, returned, ["condition", "note"]));
-    for (const [sku, previous] of before) await audit(request, admin, { action: "product.unit", targetType: "product", targetId: String(previous.productId), summary: `${sku} รับคืนจากคำขอ ${booking._id}`, changes: [{ field: "status", before: previous.status, after: status }] });
+    const changes = picks.flatMap((sku, index) => sku ? [{ sku, status: afterReturn[returnedItems[index].condition], ...(returnedItems[index].note ? { note: `คืนจาก ${booking._id}: ${returnedItems[index].note}`.slice(0, 500) } : {}) }] : []);
+    const before = await setUnitStatuses(db, changes);
+    await log("booking.returned", `รับคืนสินค้า · ${returned.condition === "good" ? "สภาพปกติ" : returned.condition === "damaged" ? "ชำรุด" : returned.condition === "missing" ? "สูญหาย/ไม่ครบ" : "ตรวจแยกตามชิ้น"}${before.size ? ` · ${[...before.keys()].join(", ")}` : ""}`, diff(booking.returned, returned, ["condition", "note", "items"]));
+    for (const [sku, previous] of before) { const item = returnedItems.find(row => row.unitSku === sku); await audit(request, admin, { action: "product.unit", targetType: "product", targetId: String(previous.productId), summary: `${sku} รับคืนจากคำขอ ${booking._id}`, changes: [{ field: "status", before: previous.status, after: afterReturn[item?.condition || "good"] }] }); }
     return Response.json({ ok: true, items, returned: { ...returned, at: returned.at.toISOString() } });
   }
   if (body.status === "confirmed" && booking.status !== "confirmed") {

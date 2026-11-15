@@ -57,7 +57,7 @@ export default function Home() {
   const visible = products.filter(p => {
     const rate = startingTier(p.pricing)?.price ?? null;
     const matchesPrice = priceFilter === "all" || priceFilter === "ask" && rate == null || priceFilter === "under500" && rate != null && rate < 500 || priceFilter === "500to1000" && rate != null && rate >= 500 && rate < 1000 || priceFilter === "over1000" && rate != null && rate >= 1000;
-    return (filter === "all" || p.category === filter) && (color === "all" || p.color === color) && matchesPrice && (availabilityFilter === "all" || availability[p.id] === availabilityFilter) && `${p.name} ${p.thai} ${p.tag} ${p.color} ${p.sku || ""}`.toLowerCase().includes(query.trim().toLowerCase());
+    return (filter === "all" || p.category === filter) && (color === "all" || p.color === color) && matchesPrice && (availabilityFilter === "all" || availability[p.id] === availabilityFilter) && `${p.name} ${p.thai} ${p.tag} ${p.color} ${p.sku || ""} ${(p.legacySkus || []).join(" ")}`.toLowerCase().includes(query.trim().toLowerCase());
   }).sort((a,b) => sort === "name" ? a.thai.localeCompare(b.thai,"th") : sort === "new" ? b.id-a.id : a.id-b.id);
   function productCard(p: Product, featured = false) { return (
     <article className="shop-card" key={p.id}>

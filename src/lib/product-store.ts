@@ -9,8 +9,18 @@ export async function getProducts(): Promise<Product[]> {
 // No request-time API calls, so it is safe inside a "use cache" scope.
 export async function readProducts(): Promise<Product[]> {
   const collection = (await database()).collection<Product>("products");
-  const stored = await collection.find({ deletedAt: { $exists: false } }, { projection: { _id: 0 } }).sort({ id: 1 }).toArray();
-  return stored.map(product => ({ ...product, color: product.color || product.variants?.map(variant => variant.color).filter(Boolean).join(" / ") || "", size: product.size || product.variants?.map(variant => variant.size).filter(Boolean).join(" / ") || "" }));
+  const [stored, mergedSources] = await Promise.all([
+    collection.find({ deletedAt: { $exists: false } }, { projection: { _id: 0 } }).sort({ id: 1 }).toArray(),
+    collection.find({ deletedAt: { $exists: true }, mergedIntoId: { $exists: true }, sku: { $exists: true } }, { projection: { _id: 0, id: 1, sku: 1, mergedIntoId: 1 } }).toArray(),
+  ]);
+  const legacySkusByProduct = new Map<number, string[]>();
+  for (const source of mergedSources) {
+    if (source.mergedIntoId === undefined || !source.sku) continue;
+    const skus = legacySkusByProduct.get(source.mergedIntoId) || [];
+    skus.push(source.sku);
+    legacySkusByProduct.set(source.mergedIntoId, skus);
+  }
+  return stored.map(product => ({ ...product, legacySkus: [...new Set([...(product.legacySkus || []), ...(legacySkusByProduct.get(product.id) || [])])], color: product.color || product.variants?.map(variant => variant.color).filter(Boolean).join(" / ") || "", size: product.size || product.variants?.map(variant => variant.size).filter(Boolean).join(" / ") || "" }));
 }
 
 export async function getProductCategories() {
@@ -156,7 +166,7 @@ export async function mergeProducts(fields: ProductFields, rows: ProductMergeRow
   const id = idCounter!.sequence;
   const safeUnits = units.map((unit, index) => ({ ...unit, sku: typeof unit.sku === "string" && unit.sku.trim() ? unit.sku : pieceCode(`${code}-LEGACY`, index + 1) }));
   const first = sources[0], images = variants[0]?.images || first.images || (first.image ? [first.image] : []);
-  const product: Product = { ...fields, color: variants.map(variant => variant.color).filter(Boolean).join(" / "), size: variants.map(variant => variant.size).filter(Boolean).join(" / "), variants, images, image: images[0] || `rental-${id}`, sku: code, id, legacyId: `PD-${code}`, inventoryStatus: "อยู่ที่ร้าน", units: safeUnits, ...derived(safeUnits) };
+  const product: Product = { ...fields, color: variants.map(variant => variant.color).filter(Boolean).join(" / "), size: variants.map(variant => variant.size).filter(Boolean).join(" / "), variants, images, image: images[0] || `rental-${id}`, sku: code, legacySkus: [...new Set(sources.map(source => source.sku).filter((sku): sku is string => !!sku))], id, legacyId: `PD-${code}`, inventoryStatus: "อยู่ที่ร้าน", units: safeUnits, ...derived(safeUnits) };
   await products(db).insertOne(product);
 
   // Move references before hiding the source products. Keep the old item

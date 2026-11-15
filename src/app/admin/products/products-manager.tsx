@@ -85,7 +85,7 @@ export default function AdminProducts({ initialProducts, initialCategories, init
   const [, startTransition] = useTransition();
   const products = items;
   const pieces = products.flatMap(p => unitsOf(p));
-  const shown = products.filter(p => `${p.name} ${p.sku || ""} ${unitsOf(p).map(unit => unit.sku).join(" ")} ${p.category} ${p.notes || p.description}`.toLowerCase().includes(query.trim().toLowerCase()) && (category === "all" || p.category === category) && (stockFilter === "all" || (stockFilter === "in" ? ready(p) > 0 : ready(p) === 0)));
+  const shown = products.filter(p => `${p.name} ${p.sku || ""} ${(p.legacySkus || []).join(" ")} ${unitsOf(p).map(unit => unit.sku).join(" ")} ${p.category} ${p.notes || p.description}`.toLowerCase().includes(query.trim().toLowerCase()) && (category === "all" || p.category === category) && (stockFilter === "all" || (stockFilter === "in" ? ready(p) > 0 : ready(p) === 0)));
   const pageCount = Math.max(1, Math.ceil(shown.length / 30));
   const currentPage = Math.min(page, pageCount - 1);
   const paginated = shown.slice(currentPage * 30, (currentPage + 1) * 30);

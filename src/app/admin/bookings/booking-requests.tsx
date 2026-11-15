@@ -39,7 +39,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
   const [detailId, setDetailId] = useState<string | null>(initial.find(row => row._id === selected)?._id || initial[0]?._id || null);
   const [query, setQuery] = useState(initialQuery); const [period, setPeriodState] = useState(initialPeriod); const [, setCutoff] = useState("");
   const [isComposing, setIsComposing] = useState(false);
-  const [quoteRow, setQuoteRow] = useState<RequestRow | null>(null); const [quote, setQuote] = useState<Quote | null>(null); const [savingQuote, setSavingQuote] = useState(false);
+  const [quoteRow, setQuoteRow] = useState<RequestRow | null>(null); const [quote, setQuote] = useState<Quote | null>(null); const [savingQuote, setSavingQuote] = useState(false); const [pngExporting, setPngExporting] = useState(false); const [pngQrImage, setPngQrImage] = useState("");
   const [deleteRow, setDeleteRow] = useState<RequestRow | null>(null);
   const refunds = statusCounts.refund || 0, late = statusCounts.late || 0, clash = statusCounts.clash || 0, damaged = statusCounts.damaged || 0;
   const pageRows = rows, currentPage = page;
@@ -127,16 +127,56 @@ export default function BookingRequests({ initial, store, permissions, selected,
   async function saveQuote() { if (!quoteRow || !quote) return false; if (!canPrice) return true; setSavingQuote(true); setError(""); try { const response = await fetch("/api/admin/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: quoteRow._id, action: "saveQuote", quote }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "บันทึกใบสรุปไม่สำเร็จ"); setQuote(data.quote || quote); setRows(current => current.map(row => row._id === quoteRow._id ? { ...row, quote: data.quote || quote } : row)); return true; } catch (cause) { setError(cause instanceof Error ? cause.message : "บันทึกใบสรุปไม่สำเร็จ"); return false; } finally { setSavingQuote(false); } }
   async function printQuote() { if (await saveQuote()) window.print(); }
   async function downloadPng() {
-    if (!quoteRow || !quote || !(await saveQuote())) return;
+    if (!quoteRow || !quote) return;
+    setPngExporting(true);
+    setPngQrImage("");
+    try {
+      if (!(await saveQuote())) return;
+      if (quoteRow.billToken) {
+        const qrResponse = await fetch(`/bill/${encodeURIComponent(quoteRow.billToken)}/qr?v=${Date.now()}`, { cache: "no-store" });
+        if (qrResponse.ok) {
+          const qrBlob = await qrResponse.blob();
+          const reader = new FileReader();
+          const qrData = await new Promise<string>((resolve, reject) => { reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(qrBlob); });
+          setPngQrImage(qrData);
+        }
+      }
+    // saveQuote updates React state asynchronously. Wait for the document to
+    // render the saved quote before cloning it for the PNG export.
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     const source = document.getElementById("rental-paper"); if (!source) return;
     const clone = source.cloneNode(true) as HTMLElement;
     const originals = [source, ...Array.from(source.querySelectorAll<HTMLElement>("*"))];
     const copies = [clone, ...Array.from(clone.querySelectorAll<HTMLElement>("*"))];
     originals.forEach((element, index) => { const style = getComputedStyle(element); const declarations = Array.from(style).map(name => `${name}:${style.getPropertyValue(name)}`).join(";"); copies[index].setAttribute("style", declarations); });
     clone.style.width = `${source.offsetWidth}px`; clone.style.height = "auto";
+    clone.querySelector<HTMLElement>(".rental-paper-wordmark")?.style.setProperty("min-width", "0");
+    clone.querySelector<HTMLElement>(".rental-paper-wordmark img")?.style.setProperty("flex-shrink", "0");
+    clone.querySelector<HTMLElement>(".rental-paper-wordmark > span")?.style.setProperty("min-width", "0");
+    clone.querySelectorAll<HTMLElement>(".rental-paper-wordmark strong, .rental-paper-wordmark small, .rental-paper-title strong, .rental-paper-title small").forEach(element => {
+      element.style.setProperty("display", "block");
+      element.style.setProperty("white-space", "nowrap");
+    });
     const width = source.offsetWidth, height = source.scrollHeight, scale = 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * scale}" height="${height * scale}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml">${new XMLSerializer().serializeToString(clone)}</div></foreignObject></svg>`;
     try {
+      const images = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
+      await Promise.all(images.map(async image => {
+        const sourceUrl = image.currentSrc || image.getAttribute("src") || "";
+        if (!sourceUrl || sourceUrl.startsWith("data:")) return;
+        try {
+          const response = await fetch(`/api/admin/images/proxy?url=${encodeURIComponent(sourceUrl)}`, { cache: "no-store" });
+          if (!response.ok) return;
+          const blob = await response.blob();
+          image.src = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob);
+          });
+          image.removeAttribute("srcset");
+          image.removeAttribute("sizes");
+        } catch {
+          // Keep the original source when the image host does not allow fetching.
+        }
+      }));
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * scale}" height="${height * scale}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml">${new XMLSerializer().serializeToString(clone)}</div></foreignObject></svg>`;
       const image = new window.Image(); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
       await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("เบราว์เซอร์ไม่สามารถแปลงตัวอย่างเอกสารเป็นภาพได้")); });
       const canvas = document.createElement("canvas"); canvas.width = width * scale; canvas.height = height * scale;
@@ -144,6 +184,7 @@ export default function BookingRequests({ initial, store, permissions, selected,
       const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("สร้างไฟล์ PNG ไม่สำเร็จ")), "image/png"));
       const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `${quoteRow._id}-rental-summary.png`; link.click(); URL.revokeObjectURL(url);
     } catch { setError("แปลงภาพไม่สำเร็จ เบราว์เซอร์หรือรูปภายนอกไม่อนุญาตให้ส่งออก PNG กรุณาใช้ดาวน์โหลด PDF"); }
+    } finally { setPngExporting(false); setPngQrImage(""); }
   }
 
   return <main className="admin-main bookings-page">
@@ -193,6 +234,6 @@ export default function BookingRequests({ initial, store, permissions, selected,
         {detail.status === "new" && <p className="bookings-detail-warning"><Icon name="help" />ตรวจสอบคิวก่อนยืนยันคำขอ</p>}
       </> : <div className="bookings-detail-placeholder"><Icon name="booking" /><strong>เลือกรายการเพื่อดูรายละเอียด</strong></div>}</aside>
     </div>
-    <Dialog.Root open={!!quoteRow} onOpenChange={open => { if (!open && !savingQuote) setQuoteRow(null); }}><Dialog.Portal><Dialog.Overlay className="admin-dialog-overlay quote-overlay"/><Dialog.Content className="admin-dialog quote-dialog"><Dialog.Close className="admin-dialog-close" aria-label="ปิดใบสรุป" disabled={savingQuote}><Icon name="close" /></Dialog.Close><Dialog.Title>ใบสรุปก่อนชำระเงิน</Dialog.Title><Dialog.Description>กรอกข้อมูลให้ครบ แล้วตรวจตัวอย่างเอกสารตามแบบร้าน</Dialog.Description>{quoteRow && quote && <><div className="quote-editor">{!canPrice && <p className="quote-editor-wide bookings-line-state">บัญชีนี้ดูใบสรุปได้ แต่ไม่มีสิทธิ์แก้ไขราคา</p>}<label>โค้ดส่วนลด<input readOnly={!canPrice} value={quote.discountCode || ""} placeholder="ถ้ามี" autoCapitalize="characters" onChange={event => setQuote({ ...quote, discountCode: event.target.value.trim().toUpperCase() })}/><small>คำนวณส่วนลดตอนกดบันทึก</small></label><label>ค่าเช่ารวม (ก่อนส่วนลด)<input readOnly={!canPrice} type="number" min="0" value={quote.rentalBeforeDiscount ?? quote.rental} onChange={event => { const before = Number(event.target.value); setQuote({ ...quote, rentalBeforeDiscount: before, rental: Math.max(0, Math.round((before - before * (quote.discountPercent || 0) / 100) * 100) / 100), discountAmount: Math.round(before * (quote.discountPercent || 0) / 100 * 100) / 100 }); }}/></label><label>เงินมัดจำ<input readOnly={!canPrice} type="number" min="0" value={quote.deposit} onChange={event => setQuote({ ...quote, deposit: Number(event.target.value) })}/></label><label>ค่าจัดส่ง<input readOnly={!canPrice} type="number" min="0" value={quote.shipping} onChange={event => setQuote({ ...quote, shipping: Number(event.target.value) })}/></label><label>ธนาคาร<input readOnly={!canPrice} value={quote.bank} onChange={event => setQuote({ ...quote, bank: event.target.value })}/></label><label>ชื่อบัญชี<input readOnly={!canPrice} value={quote.accountName} onChange={event => setQuote({ ...quote, accountName: event.target.value })}/></label><label>เลขบัญชี<input readOnly={!canPrice} value={quote.accountNumber} onChange={event => setQuote({ ...quote, accountNumber: event.target.value })}/></label><label className="quote-editor-wide">ลิงก์ QR<input readOnly={!canPrice} value={quote.qrImage} placeholder="https://…" onChange={event => setQuote({ ...quote, qrImage: event.target.value })}/></label><label>ที่อยู่ส่งคืน<input readOnly={!canPrice} value={quote.returnAddress} onChange={event => setQuote({ ...quote, returnAddress: event.target.value })}/></label><label>เบอร์โทรร้าน<input readOnly={!canPrice} value={quote.returnPhone} onChange={event => setQuote({ ...quote, returnPhone: event.target.value })}/></label><label>วิธีส่งคืน<input readOnly={!canPrice} value={quote.returnMethod} onChange={event => setQuote({ ...quote, returnMethod: event.target.value })}/></label></div><RentalDocument row={quoteRow} quote={quote} store={store}/><div className="quote-actions"><button type="button" onClick={printQuote} disabled={savingQuote}>เปิด / ดาวน์โหลด PDF</button><button type="button" onClick={downloadPng} disabled={savingQuote}>ดาวน์โหลด PNG</button>{canPrice && <button type="button" onClick={saveQuote} disabled={savingQuote}>{savingQuote ? "กำลังบันทึก…" : "บันทึกราคา"}</button>}</div></>}</Dialog.Content><div className="rental-print-only" aria-hidden="true">{quoteRow && quote && <RentalDocument row={quoteRow} quote={quote} store={store} printOnly />}</div></Dialog.Portal></Dialog.Root>
+    <Dialog.Root open={!!quoteRow} onOpenChange={open => { if (!open && !savingQuote && !pngExporting) setQuoteRow(null); }}><Dialog.Portal><Dialog.Overlay className="admin-dialog-overlay quote-overlay"/><Dialog.Content className="admin-dialog quote-dialog"><Dialog.Close className="admin-dialog-close" aria-label="ปิดใบสรุป" disabled={savingQuote || pngExporting}><Icon name="close" /></Dialog.Close><Dialog.Title>ใบสรุปก่อนชำระเงิน</Dialog.Title><Dialog.Description>กรอกข้อมูลให้ครบ แล้วตรวจตัวอย่างเอกสารตามแบบร้าน</Dialog.Description>{quoteRow && quote && <><div className="quote-editor">{!canPrice && <p className="quote-editor-wide bookings-line-state">บัญชีนี้ดูใบสรุปได้ แต่ไม่มีสิทธิ์แก้ไขราคา</p>}<label>โค้ดส่วนลด<input readOnly={!canPrice} value={quote.discountCode || ""} placeholder="ถ้ามี" autoCapitalize="characters" onChange={event => setQuote({ ...quote, discountCode: event.target.value.trim().toUpperCase() })}/><small>คำนวณส่วนลดตอนกดบันทึก</small></label><label>ค่าเช่ารวม (ก่อนส่วนลด)<input readOnly={!canPrice} type="number" min="0" value={quote.rentalBeforeDiscount ?? quote.rental} onChange={event => { const before = Number(event.target.value); setQuote({ ...quote, rentalBeforeDiscount: before, rental: Math.max(0, Math.round((before - before * (quote.discountPercent || 0) / 100) * 100) / 100), discountAmount: Math.round(before * (quote.discountPercent || 0) / 100 * 100) / 100 }); }}/></label><label>เงินมัดจำ<input readOnly={!canPrice} type="number" min="0" value={quote.deposit} onChange={event => setQuote({ ...quote, deposit: Number(event.target.value) })}/></label><label>ค่าจัดส่ง<input readOnly={!canPrice} type="number" min="0" value={quote.shipping} onChange={event => setQuote({ ...quote, shipping: Number(event.target.value) })}/></label><label>ธนาคาร<input readOnly={!canPrice} value={quote.bank} onChange={event => setQuote({ ...quote, bank: event.target.value })}/></label><label>ชื่อบัญชี<input readOnly={!canPrice} value={quote.accountName} onChange={event => setQuote({ ...quote, accountName: event.target.value })}/></label><label>เลขบัญชี<input readOnly={!canPrice} value={quote.accountNumber} onChange={event => setQuote({ ...quote, accountNumber: event.target.value })}/></label><label className="quote-editor-wide">ลิงก์ QR<input readOnly={!canPrice} value={quote.qrImage} placeholder="https://…" onChange={event => setQuote({ ...quote, qrImage: event.target.value })}/></label><label>ที่อยู่ส่งคืน<input readOnly={!canPrice} value={quote.returnAddress} onChange={event => setQuote({ ...quote, returnAddress: event.target.value })}/></label><label>เบอร์โทรร้าน<input readOnly={!canPrice} value={quote.returnPhone} onChange={event => setQuote({ ...quote, returnPhone: event.target.value })}/></label><label>วิธีส่งคืน<input readOnly={!canPrice} value={quote.returnMethod} onChange={event => setQuote({ ...quote, returnMethod: event.target.value })}/></label></div><RentalDocument row={quoteRow} quote={quote} store={store} qrPending={!pngExporting && !safeUrl(quote.qrImage)} qrImageOverride={pngQrImage} /><div className="quote-actions"><button type="button" onClick={printQuote} disabled={savingQuote || pngExporting}>เปิด / ดาวน์โหลด PDF</button><button type="button" onClick={downloadPng} disabled={savingQuote || pngExporting}>ดาวน์โหลด PNG</button>{canPrice && <button type="button" onClick={saveQuote} disabled={savingQuote || pngExporting}>{savingQuote ? "กำลังบันทึก…" : "บันทึกราคา"}</button>}</div></>}</Dialog.Content><div className="rental-print-only" aria-hidden="true">{quoteRow && quote && <RentalDocument row={quoteRow} quote={quote} store={store} printOnly />}</div></Dialog.Portal></Dialog.Root>
   </main>;
 }

@@ -16,7 +16,7 @@ export type LegacyRental = {
   legacyId: string; customerName?: string; phone?: string; phoneKey?: string; address?: string; legacyStatus?: string; importedStatus?: string;
   shipDate?: Date | null; returnDate?: Date | null; days?: number | null; paidAt?: Date | null; carrier?: string;
   shipment?: { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
-  returned?: { at: Date; condition: string; note: string; by: string; byName: string };
+  returned?: { at: Date; condition: string; note: string; items?: { unitSku: string; condition: string; note: string }[]; by: string; byName: string };
   cancelled?: { at: Date; reason: string; by: string; byName: string };
   updatedAt?: Date; updatedBy?: string;
 };

@@ -5,6 +5,7 @@ export type Product = {
   active?: boolean; stock?: number; size?: string; deposit?: number | null; depositRequired?: boolean; deletedAt?: Date | string;
   legacyId?: string; sku?: string; cost?: number | null; legacyRevenue?: number | null;
   legacyProfit?: number | null; inventoryStatus?: string; notes?: string; imageStatus?: string;
+  legacySkus?: string[];
   mergedIntoId?: number; mergedIntoSku?: string;
   units?: ProductUnit[];
   // customPricing is the admin-set table for this product; pricing is what the storefront charges (custom, legacy daily rate or the shop table).
@@ -53,5 +54,5 @@ export function publicProduct(p: Product, shopPricing?: RentalPricing | null, ex
   const colors = [...new Set(variants.map(variant => variant.color).filter(Boolean))], sizes = [...new Set(variants.map(variant => variant.size).filter(Boolean))];
   return { id: p.id, name: p.name, thai: p.thai, category: p.category, color: colors.join(" / ") || p.color, dailyRate: p.dailyRate,
     image: p.image, images: p.images, tag: p.tag, description: p.description, active: p.active, stock: p.stock,
-    size: sizes.join(" / ") || p.size, deposit: p.deposit, depositRequired: p.depositRequired === true, sku: p.sku, shippingFee: p.shippingFee ?? null, pricing: effectivePricing(p, shopPricing, extras), variants };
+    size: sizes.join(" / ") || p.size, deposit: p.deposit, depositRequired: p.depositRequired === true, sku: p.sku, legacySkus: p.legacySkus, shippingFee: p.shippingFee ?? null, pricing: effectivePricing(p, shopPricing, extras), variants };
 }

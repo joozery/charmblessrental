@@ -4,13 +4,14 @@ import { legacyItems, legacyRentals, type LegacyRental } from "@/lib/legacy-rent
 import { database } from "@/lib/mongodb";
 import { can } from "@/lib/permissions";
 import { setUnitStatuses } from "@/lib/product-store";
-import { unitStatusLabels, type UnitStatus } from "@/lib/products";
+import { type UnitStatus } from "@/lib/products";
 
 // Moves a rental imported from the old sheet on: shipped, back at the shop, or cancelled. No LINE message is sent:
 // these customers booked outside the website. A returned or cancelled rental frees its pieces in the queue.
 const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
 const conditionLabels: Record<string, string> = { good: "สภาพปกติ", damaged: "ชำรุด", missing: "สูญหาย/ไม่ครบ" };
 const text = (value: unknown, max: number) => typeof value === "string" && value.length <= max;
+const validReturnItems = (value: unknown) => Array.isArray(value) && value.every((item: unknown) => !!item && typeof item === "object" && typeof (item as { unitSku?: unknown }).unitSku === "string" && Object.hasOwn(afterReturn, (item as { condition?: string }).condition || "") && text((item as { note?: unknown }).note, 500));
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body || !text(body.id, 100) || !["ship", "return", "cancel"].includes(body.action)
     || (body.action === "ship" && (!text(body.carrier, 60) || !text(body.trackingNumber, 60)))
-    || (body.action === "return" && (!Object.hasOwn(afterReturn, body.condition) || !text(body.note, 500)))
+    || (body.action === "return" && (body.itemConditions !== undefined ? !validReturnItems(body.itemConditions) : (!Object.hasOwn(afterReturn, body.condition) || !text(body.note, 500))))
     || (body.action === "cancel" && (!text(body.reason, 300) || !body.reason.trim()))) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   if (!can(admin, body.action === "cancel" ? "bookings" : "shipping")) return Response.json({ error: "บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้ กรุณาติดต่อเจ้าของร้าน" }, { status: 403 });
   const db = await database(), rental = await legacyRentals(db).findOne({ legacyId: body.id });
@@ -46,11 +47,13 @@ export async function POST(request: Request) {
   }
   if (body.action === "return") {
     if (!["รอจัดส่ง", "จัดส่งแล้ว", "เกินกำหนดส่ง"].includes(status)) return Response.json({ error: `รายการนี้${status || "ปิดไปแล้ว"} จึงรับคืนไม่ได้` }, { status: 409 });
-    const returned = { at: new Date(), condition: body.condition as string, note: body.note.trim(), by, byName: admin.name }, unit = afterReturn[returned.condition];
+    const returnedItems = skus.map((sku, index) => { const selected = Array.isArray(body.itemConditions) ? body.itemConditions[index] : null; return { unitSku: sku || "", condition: selected?.condition || body.condition, note: selected?.note?.trim() || body.note.trim() }; });
+    if (Array.isArray(body.itemConditions) && (body.itemConditions.length !== skus.length || body.itemConditions.some((item: { unitSku: string }, index: number) => item.unitSku !== (skus[index] || "")))) return Response.json({ error: "ข้อมูลชิ้นสินค้าที่รับคืนไม่ตรงกับรายการ กรุณาโหลดหน้าใหม่" }, { status: 400 });
+    const returned = { at: new Date(), condition: returnedItems.every(item => item.condition === returnedItems[0]?.condition) ? returnedItems[0]?.condition || "good" : "mixed", note: returnedItems.every(item => item.note === returnedItems[0]?.note) ? returnedItems[0]?.note || "" : "", items: returnedItems, by, byName: admin.name };
     await update("คืนสินค้าแล้ว", { returned });
-    const before = await setUnitStatuses(db, skus.map(sku => ({ sku, status: unit, ...(returned.note ? { note: `คืนจาก ${rental.legacyId}: ${returned.note}`.slice(0, 500) } : {}) })));
-    await log("rental.returned", `รับคืนรายการเช่าเดิม · ${conditionLabels[returned.condition]}${before.size ? ` · ${[...before.keys()].join(", ")} → ${unitStatusLabels[unit]}` : ""}`, "คืนสินค้าแล้ว");
-    await unitLog(before, unit);
+    const before = await setUnitStatuses(db, returnedItems.filter(item => item.unitSku).map(item => ({ sku: item.unitSku, status: afterReturn[item.condition], ...(item.note ? { note: `คืนจาก ${rental.legacyId}: ${item.note}`.slice(0, 500) } : {}) })));
+    await log("rental.returned", `รับคืนรายการเช่าเดิม · ${returned.condition === "good" ? conditionLabels.good : returned.condition === "damaged" ? conditionLabels.damaged : returned.condition === "missing" ? conditionLabels.missing : "ตรวจแยกตามชิ้น"}${before.size ? ` · ${[...before.keys()].join(", ")}` : ""}`, "คืนสินค้าแล้ว");
+    for (const [sku, previous] of before) { const item = returnedItems.find(row => row.unitSku === sku); await audit(request, admin, { action: "product.unit", targetType: "product", targetId: String(previous.productId), summary: `${sku} รับคืนจากรายการเช่าเดิม ${rental.legacyId}`, changes: [{ field: "status", before: previous.status, after: afterReturn[item?.condition || "good"] }] }); }
     return Response.json({ ok: true, legacyStatus: "คืนสินค้าแล้ว" });
   }
   if (!["รอชำระเงิน", "รอจัดส่ง"].includes(status)) return Response.json({ error: status === "จัดส่งแล้ว" ? "ส่งสินค้าไปแล้ว กรุณาบันทึกรับคืนแทนการยกเลิก" : `รายการนี้${status || "ปิดไปแล้ว"} จึงยกเลิกไม่ได้` }, { status: 409 });

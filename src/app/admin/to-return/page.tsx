@@ -62,7 +62,7 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   const rows: ReturnRow[] = bookings.map(row => ({
     id: row._id, name: row.name, phone: row.phone, address: row.address || (row.delivery && "address" in row.delivery ? row.delivery.address || "" : ""), pickup: row.method === "pickup",
     returnDay: returnDay(row), start: row.start,
-    items: row.items.map(item => ({ name: item.name, sku: item.unitSku || item.sku, image: item.image })),
+    items: row.items.map(item => ({ name: item.name, sku: item.unitSku || item.sku, unitSku: item.unitSku || "", image: item.image })),
     customerReturn: row.customerReturn ? { carrier: row.customerReturn.carrier, trackingNumber: row.customerReturn.trackingNumber, at: new Date(row.customerReturn.at).toISOString() } : null, photos: row.photos || {},
   })).sort((a, b) => a.returnDay.localeCompare(b.returnDay) || a.start.localeCompare(b.start));
   const legacyItemsRows = legacy.length ? await legacyItems(db).find({ rentalId: { $in: legacy.map(row => row.legacyId) } }, { projection: { _id: 0, rentalId: 1, productLegacyId: 1, productName: 1, sku: 1 } }).toArray() : [];
@@ -73,7 +73,7 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
     const plan = legacyPlan(row, 0);
     if (!plan) continue;
     const items = (legacyItemsByRental.get(row.legacyId) || []).map(item => ({ name: item.productName || products.get(item.productLegacyId || "")?.name || "สินค้ารุ่นเดิม", sku: item.sku || products.get(item.productLegacyId || "")?.sku || "", image: products.get(item.productLegacyId || "")?.images?.[0] || "" }));
-    rows.push({ id: row.legacyId, legacy: true, name: row.customerName || "", phone: row.phone || "", address: row.address || "", pickup: false, returnDay: plan.returnDate, start: plan.start, items, customerReturn: null });
+    rows.push({ id: row.legacyId, legacy: true, name: row.customerName || "", phone: row.phone || "", address: row.address || "", pickup: false, returnDay: plan.returnDate, start: plan.start, items: items.map(item => ({ ...item, unitSku: item.sku })), customerReturn: null });
   }
   rows.sort((a, b) => a.returnDay.localeCompare(b.returnDay) || a.start.localeCompare(b.start));
   const pageRows = rows.slice(skip, skip + PAGE_SIZE);
