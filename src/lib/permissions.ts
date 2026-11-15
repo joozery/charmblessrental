@@ -11,6 +11,7 @@ export const permissionList = [
   { key: "products", label: "สินค้าและคิวว่าง", description: "แก้ไขสินค้า ราคา และจำนวนว่าง" },
   { key: "settings", label: "ตั้งค่าร้าน", description: "หน้าร้านและใบรายละเอียดการเช่า" },
   { key: "activity", label: "ประวัติการทำรายการ", description: "ดูว่าใครทำอะไร เมื่อใด" },
+  { key: "admins", label: "จัดการแอดมิน", description: "เพิ่ม แก้ไข เปิด/ปิดบัญชี และกำหนดสิทธิ์ผู้ดูแล" },
 ] as const;
 export type Permission = typeof permissionList[number]["key"];
 export const allPermissions = permissionList.map(item => item.key) as Permission[];

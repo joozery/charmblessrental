@@ -5,7 +5,7 @@ import { listAdmins } from "@/lib/admin-accounts";
 import AccountsManager from "./accounts-manager";
 export const metadata = { title: "จัดการแอดมิน | Charm Bless", robots: { index: false, follow: false } };
 async function Content() {
-  const admin = await pageAdmin("owner");
+  const admin = await pageAdmin("admins");
   const accounts = (await listAdmins()).map(a => ({ ...a, permissions: permissionsOf(a), createdAt: a.createdAt.toISOString() }));
   return <AccountsManager initialAccounts={accounts} currentId={admin._id} />;
 }

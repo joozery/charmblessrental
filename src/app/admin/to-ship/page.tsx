@@ -7,7 +7,7 @@ import { database } from "@/lib/mongodb";
 import { unitsOf, unitStatusLabels, type Product, type UnitStatus } from "@/lib/products";
 import { returnDay, type ScheduleRecord } from "@/lib/schedule";
 import { toShipFilter } from "@/lib/to-ship";
-import ShipBoard, { type ShipRow } from "./ship-board";
+import ShipBoard, { type ShipCounts, type ShipRow } from "./ship-board";
 import "./to-ship.css";
 import "./to-ship-mobile.css";
 
@@ -30,13 +30,24 @@ async function Content({ page, query = "", shipDate = "", tab = "all" }: { page:
   if (text) clauses.push({ $or: [{ _id: { $regex: text, $options: "i" } }, { name: { $regex: text, $options: "i" } }, { phone: { $regex: text, $options: "i" } }, { address: { $regex: text, $options: "i" } }, { "items.name": { $regex: text, $options: "i" } }, { "items.sku": { $regex: text, $options: "i" } }] });
   if (shipDate) clauses.push({ $or: [{ "schedule.ship": shipDate }, { schedule: { $exists: false }, start: shipDate }] });
   const bucketClause = tab === "late" ? { $or: [{ "schedule.ship": { $lt: thaiDay() } }, { schedule: { $exists: false }, start: { $lt: thaiDay() } }] } : tab === "today" ? { $or: [{ "schedule.ship": thaiDay() }, { schedule: { $exists: false }, start: thaiDay() }] } : tab === "tomorrow" ? { $or: [{ "schedule.ship": tomorrow }, { schedule: { $exists: false }, start: tomorrow }] } : tab === "later" ? { $or: [{ "schedule.ship": { $gt: tomorrow } }, { schedule: { $exists: false }, start: { $gt: tomorrow } }] } : null;
-  if (bucketClause) clauses.push(bucketClause);
-  const webFilter = clauses.length ? { $and: [toShipFilter, ...clauses] } : toShipFilter;
+  const baseFilter = clauses.length ? { $and: [toShipFilter, ...clauses] } : toShipFilter;
+  const webFilter = bucketClause ? { $and: [baseFilter, bucketClause] } : baseFilter;
   const skip = Math.max(0, page - 1) * PAGE_SIZE;
   const projection = { _id: 1, name: 1, phone: 1, address: 1, method: 1, start: 1, end: 1, schedule: 1, paidAt: 1, shipping: 1, verification: 1, items: 1, photos: 1 };
-  const [bookings, bookingTotal] = await Promise.all([
+  const bucketFilters = {
+    late: { $or: [{ "schedule.ship": { $lt: thaiDay() } }, { schedule: { $exists: false }, start: { $lt: thaiDay() } }] },
+    today: { $or: [{ "schedule.ship": thaiDay() }, { schedule: { $exists: false }, start: thaiDay() }] },
+    tomorrow: { $or: [{ "schedule.ship": tomorrow }, { schedule: { $exists: false }, start: tomorrow }] },
+    later: { $or: [{ "schedule.ship": { $gt: tomorrow } }, { schedule: { $exists: false }, start: { $gt: tomorrow } }] },
+  };
+  const [bookings, bookingTotal, allCount, lateCount, todayCount, tomorrowCount, laterCount] = await Promise.all([
     db.collection<BookingDoc>("bookingRequests").find(webFilter, { projection }).sort({ "schedule.ship": 1, start: 1, _id: 1 }).limit(skip + PAGE_SIZE).toArray(),
     db.collection<BookingDoc>("bookingRequests").countDocuments(webFilter),
+    db.collection<BookingDoc>("bookingRequests").countDocuments(baseFilter),
+    db.collection<BookingDoc>("bookingRequests").countDocuments({ $and: [baseFilter, bucketFilters.late] }),
+    db.collection<BookingDoc>("bookingRequests").countDocuments({ $and: [baseFilter, bucketFilters.today] }),
+    db.collection<BookingDoc>("bookingRequests").countDocuments({ $and: [baseFilter, bucketFilters.tomorrow] }),
+    db.collection<BookingDoc>("bookingRequests").countDocuments({ $and: [baseFilter, bucketFilters.later] }),
   ]);
   // Where each assigned piece is now, so the list shows whether it is back from the last customer and clean.
   const skus = [...new Set(bookings.flatMap(row => row.items.map(item => item.unitSku).filter((sku): sku is string => !!sku)))];
@@ -54,7 +65,7 @@ async function Content({ page, query = "", shipDate = "", tab = "all" }: { page:
   const pageRows = rows.slice(skip, skip + PAGE_SIZE);
   return <main className="admin-main to-ship-page">
     <header className="to-ship-header"><div><span className="to-ship-eyebrow">TO SHIP</span><h1>รายการที่ต้องส่ง</h1><p>ลูกค้าชำระเงินแล้ว รอร้านจัดส่งหรือส่งมอบที่ร้าน เรียงตามวันที่ต้องส่ง บันทึกเลขพัสดุได้จากหน้านี้ ระบบจะแจ้งลูกค้าทาง LINE ให้</p></div></header>
-    <ShipBoard rows={pageRows} today={thaiDay()} page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} total={total} filters={{ query, shipDate, tab }} />
+    <ShipBoard rows={pageRows} today={thaiDay()} page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} total={total} counts={{ all: allCount, late: lateCount, today: todayCount, tomorrow: tomorrowCount, later: laterCount }} filters={{ query, shipDate, tab }} />
   </main>;
 }
 

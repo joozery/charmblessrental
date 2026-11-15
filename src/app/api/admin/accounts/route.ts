@@ -4,8 +4,8 @@ import { audit, diff } from "@/lib/audit";
 import { isPermission, permissionsOf, type Permission } from "@/lib/permissions";
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
-  const auth = await requireAdmin("owner");
-  if (auth.error) return auth.error.status === 403 ? Response.json({ error: "เฉพาะเจ้าของร้านที่จัดการบัญชีแอดมินได้" }, { status: 403 }) : auth.error;
+  const auth = await requireAdmin("admins");
+  if (auth.error) return auth.error.status === 403 ? Response.json({ error: "บัญชีนี้ไม่มีสิทธิ์จัดการแอดมิน" }, { status: 403 }) : auth.error;
   const actor = auth.admin;
   const body = await request.json().catch(() => null);
   if (!body || typeof body.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim()) || body.email.trim().length > 254 || typeof body.name !== "string" || !body.name.trim() || body.name.length > 100 || typeof body.active !== "boolean" || typeof body.password !== "string" || ((body.password || !body.id) && (body.password.length < 8 || body.password.length > 128)) || (body.id !== undefined && (typeof body.id !== "string" || body.id.length > 100))) return Response.json({ error: "กรุณากรอกอีเมลที่ถูกต้อง และตั้งรหัสผ่าน 8–128 ตัวอักษร" }, { status: 400 });

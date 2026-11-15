@@ -23,6 +23,7 @@ type BookingDoc = {
   customerReturn?: { carrier: string; trackingNumber: string; at: Date };
   photos?: { beforeShipment?: { url: string }[]; received?: { url: string }[]; return?: { url: string }[] };
 };
+export type ReturnCounts = { all: number; late: number; today: number; later: number };
 
 async function Content({ page, query = "", tab = "all" }: { page: number; query?: string; tab?: string }) {
   await pageAdmin("shipping");
@@ -33,6 +34,7 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   const text = query.trim();
   const webClauses: Record<string, unknown>[] = [];
   if (text) webClauses.push({ $or: [{ _id: { $regex: text, $options: "i" } }, { name: { $regex: text, $options: "i" } }, { phone: { $regex: text, $options: "i" } }, { address: { $regex: text, $options: "i" } }, { "items.name": { $regex: text, $options: "i" } }, { "items.sku": { $regex: text, $options: "i" } }] });
+  const baseWebClauses = [...webClauses];
   if (tab === "late") webClauses.push({ $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] });
   if (tab === "today") webClauses.push({ $or: [{ "schedule.returnDate": { $lte: tomorrow } }, { schedule: { $exists: false }, end: { $lte: tomorrow } }] });
   if (tab === "later") webClauses.push({ $or: [{ "schedule.returnDate": { $gt: tomorrow } }, { schedule: { $exists: false }, end: { $gt: tomorrow } }] });
@@ -40,15 +42,23 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   const legacyBase = { shipment: { $exists: true }, returned: { $exists: false }, cancelled: { $exists: false }, legacyStatus: { $in: ["จัดส่งแล้ว", "เกินกำหนดส่ง"] } };
   const legacyClauses: Record<string, unknown>[] = [];
   if (text) legacyClauses.push({ $or: [{ legacyId: { $regex: text, $options: "i" } }, { customerName: { $regex: text, $options: "i" } }, { phone: { $regex: text, $options: "i" } }, { address: { $regex: text, $options: "i" } }] });
+  const baseLegacyClauses = [...legacyClauses];
   if (tab === "late") legacyClauses.push({ returnDate: { $lt: new Date(`${today}T00:00:00.000Z`) } });
   if (tab === "today") legacyClauses.push({ returnDate: { $lte: new Date(`${tomorrow}T23:59:59.999Z`) } });
   if (tab === "later") legacyClauses.push({ returnDate: { $gt: new Date(`${tomorrow}T23:59:59.999Z`) } });
   const legacyFilter = legacyClauses.length ? { $and: [legacyBase, ...legacyClauses] } : legacyBase;
-  const [bookings, legacy, bookingTotal, legacyTotal] = await Promise.all([db.collection<BookingDoc>("bookingRequests").find(webFilter, {
+  const countFilters = {
+    all: { web: baseWebClauses.length ? { $and: [toReturnFilter, ...baseWebClauses] } : toReturnFilter, legacy: baseLegacyClauses.length ? { $and: [legacyBase, ...baseLegacyClauses] } : legacyBase },
+    late: { web: { $and: [toReturnFilter, ...baseWebClauses, { $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] }] }, legacy: { $and: [legacyBase, ...baseLegacyClauses, { returnDate: { $lt: new Date(`${today}T00:00:00.000Z`) } }] } },
+    today: { web: { $and: [toReturnFilter, ...baseWebClauses, { $or: [{ "schedule.returnDate": { $lte: tomorrow } }, { schedule: { $exists: false }, end: { $lte: tomorrow } }] }] }, legacy: { $and: [legacyBase, ...baseLegacyClauses, { returnDate: { $lte: new Date(`${tomorrow}T23:59:59.999Z`) } }] } },
+    later: { web: { $and: [toReturnFilter, ...baseWebClauses, { $or: [{ "schedule.returnDate": { $gt: tomorrow } }, { schedule: { $exists: false }, end: { $gt: tomorrow } }] }] }, legacy: { $and: [legacyBase, ...baseLegacyClauses, { returnDate: { $gt: new Date(`${tomorrow}T23:59:59.999Z`) } }] } },
+  };
+  const count = (key: keyof typeof countFilters) => Promise.all([db.collection("bookingRequests").countDocuments(countFilters[key].web), legacyRentals(db).countDocuments(countFilters[key].legacy)]).then(([bookingsCount, legacyCount]) => bookingsCount + legacyCount);
+  const [bookings, legacy, bookingTotal, legacyTotal, allCount, lateCount, todayCount, laterCount] = await Promise.all([db.collection<BookingDoc>("bookingRequests").find(webFilter, {
     projection: { _id: 1, name: 1, phone: 1, address: 1, delivery: 1, method: 1, start: 1, end: 1, schedule: 1, items: 1, customerReturn: 1, photos: 1 },
   }).sort({ "schedule.returnDate": 1, end: 1, _id: 1 }).limit(skip + PAGE_SIZE).toArray(), legacyRentals(db).find(legacyFilter, {
     projection: { _id: 0, legacyId: 1, customerName: 1, phone: 1, address: 1, shipDate: 1, returnDate: 1, days: 1, shipment: 1 },
-  }).sort({ returnDate: 1, legacyId: 1 }).limit(skip + PAGE_SIZE).toArray(), db.collection("bookingRequests").countDocuments(webFilter), legacyRentals(db).countDocuments(legacyFilter)]);
+  }).sort({ returnDate: 1, legacyId: 1 }).limit(skip + PAGE_SIZE).toArray(), db.collection("bookingRequests").countDocuments(webFilter), legacyRentals(db).countDocuments(legacyFilter), count("all"), count("late"), count("today"), count("later")]);
   const rows: ReturnRow[] = bookings.map(row => ({
     id: row._id, name: row.name, phone: row.phone, address: row.address || (row.delivery && "address" in row.delivery ? row.delivery.address || "" : ""), pickup: row.method === "pickup",
     returnDay: returnDay(row), start: row.start,
@@ -70,7 +80,7 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   const total = bookingTotal + legacyTotal;
   return <main className="admin-main to-ship-page to-return-page">
     <header className="to-ship-header"><div><span className="to-ship-eyebrow">TO RETURN</span><h1>รายการที่ต้องส่งคืน</h1><p>รายการที่ร้านส่งสินค้าให้ลูกค้าแล้ว แต่ยังไม่ได้บันทึกรับคืน แสดงเลขพัสดุขากลับที่ลูกค้าแจ้งมา และยืนยันรับคืนได้จากหน้านี้</p></div></header>
-    <ReturnBoard rows={pageRows} today={today} page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} total={total} filters={{ query, tab }} />
+    <ReturnBoard rows={pageRows} today={today} page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} total={total} counts={{ all: allCount, late: lateCount, today: todayCount, later: laterCount }} filters={{ query, tab }} />
   </main>;
 }
 

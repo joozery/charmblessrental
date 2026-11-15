@@ -33,7 +33,7 @@ async function Workspace({ children }: { children: React.ReactNode }) {
   const overdue = () => db.collection("bookingRequests").countDocuments({ status: "confirmed", shipment: { $exists: true }, returned: { $exists: false }, customerReturn: { $exists: false }, $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] });
   const [products, admins, bookings, refunds, late, clashes, slips, toShip, shipLate, toReturn] = await Promise.all([
     db.collection("products").countDocuments(),
-    admin.role === "owner" ? db.collection("admins").countDocuments() : Promise.resolve(0),
+    can(admin, "admins") ? db.collection("admins").countDocuments() : Promise.resolve(0),
     can(admin, "bookings") ? db.collection("bookingRequests").countDocuments({ status: "new" }) : Promise.resolve(0),
     can(admin, "bookings") ? awaitingRefund() : Promise.resolve(0),
     can(admin, "bookings") ? overdue() : Promise.resolve(0),
