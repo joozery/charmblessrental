@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { activeExtensions, extensionLabels, lastUseDay, type Extension } from "@/lib/extension";
 import type { Permission } from "@/lib/permissions";
-import { addDays, type ScheduleRecord } from "@/lib/schedule";
+import { addDays, returnMethods, type ReturnMethod, type ScheduleRecord } from "@/lib/schedule";
 import type { FulfillmentRow } from "./booking-fulfillment";
 import QueueCalendar from "./queue-calendar";
 
@@ -29,27 +29,29 @@ async function send(body: Record<string, unknown>) {
 export default function ExtensionPanel({ row, permissions, onChange }: { row: FulfillmentRow; permissions: Permission[]; onChange: (patch: Partial<FulfillmentRow>) => void }) {
   const canExtend = permissions.includes("bookings"), canPay = permissions.includes("payments");
   const [calendar, setCalendar] = useState<{ id: number; label: string } | null>(null);
-  const [form, setForm] = useState<{ toEnd: string; amount: string; touched: boolean; note: string; allowClash: boolean } | null>(null);
+  const [form, setForm] = useState<{ toEnd: string; amount: string; touched: boolean; note: string; allowClash: boolean; returnMethod: ReturnMethod } | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [paying, setPaying] = useState<{ id: string; day: string } | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const end = lastUseDay(row), extensions = row.extensions || [], latest = activeExtensions(extensions).at(-1);
-  const canStart = row.status === "confirmed" && !row.returned && !!row.schedule && !extensions.some(item => item.status === "unpaid");
+  const canStart = (row.status === "confirmed" || row.payment === "paid" || !!row.shipment) && !row.returned && !!row.schedule && !extensions.some(item => item.status === "unpaid");
   const items = row.items.filter((item, index) => row.items.findIndex(other => other.id === item.id) === index);
 
   async function run(task: () => Promise<void>) { setBusy(true); setError(""); setNotice(""); try { await task(); } catch (cause) { setError(cause instanceof Error ? cause.message : "ทำรายการไม่สำเร็จ"); } finally { setBusy(false); } }
+  const previewFor = async (toEnd: string, returnMethod: ReturnMethod) => {
+    const data: Preview = await send({ id: row._id, action: "preview", toEnd, returnMethod });
+    setPreview(data);
+    setForm(current => current && current.toEnd === toEnd && !current.touched && data.suggested !== null ? { ...current, amount: String(data.suggested) } : current);
+  };
   const choose = (toEnd: string) => {
     if (!form) return;
     setForm({ ...form, toEnd, allowClash: false }); setPreview(null);
-    if (toEnd) void run(async () => {
-      const data: Preview = await send({ id: row._id, action: "preview", toEnd });
-      setPreview(data);
-      setForm(current => current && current.toEnd === toEnd && !current.touched && data.suggested !== null ? { ...current, amount: String(data.suggested) } : current);
-    });
+    if (toEnd) void run(() => previewFor(toEnd, form.returnMethod));
   };
+  const chooseReturnMethod = (returnMethod: ReturnMethod) => { if (!form) return; setForm({ ...form, returnMethod, allowClash: false }); setPreview(null); if (form.toEnd) void run(() => previewFor(form.toEnd, returnMethod)); };
   const create = () => run(async () => {
     if (!form || !preview) return;
-    const data = await send({ id: row._id, action: "create", toEnd: preview.toEnd, amount: Number(form.amount) || 0, note: form.note, allowClash: form.allowClash });
+    const data = await send({ id: row._id, action: "create", toEnd: preview.toEnd, returnMethod: form.returnMethod, amount: Number(form.amount) || 0, note: form.note, allowClash: form.allowClash });
     onChange({ extensions: [...extensions, data.extension], schedule: data.schedule });
     setForm(null); setPreview(null);
     setNotice(`ขยายวันเช่าแล้ว${data.lineNotified ? " และส่ง LINE แจ้งลูกค้าแล้ว" : " · ไม่ได้ส่ง LINE (ลูกค้ายังไม่ได้เชื่อม LINE หรือส่งไม่สำเร็จ)"}`);
@@ -78,9 +80,10 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
         {canExtend && latest?.id === item.id && !row.returned && paying?.id !== item.id && <button type="button" disabled={busy} onClick={() => cancel(item)}>ยกเลิกการเช่าต่อ</button>}
       </span>}
     </li>)}</ul>}
-    {canExtend && canStart && !form && <p className="bookings-fulfillment-wait">ใช้งานถึง {day(end)} · คืนภายใน {day(row.schedule!.returnDate)}<button type="button" disabled={busy} onClick={() => { setForm({ toEnd: "", amount: "", touched: false, note: "", allowClash: false }); setPreview(null); setNotice(""); }}>ขยายวันเช่า</button></p>}
+    {canExtend && canStart && !form && <p className="bookings-fulfillment-wait">ใช้งานถึง {day(end)} · คืนภายใน {day(row.schedule!.returnDate)}<button type="button" disabled={busy} onClick={() => { setForm({ toEnd: "", amount: "", touched: false, note: "", allowClash: false, returnMethod: row.schedule!.returnMethod }); setPreview(null); setNotice(""); }}>ขยายวันเช่า</button></p>}
     {form && <div className="bookings-inline-form">
       <label>ใช้งานถึงวันที่ (เดิม {day(end)})<input type="date" min={addDays(end, 1)} value={form.toEnd} onChange={event => choose(event.target.value)} /></label>
+      <label>วิธีส่งคืนสินค้า<select value={form.returnMethod} onChange={event => chooseReturnMethod(event.target.value as ReturnMethod)}>{returnMethods.map(method => <option key={method.key} value={method.key}>{method.label}</option>)}</select></label>
       <label>ค่าเช่าต่อ (บาท)<input type="number" min="0" step="1" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value, touched: true })} placeholder={preview?.suggested === null ? "ไม่มีราคาตั้งไว้ กรอกเอง" : ""} /></label>
       {preview && <div className="is-wide bookings-extension-preview">
         <p>+{preview.added} วัน · ลูกค้าคืนชุดภายใน <b>{day(preview.schedule.returnDate)}</b> · รับคิวใหม่ได้ {day(preview.schedule.ready)}{preview.suggested !== null && <> · ราคาแนะนำ {money(preview.suggested)} บาท</>}</p><p className="bookings-extension-rule">{preview.rule}</p>

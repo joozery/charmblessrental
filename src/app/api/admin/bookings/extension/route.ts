@@ -9,23 +9,24 @@ import { lineConfigured, pushLine } from "@/lib/line";
 import { database } from "@/lib/mongodb";
 import { effectivePricing, priceFor } from "@/lib/pricing";
 import type { Product } from "@/lib/products";
-import { blockRange, countUseDays, type ScheduleRecord } from "@/lib/schedule";
+import { addDays, blockRange, countUseDays, isReturnMethod, type ReturnMethod, type ScheduleRecord } from "@/lib/schedule";
 import { getStoreSettings } from "@/lib/store-settings";
 import { requestOrigin } from "@/lib/request-origin";
 
-type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; shipment?: object; extensions?: Extension[]; lineUserId?: string; lineOa?: string; billToken?: string; quote?: { accountNumber?: string } };
+type BookingDoc = { _id: string; name?: string; status: string; payment?: string; start: string; end: string; days: number; schedule?: ScheduleRecord; items: { id: number; name: string; sku: string }[]; returned?: object; shipment?: object; extensions?: Extension[]; lineUserId?: string; lineOa?: string; billToken?: string; quote?: { accountNumber?: string } };
 const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const actions = { preview: "bookings", create: "bookings", cancel: "bookings", paid: "payments", updateAmount: "pricing" } as const;
 
 // What extending to `toEnd` means: the added days, the new return and ready days, any queue clash, and a suggested price.
-async function plan(db: Db, booking: BookingDoc, toEnd: string) {
+async function plan(db: Db, booking: BookingDoc, toEnd: string, returnMethod: ReturnMethod) {
   const fromEnd = lastUseDay(booking);
   if (!booking.schedule) return { error: "คำขอนี้สร้างก่อนมีตารางวันจัดส่ง/คืน จึงขยายวันในระบบไม่ได้" };
   if (toEnd <= fromEnd) return { error: `วันใช้งานวันสุดท้ายใหม่ต้องอยู่หลัง ${day(fromEnd)}` };
   const added = countUseDays(fromEnd, toEnd) - 1;
   if (added > 30) return { error: "ขยายได้ครั้งละไม่เกิน 30 วัน" };
-  const schedule = shiftSchedule(booking.schedule, added), from = booking.schedule.ready, to = schedule.ready;
+  const settings = await getStoreSettings();
+  const shifted = shiftSchedule(booking.schedule, added), gap = settings.schedule.gap[returnMethod], schedule = { ...shifted, ready: addDays(shifted.returnDate, gap + 1), returnMethod, gap }, from = booking.schedule.ready, to = schedule.ready;
   const ids = [...new Set(booking.items.map(item => item.id))];
   const others = await db.collection<BookingDoc>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": { $in: ids }, _id: { $ne: booking._id } }, { projection: { _id: 1, name: 1, start: 1, end: 1, schedule: 1, items: 1 } }).toArray();
   const conflicts: { item: string; date: string; bookings: { id: string; name: string }[] }[] = [];
@@ -35,7 +36,6 @@ async function plan(db: Db, booking: BookingDoc, toEnd: string) {
     for (const row of full) conflicts.push({ item: item.sku || item.name, date: row.date, bookings: others.filter(other => other.items.some(entry => entry.id === id) && blockRange(other).from <= row.date && row.date < blockRange(other).to).map(other => ({ id: other._id, name: other.name || "" })) });
   }
   // Suggested price: what the longer rental costs minus what the current length costs, per piece.
-  const settings = await getStoreSettings();
   const products = await db.collection<Product>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, customPricing: 1, dailyRate: 1, category: 1 } }).toArray();
   const before = booking.days + extendedDays(booking), after = before + added;
   const parts = booking.items.map(item => { const product = products.find(row => row.id === item.id); const pricing = product ? effectivePricing(product, settings.rentalPricing, settings.extraDayRates) : null; const was = priceFor(pricing, before), now = priceFor(pricing, after); return was === null || now === null ? null : Math.max(0, now - was); });
@@ -70,10 +70,12 @@ export async function POST(request: Request) {
   const log = (action: string, summary: string, changes: { field: string; before: unknown; after: unknown }[] = []) => audit(request, admin, { action, targetType: "booking", targetId: booking._id, summary, changes });
 
   if (body.action === "preview" || body.action === "create") {
-    if (booking.status !== "confirmed") return Response.json({ error: "ขยายวันได้เฉพาะคำขอที่ยืนยันจองแล้ว" }, { status: 409 });
+    if (booking.status !== "confirmed" && booking.payment !== "paid" && !booking.shipment) return Response.json({ error: "ขยายวันได้เฉพาะคำขอที่ยืนยันจองแล้ว ชำระเงินแล้ว หรือส่งชุดแล้ว" }, { status: 409 });
     if (booking.returned) return Response.json({ error: "รับชุดคืนแล้ว จึงขยายวันไม่ได้" }, { status: 409 });
     if (!validDay(body.toEnd)) return Response.json({ error: "กรุณาเลือกวันใช้งานวันสุดท้ายใหม่" }, { status: 400 });
-    const result = await plan(db, booking, body.toEnd);
+    const returnMethod = body.returnMethod === undefined ? booking.schedule?.returnMethod : body.returnMethod;
+    if (!isReturnMethod(returnMethod)) return Response.json({ error: "กรุณาเลือกวิธีส่งคืนสินค้า" }, { status: 400 });
+    const result = await plan(db, booking, body.toEnd, returnMethod);
     if ("error" in result) return Response.json({ error: result.error }, { status: 400 });
     if (body.action === "preview") return Response.json(result);
     // A late return can still be extended over the next rental, but only knowingly and with a note.

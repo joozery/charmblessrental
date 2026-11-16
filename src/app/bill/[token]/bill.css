@@ -40,6 +40,7 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-return-form>div,.bill-return-form .bill-error{grid-column:1/-1}.bill-return-form>div{display:flex;flex-wrap:wrap;gap:8px}
 .bill-error{margin:0;color:#b42318;font-size:13px}
 .bill-link-button{margin-top:6px;padding:0;border:0;background:none;color:#79516c;font:inherit;font-size:13px;font-weight:600;text-decoration:underline;cursor:pointer}
+.bill-return-photos{display:grid;gap:6px;margin-top:12px;color:#475467;font-size:13px}.bill-return-photos>div{display:flex;flex-wrap:wrap;gap:8px}.bill-return-photos img{width:76px;height:92px;border:1px solid #d0d5dd;border-radius:8px;object-fit:cover}.bill-return-upload{grid-column:auto}
 @media(max-width:700px){.bill-steps{display:flex;overflow-x:auto;justify-content:flex-start;gap:0;padding:18px 4px 8px;scroll-snap-type:x proximity}.bill-steps li{flex:0 0 92px;scroll-snap-align:start}.bill-steps li:not(:last-child)::after{width:60px}}
 @media(max-width:560px){.bill-track{padding:14px}.bill-steps li{font-size:10px}.bill-return-form{grid-template-columns:1fr}}
 @media print{.bill-track{display:none!important}}
