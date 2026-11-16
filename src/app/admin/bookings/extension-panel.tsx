@@ -10,7 +10,11 @@ import type { FulfillmentRow } from "./booking-fulfillment";
 import QueueCalendar from "./queue-calendar";
 
 type Preview = { toEnd: string; added: number; schedule: ScheduleRecord; conflicts: { item: string; date: string; bookings: { id: string; name: string }[] }[]; suggested: number | null; rule: string };
-const day = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+const day = (value: unknown) => {
+  const text = typeof value === "string" ? value : value instanceof Date ? value.toISOString().slice(0, 10) : "";
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T00:00:00Z`) : new Date("invalid");
+  return Number.isNaN(date.getTime()) ? "ไม่ระบุวันที่" : new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
+};
 const money = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
@@ -62,7 +66,7 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
     update(data.extension, { schedule: data.schedule }); setNotice("ยกเลิกการเช่าต่อแล้ว คิวที่กันเพิ่มว่างแล้ว");
   });
 
-  return <div className="bookings-detail-section bookings-extension"><Icon name="calendar" /><div>
+  return <div id="extension" className="bookings-detail-section bookings-extension"><Icon name="calendar" /><div>
     <h3>คิวและการเช่าต่อ</h3>
     <p className="bookings-queue-links">ดูคิว:{items.map(item => <button key={item.id} type="button" onClick={() => setCalendar({ id: item.id, label: item.sku || item.name })}><Icon name="calendar" />{item.sku || item.name}</button>)}</p>
     {extensions.length > 0 && <ul className="bookings-extension-list">{extensions.map(item => <li key={item.id} className={`is-${item.status}`}>

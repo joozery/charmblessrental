@@ -27,8 +27,13 @@ export function standardFee(settings: Settings, items: Item[]) {
   const fees = enabledOptions(settings).filter(option => option.standard).map(option => option.fee);
   return fees.length ? Math.max(Math.min(...fees), itemMinimum(items)) : 0;
 }
-export function shippingFor(settings: Settings & { categoryShippingRules?: CategoryShippingRule[] }, method: string, items: Array<Item & { category?: string }>, messengerFee: number | null): ShippingQuote | null {
+export function shippingFor(settings: Settings & { categoryShippingRules?: CategoryShippingRule[] }, method: string, items: Array<Item & { category?: string }>, _messengerFee: number | null): ShippingQuote | null {
+  void _messengerFee;
   const categoryRule = categoryShippingRuleFor(settings, items);
+  if (method === "messenger") {
+    if (categoryRule && categoryRule.method !== "messenger") return null;
+    return { label: "แมสเซนเจอร์ (Grab / LINE MAN)", base: null, discount: 0, fee: 0 };
+  }
   if (categoryRule) {
     if (method !== categoryRule.method) return null;
     const option = categoryRule.method === "messenger" ? null : enabledOptions(settings).find(item => item.id === categoryRule.method);
@@ -37,7 +42,6 @@ export function shippingFor(settings: Settings & { categoryShippingRules?: Categ
   }
   if (method === "pickup") return { label: "รับเองที่ร้าน", base: 0, discount: 0, fee: 0 };
   const credit = freeEligible(settings, items.length) ? settings.freeShipping.discountAmount : 0;
-  if (method === "messenger") return { label: "แมสเซนเจอร์ (Grab / LINE MAN)", base: messengerFee, discount: 0, fee: messengerFee };
   const option = enabledOptions(settings).find(item => item.id === method);
   if (!option) return null;
   const base = Math.max(option.fee, itemMinimum(items));

@@ -8,6 +8,7 @@ import { unitsOf, unitStatusLabels, type Product, type UnitStatus } from "@/lib/
 import { returnDay, type ScheduleRecord } from "@/lib/schedule";
 import { toShipFilter } from "@/lib/to-ship";
 import ShipBoard, { type ShipCounts, type ShipRow } from "./ship-board";
+import "../bookings/bookings.css";
 import "./to-ship.css";
 import "./to-ship-mobile.css";
 
@@ -58,7 +59,7 @@ async function Content({ page, query = "", shipDate = "", tab = "all" }: { page:
     id: row._id, name: row.name, phone: row.phone, address: row.address, pickup: row.method === "pickup", methodLabel: row.method === "pickup" ? "รับเองที่ร้าน" : row.shipping?.label || row.method,
     shipDay: row.schedule?.ship || row.start, start: row.start, returnDay: returnDay(row), paidAt: row.paidAt ? new Date(row.paidAt).toISOString() : "",
     identityPending: row.verification?.mode === "identity" && row.verification.status !== "approved", beforeShipmentPhotos: row.photos?.beforeShipment?.map(photo => photo.url) || [],
-    items: row.items.map(item => { const status = item.unitSku ? unitStatus.get(item.unitSku) : undefined; return { name: `${item.name}${item.color || item.size ? ` · ${item.color || ""}${item.color && item.size ? " / " : ""}${item.size || ""}` : ""}`, sku: item.unitSku || item.sku, image: item.image, ready: !item.unitSku || status === "available" || status === undefined, state: status ? unitStatusLabels[status] : "" }; }),
+    items: row.items.map(item => { const status = item.unitSku ? unitStatus.get(item.unitSku) : undefined; return { id: item.id, name: `${item.name}${item.color || item.size ? ` · ${item.color || ""}${item.color && item.size ? " / " : ""}${item.size || ""}` : ""}`, sku: item.unitSku || item.sku, image: item.image, ready: !item.unitSku || status === "available" || status === undefined, state: status ? unitStatusLabels[status] : "" }; }),
   }));
   rows.sort((a, b) => a.shipDay.localeCompare(b.shipDay) || a.start.localeCompare(b.start));
   const total = bookingTotal;

@@ -5,8 +5,6 @@ import { audit } from "@/lib/audit";
 import type { Product } from "@/lib/products";
 import { getStoreSettings } from "@/lib/store-settings";
 import { depositFor, effectivePricing, priceFor } from "@/lib/pricing";
-import { quoteDelivery } from "@/lib/delivery-quote";
-import type { LatLng } from "@/lib/delivery";
 import { shippingFor } from "@/lib/shipping";
 import { identityAllowed, normalizePhone, type BookingVerification } from "@/lib/identity";
 import { addDays, blockRange, isReturnMethod, planFor, scheduleRecord, type ReturnMethod, type ScheduleRecord } from "@/lib/schedule";
@@ -17,7 +15,7 @@ import { cleanCode, discountCoupons, validCoupon } from "@/lib/discounts";
 
 const validDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 const thaiDay = (date = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-type BookingRecord = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; discountCode?: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; delivery?: { km: number; fee: number; inBill: boolean; location: LatLng; address: string } | { error: string }; shipping?: { label: string; base: number | null; discount: number }; schedule: ScheduleRecord; depositMode: "deposit" | "identity"; verification?: BookingVerification; refundAccount?: RefundAccount & { updatedAt: Date }; waitlist?: { since: Date }; items: { id: number; variantId?: string; color?: string; size?: string; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice: number | null; stock: number; schedule?: ScheduleRecord }[]; createdAt: Date; updatedAt: Date; billToken: string; payment: "unpaid" | "paid" };
+type BookingRecord = { _id: string; status: string; name: string; phone: string; address: string; pin: string; note: string; discountCode?: string; method: string; start: string; end: string; days: number; deliveryFee: number; estimatedTotal: number | null; shipping?: { label: string; base: number | null; discount: number }; schedule: ScheduleRecord; depositMode: "deposit" | "identity"; verification?: BookingVerification; refundAccount?: RefundAccount & { updatedAt: Date }; waitlist?: { since: Date }; items: { id: number; variantId?: string; color?: string; size?: string; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice: number | null; stock: number; schedule?: ScheduleRecord }[]; createdAt: Date; updatedAt: Date; billToken: string; payment: "unpaid" | "paid" };
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   try {
@@ -38,11 +36,8 @@ export async function POST(request: Request) {
   const plan = planFor(settings, body.start, body.end, body.method, returnMethod, gap);
   const days = plan.days;
   if (plan.ship < thaiDay()) return Response.json({ error: `วิธีรับชุดนี้ร้านต้องส่งล่วงหน้า ${plan.lead} วัน กรุณาเลือกวันเริ่มใช้งานตั้งแต่ ${new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${addDays(thaiDay(), plan.lead)}T00:00:00Z`))} หรือเลือกวิธีรับชุดอื่น` }, { status: 400 });
-  // Messenger fees are recomputed here from the shop's own settings; the browser's figure is only a preview.
-  const quote = body.method === "messenger" ? await quoteDelivery(db, settings.messenger, { pin: body.pin?.trim(), address: body.address?.trim() }).catch(error => { console.error("Delivery quote failed:", error); return { error: "คำนวณค่าส่งไม่สำเร็จ" }; }) : null;
-  const delivery = quote && "km" in quote ? { km: quote.km, fee: quote.fee, inBill: settings.messenger.inBill, location: quote.location, address: quote.address } : quote ? { error: quote.error } : undefined;
-  // Carrier fee, bulky-item minimum and the "rent 2, ship free" promotion, worked out the same way as the booking form shows it.
-  const shipping = shippingFor(settings, body.method, products, delivery && "fee" in delivery && delivery.inBill ? delivery.fee : null);
+  // Messenger delivery is agreed with the admin and paid outside the rental bill.
+  const shipping = shippingFor(settings, body.method, products, null);
   if (!shipping) return Response.json({ error: "วิธีจัดส่งนี้ปิดให้บริการแล้ว กรุณาเลือกวิธีอื่น" }, { status: 400 });
   const deliveryFee = shipping.fee ?? 0;
   const prices = new Map(products.map(product => [product.id, priceFor(effectivePricing(product, settings.rentalPricing, settings.extraDayRates), days)]));
@@ -74,7 +69,7 @@ export async function POST(request: Request) {
   const requestId = `BR-${body.start.replaceAll("-", "")}-${randomUUID().slice(0, 6).toUpperCase()}`;
   await db.collection<BookingRecord>("bookingRequests").insertOne({
     _id: requestId, status: "new", name: body.name.trim(), phone: body.phone.trim(), address: body.method === "pickup" ? "" : body.address.trim(), pin: body.pin?.trim() || "", note: body.note?.trim() || "", ...(waitlisted ? { waitlist: { since: new Date() } } : {}), ...(discountCode ? { discountCode } : {}),
-    method: body.method, start: body.start, end: body.end, days, schedule, depositMode: body.depositMode === "identity" ? "identity" : "deposit", ...(verification ? { verification } : {}), ...(refundAccount ? { refundAccount: { ...refundAccount, updatedAt: new Date() } } : {}), deliveryFee, estimatedTotal, shipping: { label: shipping.label, base: shipping.base, discount: shipping.discount }, ...(delivery ? { delivery } : {}),
+    method: body.method, start: body.start, end: body.end, days, schedule, depositMode: body.depositMode === "identity" ? "identity" : "deposit", ...(verification ? { verification } : {}), ...(refundAccount ? { refundAccount: { ...refundAccount, updatedAt: new Date() } } : {}), deliveryFee, estimatedTotal, shipping: { label: shipping.label, base: shipping.base, discount: shipping.discount },
     items: requestedItems.map(requested => { const product = products.find(item => item.id === requested.id)!; const variant = product.variants?.find(item => item.id === requested.variantId), images = variant?.images?.length ? variant.images : product.images; return { id: product.id, ...(variant ? { variantId: variant.id, color: variant.color, size: variant.size } : {}), name: product.thai || product.name, sku: product.sku || "", image: images?.[0] || "", dailyRate: product.dailyRate, rentalPrice: prices.get(product.id) ?? null, depositPrice: body.depositMode === "identity" ? 0 : depositFor(product, settings.categoryDeposits), stock: variant ? (product.units || []).filter(unit => unit.variantId === variant.id && unit.status !== "unavailable" && unit.status !== "retired").length : product.stock ?? 1, schedule: scheduleRecord(planFor(settings, body.start, body.end, body.method, returnMethod, product.gapDays ?? settings.schedule.gap[returnMethod]), returnMethod) }; }),
     createdAt: new Date(), updatedAt: new Date(), billToken: randomBytes(18).toString("base64url"), payment: "unpaid",
   });

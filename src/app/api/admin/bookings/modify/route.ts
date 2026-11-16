@@ -56,15 +56,21 @@ export async function POST(request: Request) {
   const discountPercent = booking.quote?.discountPercent || 0, discountAmount = Math.round(calculatedRental * discountPercent / 100 * 100) / 100, discountedRental = Math.max(0, Math.round((calculatedRental - discountAmount) * 100) / 100);
   const rental = typeof body.rental === "number" && Number.isFinite(body.rental) && body.rental >= 0 ? Math.round(body.rental * 100) / 100 : discountedRental;
   const deposit = typeof body.deposit === "number" && Number.isFinite(body.deposit) && body.deposit >= 0 ? Math.round(body.deposit * 100) / 100 : calculatedDeposit;
-  const shipping = typeof body.shipping === "number" && Number.isFinite(body.shipping) && body.shipping >= 0 ? Math.round(body.shipping * 100) / 100 : (booking.quote?.shipping ?? booking.deliveryFee ?? 0);
+  const shipping = method === "messenger" ? 0 : typeof body.shipping === "number" && Number.isFinite(body.shipping) && body.shipping >= 0 ? Math.round(body.shipping * 100) / 100 : (booking.quote?.shipping ?? booking.deliveryFee ?? 0);
   const details = { name: typeof body.name === "string" ? body.name.trim().slice(0, 120) : booking.name || "", phone: typeof body.phone === "string" ? body.phone.trim().slice(0, 40) : booking.phone || "", address: typeof body.address === "string" ? body.address.trim().slice(0, 500) : booking.address || "", pin: typeof body.pin === "string" ? body.pin.trim().slice(0, 500) : booking.pin || "", note: typeof body.note === "string" ? body.note.trim().slice(0, 500) : booking.note || "", method };
+  const shippingOption = settings.shippingOptions.find(option => option.id === method);
+  const shippingRecord = method === "pickup"
+    ? { label: "รับเองที่ร้าน", base: 0, discount: 0 }
+    : method === "messenger"
+      ? { label: "แมสเซนเจอร์ (Grab / LINE MAN)", base: 0, discount: 0 }
+      : { label: shippingOption?.label || method, base: shipping, discount: 0 };
   if (!details.name || !details.phone) return Response.json({ error: "กรุณากรอกชื่อลูกค้าและเบอร์โทรศัพท์" }, { status: 400 });
   if (details.method !== "pickup" && !details.address) return Response.json({ error: "กรุณากรอกที่อยู่จัดส่ง" }, { status: 400 });
   if (booking.payment !== "paid") {
     const quote = booking.quote ? { ...booking.quote, rental, deposit, shipping, rentalBeforeDiscount: calculatedRental, discountAmount, discountPercent } : booking.quote;
-    await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, deliveryFee: shipping, ...(quote ? { quote } : {}), estimatedTotal: rental + deposit + shipping, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(penaltyExtension ? { $push: { extensions: penaltyExtension } } : {}) });
+    await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, shipping: shippingRecord, deliveryFee: shipping, ...(quote ? { quote } : {}), estimatedTotal: rental + deposit + shipping, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(penaltyExtension ? { $push: { extensions: penaltyExtension } } : {}) });
     await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: "แก้ไขสินค้าและวันเช่าก่อนชำระเงิน" });
-    return Response.json({ ok: true, ...details, items, start, end, days, schedule, deliveryFee: shipping, estimatedTotal: rental + deposit + shipping, quote, penalty: penaltyExtension });
+    return Response.json({ ok: true, ...details, items, start, end, days, schedule, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: rental + deposit + shipping, quote, penalty: penaltyExtension });
   }
   const oldTotal = (booking.quote?.rental || 0) + (booking.quote?.deposit || 0) + (booking.quote?.shipping || booking.deliveryFee || 0), newTotal = rental + deposit + shipping, difference = Math.round((newTotal - oldTotal) * 100) / 100;
   // A paid booking may not have a LINE link yet. Create a temporary customer key so a refund difference can still be recorded.
@@ -77,11 +83,11 @@ export async function POST(request: Request) {
   const extension: Extension | undefined = difference > 0 ? { id: randomUUID(), fromEnd: booking.end, toEnd: end, addedDays: Math.max(0, days - booking.days), amount: difference, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken: randomBytes(18).toString("base64url"), dueAt: new Date(now.getTime() + 3600000), chargeType: "standard", note: "บิลส่วนต่างจากการแก้ไขสินค้า/วันเช่า" } : undefined;
   const extensions = [extension, penaltyExtension].filter((item): item is Extension => !!item);
   if (difference < 0 && booking.lineUserId) await grantCredit(db, { customerId: booking.lineUserId, amount: Math.abs(difference), reason: "ส่วนต่างจากการแก้ไขสินค้า/วันเช่า", bookingId: booking._id, billToken: booking.billToken, createdBy: auth.admin.email || auth.admin.username, createdByName: auth.admin.name });
-  await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, deliveryFee: shipping, estimatedTotal: newTotal, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(extensions.length ? { $push: { extensions: { $each: extensions } } } : {}) });
+  await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: newTotal, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(extensions.length ? { $push: { extensions: { $each: extensions } } } : {}) });
   await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: `แก้ไขสินค้า/วันเช่าหลังชำระเงิน · ส่วนต่าง ${difference} บาท` });
   let lineNotified = false;
   if (extension?.billToken && booking.lineUserId && !booking.lineUserId.startsWith("pending:") && lineConfigured(booking.lineOa)) {
     try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${difference.toLocaleString("th-TH")} บาท\nบิลใหม่ต้องชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${extension.billToken}` }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE booking modification notice failed:", error); }
   }
-  return Response.json({ ok: true, ...details, items, start, end, days, schedule, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, penalty: penaltyExtension, lineNotified });
+  return Response.json({ ok: true, ...details, items, start, end, days, schedule, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, penalty: penaltyExtension, lineNotified });
 }

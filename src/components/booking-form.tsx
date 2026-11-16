@@ -7,7 +7,6 @@ import Image from "next/image";
 import { Dialog } from "radix-ui";
 import { useStoreSettings } from "@/components/store-settings-provider";
 import { priceFor, tiersOf, type RentalPricing } from "@/lib/pricing";
-import { mapsLink } from "@/lib/delivery";
 import { categoryShippingRuleFor, enabledOptions, freeEligible, shippingFor } from "@/lib/shipping";
 import { addDays, planFor, returnMethods, countUseDays, type ReturnMethod } from "@/lib/schedule";
 import { useToday } from "@/lib/use-today";
@@ -63,30 +62,9 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const [queued, setQueued] = useState<{ waitlisted: boolean; minutes: number } | null>(null);
   const [copiedId, setCopiedId] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [quote, setQuote] = useState<{ km: number; fee: number; inBill: boolean; for: string } | null>(null);
-  const [quoteState, setQuoteState] = useState<{ busy: boolean; error: string }>({ busy: false, error: "" });
   const settings = useStoreSettings();
   const categoryRule = categoryShippingRuleFor(settings, items);
   const messenger = settings.messenger;
-  const autoFee = messenger.enabled && !!messenger.origin;
-  const spot = `${pin.trim()}|${address.trim()}`;
-  const fresh = quote && quote.for === spot ? quote : null;
-  async function priceDelivery(nextPin = pin) {
-    const key = `${nextPin.trim()}|${address.trim()}`;
-    if (!autoFee || method !== "messenger" || (!nextPin.trim() && address.trim().length < 10) || (quote?.for === key)) return;
-    setQuoteState({ busy: true, error: "" });
-    try {
-      const response = await fetch("/api/delivery-quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: nextPin.trim(), address: address.trim() }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "คำนวณค่าส่งไม่สำเร็จ");
-      setQuote({ km: data.km, fee: data.fee, inBill: data.inBill, for: key }); setQuoteState({ busy: false, error: "" });
-    } catch (cause) { setQuote(null); setQuoteState({ busy: false, error: cause instanceof Error ? cause.message : "คำนวณค่าส่งไม่สำเร็จ" }); }
-  }
-  function useMyLocation() {
-    if (!navigator.geolocation) { setQuoteState({ busy: false, error: "เบราว์เซอร์นี้ไม่รองรับการหาตำแหน่ง กรุณาวางลิงก์หมุดแทน" }); return; }
-    setQuoteState({ busy: true, error: "" });
-    navigator.geolocation.getCurrentPosition(position => { const link = mapsLink({ lat: Number(position.coords.latitude.toFixed(6)), lng: Number(position.coords.longitude.toFixed(6)) }); setPin(link); void priceDelivery(link); }, () => setQuoteState({ busy: false, error: "ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง กรุณาวางลิงก์หมุดจาก Google Maps แทน" }), { enableHighAccuracy: true, timeout: 10000 });
-  }
   const days = rentalDays(start,end);
   const totalFor = (count: number) => { const prices = items.map(item => priceFor(item.pricing, count)); return items.length && prices.every(price => price !== null) ? prices.reduce<number>((sum, price) => sum + (price ?? 0), 0) : null; };
   // Before dates are picked the estimate uses each item's shortest package.
@@ -106,12 +84,14 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
   const carriers = enabledOptions(settings).filter(option => !categoryRule || option.id === categoryRule.method);
   const free = freeEligible(settings, items.length);
   const missing = settings.freeShipping.enabled ? settings.freeShipping.minItems - items.length : 0;
-  const quoteFor = (value: string) => shippingFor(settings, value, items, value === "messenger" && fresh?.inBill ? fresh.fee : null);
+  const quoteFor = (value: string) => shippingFor(settings, value, items, null);
   const shipping = quoteFor(method);
   const delivery = shipping?.fee ?? 0;
-  const feeText = (value: string) => { const quote = quoteFor(value); if (!quote) return ""; if (value === "pickup") return "ฟรี"; if (quote.fee === null) return value === "messenger" ? (fresh ? baht(fresh.fee) : "ตามระยะทาง") : ""; return quote.fee === 0 ? "ส่งฟรี" : quote.discount ? `+${baht(quote.fee)} (ลด ${baht(quote.discount)})` : `+${baht(quote.fee)}`; };
-  const methodLabel = method === "messenger" ? (fresh ? `แมสเซนเจอร์ · ${fresh.km.toLocaleString("th-TH")} กม. (${fresh.inBill ? feeText("messenger") : `จ่ายแมสปลายทาง ${baht(fresh.fee)}`})` : "แมสเซนเจอร์ (ค่าส่งตามระยะทาง)") : `${shipping?.label || "รับเองที่ร้าน"}${method === "pickup" ? "" : ` (${feeText(method)})`}`;
+  const feeText = (value: string) => { const quote = quoteFor(value); if (!quote) return ""; if (value === "pickup") return "ฟรี"; if (value === "messenger") return "คุยกับแอดมิน"; if (quote.fee === null) return ""; return quote.fee === 0 ? "ส่งฟรี" : quote.discount ? `+${baht(quote.fee)} (ลด ${baht(quote.discount)})` : `+${baht(quote.fee)}`; };
+  const methodLabel = method === "messenger" ? "แมสเซนเจอร์ (ชำระค่าขนส่งกับทางร้าน แยกจากบิล)" : `${shipping?.label || "รับเองที่ร้าน"}${method === "pickup" ? "" : ` (${feeText(method)})`}`;
   useEffect(() => {
+    // The selected method must follow a category-specific delivery rule.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (categoryRule && method !== categoryRule.method) setMethod(categoryRule.method);
   }, [categoryRule, method]);
 
@@ -168,17 +148,12 @@ export default function BookingForm({ items, initialStart = "", initialEnd = "",
 
   const receive = <>
     {settings.freeShipping.enabled && <p className={`booking-free${free && shipping?.discount ? " is-active" : ""}`}>{free ? shipping?.discount ? `🎉 เช่าครบ ${settings.freeShipping.minItems} ตัว ลดค่าส่ง ${baht(shipping.discount)}` : "โปรส่วนลดค่าส่งใช้เฉพาะขนส่งที่ร่วมรายการ" : missing > 0 && `เช่าอีก ${missing} ตัว จึงจะได้ส่วนลดค่าส่ง ${baht(settings.freeShipping.discountAmount)}`}</p>}
-    <fieldset><legend>อยากรับชุดยังไง</legend>{[...(categoryRule ? [] : [["pickup", "รับเองที่ร้าน", "ไม่มีค่าส่ง"]]), ...carriers.map(option => [option.id, option.label, `${option.description}${option.description ? " · " : ""}${option.standard ? "ร่วมโปรส่งฟรีเมื่อครบจำนวน" : "ไม่ร่วมโปรส่งฟรี"}`]), ...((!categoryRule || categoryRule.method === "messenger") ? [["messenger", "แมสเซนเจอร์ (Grab / LINE MAN)", autoFee ? `คิดตามระยะทางจากร้าน · ${messenger.inBill ? "รวมในบิล" : "จ่ายแมสปลายทาง"}` : "ค่าส่งตามระยะทาง · ลูกค้าจ่ายปลายทาง"]] : [])].map(([value, title, description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{feeText(value)}</b></label>)}</fieldset>
+    <fieldset><legend>อยากรับชุดยังไง</legend>{[...(categoryRule ? [] : [["pickup", "รับเองที่ร้าน", "ไม่มีค่าส่ง"]]), ...carriers.map(option => [option.id, option.label, `${option.description}${option.description ? " · " : ""}${option.standard ? "ร่วมโปรส่งฟรีเมื่อครบจำนวน" : "ไม่ร่วมโปรส่งฟรี"}`]), ...((!categoryRule || categoryRule.method === "messenger") ? [["messenger", "แมสเซนเจอร์ (Grab / LINE MAN)", "คุยกับแอดมินเพื่อแจ้งและชำระค่าขนส่งกับทางร้าน แยกจากบิล"]] : [])].map(([value, title, description]) => <label className={`booking-method ${method === value ? "selected" : ""}`} key={value}><input type="radio" name="delivery" value={value} checked={method === value} onChange={() => setMethod(value)} /><span><strong>{title}</strong><small>{description}</small></span><b>{feeText(value)}</b></label>)}</fieldset>
     {method !== "pickup" && <>
-      <label>ที่อยู่จัดส่ง *<textarea autoComplete="street-address" value={address} onChange={e => setAddress(e.target.value)} onBlur={() => void priceDelivery()} placeholder="บ้านเลขที่ อาคาร ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด และรหัสไปรษณีย์" /></label>
-      <label>หมุดตำแหน่ง {method === "messenger" ? "(แนะนำ ช่วยให้คิดค่าส่งแม่นขึ้น)" : "(ไม่บังคับ)"}<input type="url" value={pin} onChange={e => setPin(e.target.value)} onBlur={() => void priceDelivery()} placeholder="วางลิงก์หมุดจาก Google Maps" /></label>
+      <label>ที่อยู่จัดส่ง *<textarea autoComplete="street-address" value={address} onChange={e => setAddress(e.target.value)} placeholder="บ้านเลขที่ อาคาร ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด และรหัสไปรษณีย์" /></label>
+      <label>หมุดตำแหน่ง (ไม่บังคับ)<input type="url" value={pin} onChange={e => setPin(e.target.value)} placeholder="วางลิงก์หมุดจาก Google Maps" /></label>
       <p className="booking-help"><a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="booking-map-link">เปิด Google Maps <Icon name="arrow" /></a> เลือกจุดแล้วกดแชร์ คัดลอกลิงก์มาวาง</p>
-      {method === "messenger" && <div className="booking-delivery">{messenger.description && <p>{messenger.description}</p>}{autoFee && <>
-        <div className="booking-delivery-actions"><button type="button" onClick={useMyLocation} disabled={quoteState.busy}><Icon name="map" />ใช้ตำแหน่งปัจจุบัน</button><button type="button" onClick={() => void priceDelivery()} disabled={quoteState.busy || (!pin.trim() && address.trim().length < 10)}>{quoteState.busy ? "กำลังคำนวณ…" : "คำนวณค่าส่ง"}</button></div>
-        {fresh ? <p className="booking-delivery-result" role="status">ระยะทางประมาณ <b>{fresh.km.toLocaleString("th-TH")} กม.</b> · ค่าส่ง <b>{baht(fresh.fee)}</b> {fresh.inBill ? "(รวมในบิล)" : "(จ่ายแมสปลายทาง)"}<small>ค่าประมาณจากระยะทางจริง ร้านจะยืนยันยอดในบิลอีกครั้ง</small></p>
-          : quoteState.error ? <p className="booking-delivery-error" role="alert">{quoteState.error}</p>
-          : <p className="booking-help">แนบหมุดหรือกรอกที่อยู่ให้ครบ ระบบจะคำนวณค่าส่งจากระยะทางให้อัตโนมัติ</p>}
-      </>}</div>}
+      {method === "messenger" && <div className="booking-delivery">{messenger.description && <p>{messenger.description}</p>}<p className="booking-delivery-result" role="status">ค่าส่งแมสเซนเจอร์จะแจ้งและชำระกับทางร้านแยกต่างหาก ไม่รวมอยู่ในบิลค่าเช่า<small>กรุณากรอกที่อยู่จัดส่งให้ครบ เพื่อให้แอดมินตรวจสอบและแจ้งยอดค่าส่ง</small></p></div>}
     </>}
     <fieldset><legend>คืนชุดยังไง</legend><div className="booking-return-options">{returnMethods.map(item => <label key={item.key} className={`booking-method ${returnMethod === item.key ? "selected" : ""}`}><input type="radio" name="return" value={item.key} checked={returnMethod === item.key} onChange={() => setReturnMethod(item.key)} /><span><strong>{item.label}</strong><small>ร้านเว้น Gap {settings.schedule.gap[item.key]} วันก่อนรับคิวถัดไป</small></span></label>)}</div></fieldset>
     {plan && <RentalTimeline plan={plan} pickup={method === "pickup"} compact />}

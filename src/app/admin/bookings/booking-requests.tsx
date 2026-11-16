@@ -51,9 +51,9 @@ export default function BookingRequests({ initial, store, permissions, selected,
   const navigate = useCallback((next: { page?: number; status?: string; q?: string; period?: string }) => {
     const params = new URLSearchParams();
     const nextPage = next.page ?? currentPage;
-    const nextStatus = next.status ?? filter;
+    const nextStatus = next.q?.trim() ? "all" : next.status ?? filter;
     const nextQuery = next.q ?? query;
-    const nextPeriod = next.period ?? period;
+    const nextPeriod = next.q?.trim() ? "all" : next.period ?? period;
     if (nextPage > 1) params.set("page", String(nextPage));
     if (nextStatus !== "all") params.set("status", nextStatus);
     if (nextQuery.trim()) params.set("q", nextQuery.trim());

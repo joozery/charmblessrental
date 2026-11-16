@@ -105,9 +105,14 @@ export async function POST(request: Request) {
     const before = typeof body.quote.rentalBeforeDiscount === "number" ? body.quote.rentalBeforeDiscount : body.quote.rental;
     const code = cleanCode(body.quote.discountCode || booking.discountCode), coupon = code ? await discountCoupons(db).findOne({ code }) : null;
     if (code && !validCoupon(coupon)) return Response.json({ error: "โค้ดส่วนลดไม่ถูกต้อง หมดอายุ หรือใช้ครบแล้ว" }, { status: 400 });
-    const customer = booking.lineUserId ? await db.collection<{ _id: string; bookingCount?: number; completedCount?: number; reviewCount?: number }>("customers").findOne({ _id: booking.lineUserId }) : null;
+    const customer = booking.lineUserId ? await db.collection<{ _id: string; reviewCount?: number }>("customers").findOne({ _id: booking.lineUserId }, { projection: { reviewCount: 1 } }) : null;
+    // Count only completed rentals before this booking. The LINE link increments bookingCount
+    // for the current request, so using that field here incorrectly grants the first booking 5% off.
+    const completedBookings = booking.lineUserId
+      ? await bookings.countDocuments({ lineUserId: booking.lineUserId, status: "confirmed", _id: { $ne: booking._id } })
+      : 0;
     // Rentals through the old sheet count too, matched by the phone number on this booking.
-    const loyalty = customerDiscount((customer?.completedCount ?? customer?.bookingCount ?? 0) + await legacyRentalCount(db, booking.phone), customer?.reviewCount ?? 0);
+    const loyalty = customerDiscount(completedBookings + await legacyRentalCount(db, booking.phone), customer?.reviewCount ?? 0);
     const percent = Math.min(100, (couponType(coupon) === "percent" ? (coupon?.value ?? coupon?.percent ?? 0) : 0) + loyalty.percent), discountAmount = Math.min(before, couponDiscountAmount(coupon, before) + Math.round(before * loyalty.percent / 100 * 100) / 100);
     const quote = Object.fromEntries(quoteFields.map(key => [key, body.quote[key]])) as QuoteInput;
     quote.rentalBeforeDiscount = before; quote.discountPercent = percent; quote.discountAmount = discountAmount; quote.rental = Math.max(0, Math.round((before - discountAmount) * 100) / 100); quote.discountLabel = [loyalty.label, coupon?.label].filter(Boolean).join(" + "); quote.discountCode = coupon?.code || "";
@@ -169,7 +174,9 @@ export async function POST(request: Request) {
     const items = booking.items.map((item, index) => withUnit(item, picks[index]));
     const returnedItems: ReturnedItem[] = booking.items.map((item, index) => {
       const selected = Array.isArray(body.itemConditions) ? body.itemConditions[index] : null;
-      return { unitSku: item.unitSku || "", condition: selected?.condition || body.condition, note: selected?.note?.trim() || body.note.trim() };
+      const selectedNote = typeof selected?.note === "string" ? selected.note.trim() : "";
+      const generalNote = typeof body.note === "string" ? body.note.trim() : "";
+      return { unitSku: item.unitSku || "", condition: selected?.condition || body.condition, note: selectedNote || generalNote };
     });
     const returned: Returned = { at: new Date(), condition: returnedItems.every(item => item.condition === returnedItems[0]?.condition) ? returnedItems[0]?.condition || "good" : "mixed", note: returnedItems.every(item => item.note === returnedItems[0]?.note) ? returnedItems[0]?.note || "" : "", items: returnedItems, by, byName: admin.name };
     await bookings.updateOne({ _id: body.id }, { $set: { returned, items, updatedAt: new Date(), updatedBy: by } });
