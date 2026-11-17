@@ -116,12 +116,13 @@ export async function POST(request: Request) {
     const percent = Math.min(100, (couponType(coupon) === "percent" ? (coupon?.value ?? coupon?.percent ?? 0) : 0) + loyalty.percent), discountAmount = Math.min(before, couponDiscountAmount(coupon, before) + Math.round(before * loyalty.percent / 100 * 100) / 100);
     const quote = Object.fromEntries(quoteFields.map(key => [key, body.quote[key]])) as QuoteInput;
     quote.rentalBeforeDiscount = before; quote.discountPercent = percent; quote.discountAmount = discountAmount; quote.rental = Math.max(0, Math.round((before - discountAmount) * 100) / 100); quote.discountLabel = [loyalty.label, coupon?.label].filter(Boolean).join(" + "); quote.discountCode = coupon?.code || "";
-    await bookings.updateOne({ _id: body.id }, { $set: { quote: { ...quote, updatedAt: new Date(), updatedBy: by } } });
+    const savedQuote = { ...quote, updatedAt: new Date(), updatedBy: by };
+    await bookings.updateOne({ _id: body.id }, { $set: { quote: savedQuote, deliveryFee: quote.shipping, estimatedTotal: quote.rental + quote.deposit + quote.shipping, updatedAt: new Date(), updatedBy: by } });
     await claimBill(db, booking._id, admin);
     const changes = diff(booking.quote, quote, quoteFields);
     if (changes.length) await log("booking.quote", booking.quote ? "แก้ไขราคาในใบสรุป" : "บันทึกราคาในใบสรุป", changes);
     if (coupon && booking.quote?.discountCode !== coupon.code) await discountCoupons(db).updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 }, $set: { updatedAt: new Date() } });
-    return Response.json({ ok: true, quote });
+    return Response.json({ ok: true, quote: savedQuote, deliveryFee: quote.shipping, estimatedTotal: quote.rental + quote.deposit + quote.shipping });
   }
   if (body.action === "setCondition") {
     if (!["normal", "damaged"].includes(body.condition) || (body.note !== undefined && !text(body.note, 500))) return Response.json({ error: "ข้อมูลสภาพสินค้าไม่ถูกต้อง" }, { status: 400 });
