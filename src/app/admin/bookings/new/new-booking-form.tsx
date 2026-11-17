@@ -49,7 +49,9 @@ export default function NewBookingForm({ products, methods, shipping, verificati
   const canUseIdentity = identityAllowed(verification, rentalTotal, items.map(item => product(item.id)?.category || ""));
   const selectedProducts = items.map(item => ({ shippingFee: product(item.id)?.shippingFee, category: product(item.id)?.category }));
   const categoryRule = categoryShippingRuleFor({ shippingOptions: shipping.options, freeShipping: shipping.free, categoryShippingRules: shipping.categoryRules }, selectedProducts);
-  const shippingQuote = shippingFor({ shippingOptions: shipping.options, freeShipping: shipping.free, categoryShippingRules: shipping.categoryRules }, form.method, selectedProducts, null);
+  const shippingQuote = editId && initial
+    ? { fee: Number(form.shipping) || 0, discount: 0 }
+    : shippingFor({ shippingOptions: shipping.options, freeShipping: shipping.free, categoryShippingRules: shipping.categoryRules }, form.method, selectedProducts, null);
   // A category rule is authoritative for the delivery method.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (categoryRule && form.method !== categoryRule.method) setForm(current => ({ ...current, method: categoryRule.method })); }, [categoryRule, form.method]);

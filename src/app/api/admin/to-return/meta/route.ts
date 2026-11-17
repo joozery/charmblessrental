@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     legacyClauses.push({ $or: [{ legacyId: { $regex: query, $options: "i" } }, { customerName: { $regex: query, $options: "i" } }, { phone: { $regex: query, $options: "i" } }] });
   }
   if (tab === "late") { webClauses.push({ $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] }); legacyClauses.push({ returnDate: { $lt: new Date(`${today}T00:00:00.000Z`) } }); }
-  if (tab === "today") { webClauses.push({ $or: [{ "schedule.returnDate": { $lte: tomorrow } }, { schedule: { $exists: false }, end: { $lte: tomorrow } }] }); legacyClauses.push({ returnDate: { $lte: new Date(`${tomorrow}T23:59:59.999Z`) } }); }
+  if (tab === "today") { webClauses.push({ $or: [{ "schedule.returnDate": { $gte: today, $lte: tomorrow } }, { schedule: { $exists: false }, end: { $gte: today, $lte: tomorrow } }] }); legacyClauses.push({ returnDate: { $gte: new Date(`${today}T00:00:00.000Z`), $lte: new Date(`${tomorrow}T23:59:59.999Z`) } }); }
   if (tab === "later") { webClauses.push({ $or: [{ "schedule.returnDate": { $gt: tomorrow } }, { schedule: { $exists: false }, end: { $gt: tomorrow } }] }); legacyClauses.push({ returnDate: { $gt: new Date(`${tomorrow}T23:59:59.999Z`) } }); }
   const webFilter = webClauses.length ? { $and: [toReturnFilter, ...webClauses] } : toReturnFilter;
   const legacyBase = { shipment: { $exists: true }, returned: { $exists: false }, cancelled: { $exists: false }, legacyStatus: { $in: ["จัดส่งแล้ว", "เกินกำหนดส่ง"] } };

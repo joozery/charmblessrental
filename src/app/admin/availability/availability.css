@@ -10,7 +10,7 @@ body:has(.availability-page),body:has(.availability-page) .chrome-shell,body:has
 .availability-summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:10px}.availability-summary strong{font-size:16px}.availability-summary span{color:#475467;font-size:13px}.availability-summary .availability-tip{margin-left:auto;color:#79516c}
 .availability-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 12px;padding:0;list-style:none;color:#475467;font-size:12px}
 .availability-legend li::before{content:"";display:inline-block;width:11px;height:11px;margin-right:6px;border-radius:3px;vertical-align:-1px;background:var(--chip)}
-.availability-legend .is-use,.availability-chip.is-use{--chip:#f3d6e4}.availability-legend .is-ship,.availability-chip.is-ship,.availability-chip.is-return{--chip:#dbe7fb}.availability-legend .is-gap,.availability-chip.is-gap{--chip:#fbefc8}
+.availability-legend .is-use,.availability-chip.is-use{--chip:#f3d6e4}.availability-legend .is-ship,.availability-chip.is-ship{--chip:#dbe7fb}.availability-legend .is-return,.availability-chip.is-return{--chip:#f79009}.availability-legend .is-gap,.availability-chip.is-gap{--chip:#fbefc8}
 .availability-legend .is-hold::before{background:repeating-linear-gradient(45deg,#d0d5dd 0 3px,#fff 3px 6px)}.availability-legend .is-closed::before{background:#fff;outline:2px solid #c65a50;outline-offset:-2px}
 .availability-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.availability-grid[aria-busy=true]{opacity:.55}
 .availability-weekday{padding:4px 0;text-align:center;color:#667085;font-size:12px;font-weight:600}
@@ -22,6 +22,7 @@ body:has(.availability-page),body:has(.availability-page) .chrome-shell,body:has
 .availability-day.is-picked{border:2px solid #79516c;background:#f6eef3;box-shadow:0 0 0 3px #79516c22}
 .availability-day.is-past{background:#f9fafb;opacity:.6}
 .availability-chip{display:block;padding:2px 6px;border-radius:5px;background:var(--chip);color:#3b313e;font-size:11px;line-height:1.5;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.availability-chip:hover{filter:brightness(.96)}.availability-chip.is-hold{background:repeating-linear-gradient(45deg,var(--chip) 0 4px,#fff 4px 8px)}
+.availability-chip.is-return{color:#3b313e}
 .availability-note{margin:10px 0 0;color:#667085;font-size:12px}
 .availability-editor{position:sticky;bottom:16px;z-index:5;display:grid;gap:12px;padding:16px 18px;border:1px solid #d9c6d3;border-radius:12px;background:#fff;box-shadow:0 12px 40px #2a183026}
 .availability-editor>p{display:flex;flex-wrap:wrap;gap:4px 10px;margin:0;font-size:13px}.availability-editor>p span{color:#667085}

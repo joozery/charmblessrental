@@ -61,7 +61,7 @@ export default function AvailabilityManager({ products, initialProductId, initia
       {notice && <p className="admin-success" role="status"><Icon name="success" />{notice}</p>}
       <section className="availability-card">
         <div className="availability-summary"><strong>{current?.sku || current?.name}</strong>{loaded && <span>มีในสต๊อก {loaded.stock} ชิ้น</span>}<span className="availability-tip">แตะวันที่เพื่อเลือก เลือกได้หลายวัน</span></div>
-        <ul className="availability-legend"><li className="is-use">ลูกค้าใช้งาน</li><li className="is-ship">จัดส่ง / คืน</li><li className="is-gap">พักชุด</li><li className="is-hold">กันคิวชั่วคราว</li><li className="is-closed">ร้านปิดรับ / ตั้งเอง</li></ul>
+        <ul className="availability-legend"><li className="is-use">ลูกค้าใช้งาน</li><li className="is-ship">จัดส่ง</li><li className="is-return">ส่งคืน</li><li className="is-gap">พักชุด</li><li className="is-hold">กันคิวชั่วคราว</li><li className="is-closed">ร้านปิดรับ / ตั้งเอง</li></ul>
         <div className="availability-grid" aria-busy={!loaded}>
           {queueWeekdays.map(name => <span key={name} className="availability-weekday">{name}</span>)}
           {monthCells(month).map((day, index) => {

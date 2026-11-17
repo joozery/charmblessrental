@@ -36,7 +36,7 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   if (text) webClauses.push({ $or: [{ _id: { $regex: text, $options: "i" } }, { name: { $regex: text, $options: "i" } }, { phone: { $regex: text, $options: "i" } }, { address: { $regex: text, $options: "i" } }, { "items.name": { $regex: text, $options: "i" } }, { "items.sku": { $regex: text, $options: "i" } }] });
   const baseWebClauses = [...webClauses];
   if (tab === "late") webClauses.push({ $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] });
-  if (tab === "today") webClauses.push({ $or: [{ "schedule.returnDate": { $lte: tomorrow } }, { schedule: { $exists: false }, end: { $lte: tomorrow } }] });
+  if (tab === "today") webClauses.push({ $or: [{ "schedule.returnDate": { $gte: today, $lte: tomorrow } }, { schedule: { $exists: false }, end: { $gte: today, $lte: tomorrow } }] });
   if (tab === "later") webClauses.push({ $or: [{ "schedule.returnDate": { $gt: tomorrow } }, { schedule: { $exists: false }, end: { $gt: tomorrow } }] });
   const webFilter = webClauses.length ? { $and: [toReturnFilter, ...webClauses] } : toReturnFilter;
   const legacyBase = { shipment: { $exists: true }, returned: { $exists: false }, cancelled: { $exists: false }, legacyStatus: { $in: ["จัดส่งแล้ว", "เกินกำหนดส่ง"] } };
@@ -44,13 +44,13 @@ async function Content({ page, query = "", tab = "all" }: { page: number; query?
   if (text) legacyClauses.push({ $or: [{ legacyId: { $regex: text, $options: "i" } }, { customerName: { $regex: text, $options: "i" } }, { phone: { $regex: text, $options: "i" } }, { address: { $regex: text, $options: "i" } }] });
   const baseLegacyClauses = [...legacyClauses];
   if (tab === "late") legacyClauses.push({ returnDate: { $lt: new Date(`${today}T00:00:00.000Z`) } });
-  if (tab === "today") legacyClauses.push({ returnDate: { $lte: new Date(`${tomorrow}T23:59:59.999Z`) } });
+  if (tab === "today") legacyClauses.push({ returnDate: { $gte: new Date(`${today}T00:00:00.000Z`), $lte: new Date(`${tomorrow}T23:59:59.999Z`) } });
   if (tab === "later") legacyClauses.push({ returnDate: { $gt: new Date(`${tomorrow}T23:59:59.999Z`) } });
   const legacyFilter = legacyClauses.length ? { $and: [legacyBase, ...legacyClauses] } : legacyBase;
   const countFilters = {
     all: { web: baseWebClauses.length ? { $and: [toReturnFilter, ...baseWebClauses] } : toReturnFilter, legacy: baseLegacyClauses.length ? { $and: [legacyBase, ...baseLegacyClauses] } : legacyBase },
     late: { web: { $and: [toReturnFilter, ...baseWebClauses, { $or: [{ "schedule.returnDate": { $lt: today } }, { schedule: { $exists: false }, end: { $lt: today } }] }] }, legacy: { $and: [legacyBase, ...baseLegacyClauses, { returnDate: { $lt: new Date(`${today}T00:00:00.000Z`) } }] } },
-    today: { web: { $and: [toReturnFilter, ...baseWebClauses, { $or: [{ "schedule.returnDate": { $lte: tomorrow } }, { schedule: { $exists: false }, end: { $lte: tomorrow } }] }] }, legacy: { $and: [legacyBase, ...baseLegacyClauses, { returnDate: { $lte: new Date(`${tomorrow}T23:59:59.999Z`) } }] } },
+    today: { web: { $and: [toReturnFilter, ...baseWebClauses, { $or: [{ "schedule.returnDate": { $gte: today, $lte: tomorrow } }, { schedule: { $exists: false }, end: { $gte: today, $lte: tomorrow } }] }] }, legacy: { $and: [legacyBase, ...baseLegacyClauses, { returnDate: { $gte: new Date(`${today}T00:00:00.000Z`), $lte: new Date(`${tomorrow}T23:59:59.999Z`) } }] } },
     later: { web: { $and: [toReturnFilter, ...baseWebClauses, { $or: [{ "schedule.returnDate": { $gt: tomorrow } }, { schedule: { $exists: false }, end: { $gt: tomorrow } }] }] }, legacy: { $and: [legacyBase, ...baseLegacyClauses, { returnDate: { $gt: new Date(`${tomorrow}T23:59:59.999Z`) } }] } },
   };
   const count = (key: keyof typeof countFilters) => Promise.all([db.collection("bookingRequests").countDocuments(countFilters[key].web), legacyRentals(db).countDocuments(countFilters[key].legacy)]).then(([bookingsCount, legacyCount]) => bookingsCount + legacyCount);
