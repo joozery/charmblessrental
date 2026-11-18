@@ -9,7 +9,7 @@ import QueueCalendar from "../bookings/queue-calendar";
 export type ShipRow = {
   id: string; legacy?: boolean; name: string; phone: string; address: string; pickup: boolean; methodLabel: string;
   shipDay: string; start: string; returnDay: string; paidAt: string; identityPending: boolean; beforeShipmentPhotos: string[];
-  items: { id: number; name: string; sku: string; image: string; ready: boolean; state: string; previousCondition: "good" | "damaged" | "missing"; checkedForShipment: boolean }[];
+  items: { id: number; name: string; sku: string; image: string; note?: string; ready: boolean; state: string; previousCondition: "good" | "damaged" | "missing"; checkedForShipment: boolean }[];
 };
 export type ShipCounts = { all: number; late: number; today: number; tomorrow: number; later: number };
 const carriers = ["ไปรษณีย์ไทย", "Flash Express", "Kerry Express", "J&T Express", "แมสเซนเจอร์", "Lalamove"];

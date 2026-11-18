@@ -113,7 +113,8 @@ export async function POST(request: Request) {
   if (body.id === undefined && !validVariants && (!Number.isSafeInteger(body.pieces) || body.pieces < 1 || body.pieces > 50 || !validAmount(body.cost))) return Response.json({ error: "กรุณาระบุจำนวนชิ้นเริ่มต้น 1–50 ชิ้น และต้นทุนต่อชิ้น" }, { status: 400 });
   const fields: ProductFields = {
     name: text("name"), thai: text("name"), category: text("category"), tag: categoryLabels[text("category")],
-    color: text("color"), size: text("size"), dailyRate: body.dailyRate, deposit: body.deposit, depositRequired: body.depositRequired,
+    color: validVariants ? [...new Set(variants.map(variant => variant.color).filter(Boolean))].join(" / ") : text("color"),
+    size: validVariants ? [...new Set(variants.map(variant => variant.size).filter(Boolean))].join(" / ") : text("size"), dailyRate: body.dailyRate, deposit: body.deposit, depositRequired: body.depositRequired,
     description: text("description"), notes: text("description"), images: [...new Set<string>(images)], active: body.active,
     customPricing: body.customPricing?.tiers.length ? cleanPricing(body.customPricing) : null, shippingFee: body.shippingFee ?? null, gapDays: body.gapDays ?? null,
     ...(validVariants ? { variants: variants.map(({ id, color, colorCode, size, images, cost }): ProductVariant => ({ id, color, colorCode, size, images: [...new Set(images)], cost })) } : {}),

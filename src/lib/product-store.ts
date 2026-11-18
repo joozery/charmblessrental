@@ -20,7 +20,12 @@ export async function readProducts(): Promise<Product[]> {
     skus.push(source.sku);
     legacySkusByProduct.set(source.mergedIntoId, skus);
   }
-  return stored.map(product => ({ ...product, legacySkus: [...new Set([...(product.legacySkus || []), ...(legacySkusByProduct.get(product.id) || [])])], color: product.color || product.variants?.map(variant => variant.color).filter(Boolean).join(" / ") || "", size: product.size || product.variants?.map(variant => variant.size).filter(Boolean).join(" / ") || "" }));
+  return stored.map(product => {
+    const variants = product.variants?.length ? product.variants : null;
+    const colors = variants ? [...new Set(variants.map(variant => variant.color.trim()).filter(Boolean))].join(" / ") : product.color || "";
+    const sizes = variants ? [...new Set(variants.map(variant => variant.size.trim()).filter(Boolean))].join(" / ") : product.size || "";
+    return { ...product, legacySkus: [...new Set([...(product.legacySkus || []), ...(legacySkusByProduct.get(product.id) || [])])], color: colors, size: sizes };
+  });
 }
 
 export async function getProductCategories() {
@@ -166,7 +171,7 @@ export async function mergeProducts(fields: ProductFields, rows: ProductMergeRow
   const id = idCounter!.sequence;
   const safeUnits = units.map((unit, index) => ({ ...unit, sku: typeof unit.sku === "string" && unit.sku.trim() ? unit.sku : pieceCode(`${code}-LEGACY`, index + 1) }));
   const first = sources[0], images = variants[0]?.images || first.images || (first.image ? [first.image] : []);
-  const product: Product = { ...fields, color: variants.map(variant => variant.color).filter(Boolean).join(" / "), size: variants.map(variant => variant.size).filter(Boolean).join(" / "), variants, images, image: images[0] || `rental-${id}`, sku: code, legacySkus: [...new Set(sources.map(source => source.sku).filter((sku): sku is string => !!sku))], id, legacyId: `PD-${code}`, inventoryStatus: "อยู่ที่ร้าน", units: safeUnits, ...derived(safeUnits) };
+  const product: Product = { ...fields, color: [...new Set(variants.map(variant => variant.color.trim()).filter(Boolean))].join(" / "), size: [...new Set(variants.map(variant => variant.size.trim()).filter(Boolean))].join(" / "), variants, images, image: images[0] || `rental-${id}`, sku: code, legacySkus: [...new Set(sources.map(source => source.sku).filter((sku): sku is string => !!sku))], id, legacyId: `PD-${code}`, inventoryStatus: "อยู่ที่ร้าน", units: safeUnits, ...derived(safeUnits) };
   await products(db).insertOne(product);
 
   // Move references before hiding the source products. Keep the old item

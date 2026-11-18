@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
 export const metadata = { title: "รายการที่ต้องส่ง | Charm Bless", robots: { index: false, follow: false } };
 type BookingDoc = {
   _id: string; name: string; phone: string; address: string; method: string; start: string; end: string; schedule?: ScheduleRecord; paidAt?: Date | null; photos?: { beforeShipment?: { url: string }[] };
-  shipping?: { label: string }; verification?: BookingVerification; items: { id: number; variantId?: string; color?: string; size?: string; name: string; sku: string; image: string; unitSku?: string; checkedForShipment?: boolean }[];
+  shipping?: { label: string }; verification?: BookingVerification; items: { id: number; variantId?: string; color?: string; size?: string; name: string; sku: string; image: string; note?: string; unitSku?: string; checkedForShipment?: boolean }[];
 };
 type ReturnCondition = "good" | "damaged" | "missing";
 type ReturnedHistory = { start: string; returned?: { at?: Date; condition?: string; items?: { unitSku?: string; condition?: string }[] }; items: { unitSku?: string }[] };
@@ -72,6 +72,8 @@ async function Content({ page, query = "", shipDate = "", tab = "all" }: { page:
     identityPending: row.verification?.mode === "identity" && row.verification.status !== "approved", beforeShipmentPhotos: row.photos?.beforeShipment?.map(photo => photo.url) || [],
     items: row.items.map(item => { const status = item.unitSku ? unitStatus.get(item.unitSku) : undefined; const cutoff = new Date(`${row.start}T23:59:59.999Z`).getTime(); const previous = item.unitSku ? (historyBySku.get(item.unitSku) || []).find(history => new Date(history.returned?.at || 0).getTime() <= cutoff) : undefined; return { id: item.id, name: `${item.name}${item.color || item.size ? ` · ${item.color || ""}${item.color && item.size ? " / " : ""}${item.size || ""}` : ""}`, sku: item.unitSku || item.sku, image: item.image, ready: !item.unitSku || status === "available" || status === undefined, state: status ? unitStatusLabels[status] : "", previousCondition: status === "available" ? "good" : previous && item.unitSku ? conditionFor(previous, item.unitSku) || "good" : "good", checkedForShipment: !!item.checkedForShipment }; }),
   }));
+  const rowsWithNotes: ShipRow[] = rows.map((shipRow, rowIndex) => ({ ...shipRow, items: shipRow.items.map((item, itemIndex) => { const note = bookings[rowIndex]?.items[itemIndex]?.note?.trim(); return note ? { ...item, name: `${item.name} · หมายเหตุ: ${note}` } : item; }) }));
+  rows.splice(0, rows.length, ...rowsWithNotes);
   rows.sort((a, b) => a.shipDay.localeCompare(b.shipDay) || a.start.localeCompare(b.start));
   const total = bookingTotal;
   const pageRows = rows.slice(skip, skip + PAGE_SIZE);
