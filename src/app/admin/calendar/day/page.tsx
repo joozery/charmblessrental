@@ -11,7 +11,7 @@ export const instant = false;
 
 type ImportedRental = { legacyId: string; customerName?: string; shipDate?: Date | string; returnDate?: Date | string; enteredAt?: Date | string; legacyStatus?: string; total?: number | null };
 type RentalItem = { rentalId: string; productLegacyId?: string; productName?: string; sku?: string };
-type DailyRental = { legacyId: string; customerName?: string; shipDate?: Date | string; returnDate?: Date | string; enteredAt?: Date | string; legacyStatus?: string; total?: number | null; items: { productName?: string; sku?: string; image?: string }[]; web?: true };
+type DailyRental = { legacyId: string; customerName?: string; shipDate?: Date | string; returnDate?: Date | string; enteredAt?: Date | string; legacyStatus?: string; total?: number | null; returned?: boolean; items: { productName?: string; sku?: string; image?: string }[]; web?: true };
 type Query = { date?: string | string[] };
 
 const one = (value?: string | string[]) => Array.isArray(value) ? value[0] || "" : value || "";
@@ -44,7 +44,7 @@ async function Content({ searchParams }: { searchParams: Promise<Query> }) {
   const rows: DailyRental[] = [...oldRows, ...web.map((row: WebRental) => ({ ...row, web: true as const }))].sort((a, b) => dayOf(a.shipDate).localeCompare(dayOf(b.shipDate)) || (a.legacyId || "").localeCompare(b.legacyId || ""));
   return <main className="admin-main calendar-day-page">
     <header className="calendar-day-header"><div><Link href={`/admin?from=${date}&to=${date}`} className="calendar-day-back">← กลับไปหน้าภาพรวม</Link><span className="calendar-day-eyebrow">DAILY QUEUE</span><h1>คิวเช่าวันที่ {dateLabel(date)}</h1><p>รวม {rows.length.toLocaleString("th-TH")} รายการจัดส่งหรือคืนสินค้าในวันนี้</p></div><div className="calendar-day-count"><strong>{rows.length.toLocaleString("th-TH")}</strong><span>คิวทั้งหมด</span></div></header>
-    {rows.length ? <div className="calendar-day-list">{rows.map(row => <article key={row.legacyId} className="calendar-day-card">
+    {rows.length ? <div className="calendar-day-list">{rows.map(row => <article key={row.legacyId} className={`calendar-day-card${row.returned ? " is-returned" : ""}`}>
       <div className="calendar-day-card-head"><div><span className="calendar-day-number">#{row.legacyId}</span><h2>{row.customerName || "ไม่ระบุชื่อลูกค้า"}</h2></div><div className="calendar-day-statuses">{statusBadges(row, date).map((label, index) => <span className={`calendar-day-status${index ? " is-secondary" : ""}`} key={label}>{label}</span>)}</div></div>
       <div className="calendar-day-info"><div><b>กำหนดการ</b><span>จัดส่ง {shortDate(row.shipDate)}</span><small>กำหนดคืน {shortDate(row.returnDate)}</small></div><div><b>ข้อมูลรายการ</b><span>{row.web ? "รายการจากเว็บไซต์" : "รายการเช่าเดิม"}</span><small>สร้างรายการ {shortDate(row.enteredAt)}</small></div></div>
       <div className="calendar-day-products"><b>รายการชุด ({row.items.length})</b><div>{row.items.length ? row.items.map((item, index) => <div key={`${row.legacyId}-${item.sku}-${index}`}><span>{item.image ? <img src={item.image} alt="" /> : <span className="calendar-day-product-placeholder">ชุด</span>}</span><p><strong>{item.sku || "ไม่มีรหัสชุด"}</strong><small>{item.productName || "ไม่ระบุชื่อชุด"}</small></p></div>) : <span className="calendar-day-no-items">ไม่มีรายละเอียดชุด</span>}</div></div>

@@ -10,7 +10,7 @@ body:has(.availability-page),body:has(.availability-page) .chrome-shell,body:has
 .availability-summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:10px}.availability-summary strong{font-size:16px}.availability-summary span{color:#475467;font-size:13px}.availability-summary .availability-tip{margin-left:auto;color:#79516c}
 .availability-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 12px;padding:0;list-style:none;color:#475467;font-size:12px}
 .availability-legend li::before{content:"";display:inline-block;width:11px;height:11px;margin-right:6px;border-radius:3px;vertical-align:-1px;background:var(--chip)}
-.availability-legend .is-use,.availability-chip.is-use{--chip:#f3d6e4}.availability-legend .is-ship,.availability-chip.is-ship{--chip:#dbe7fb}.availability-legend .is-return,.availability-chip.is-return{--chip:#f79009}.availability-legend .is-gap,.availability-chip.is-gap{--chip:#fbefc8}
+.availability-legend .is-use,.availability-chip.is-use{--chip:#f3d6e4}.availability-legend .is-ship,.availability-chip.is-ship{--chip:#dbe7fb}.availability-legend .is-return,.availability-chip.is-return{--chip:#f79009}.availability-legend .is-returned,.availability-chip.is-returned{--chip:#b9e5c8;color:#247044}.availability-legend .is-gap,.availability-chip.is-gap{--chip:#fbefc8}
 .availability-legend .is-hold::before{background:repeating-linear-gradient(45deg,#d0d5dd 0 3px,#fff 3px 6px)}.availability-legend .is-closed::before{background:#fff;outline:2px solid #c65a50;outline-offset:-2px}
 .availability-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.availability-grid[aria-busy=true]{opacity:.55}
 .availability-weekday{padding:4px 0;text-align:center;color:#667085;font-size:12px;font-weight:600}

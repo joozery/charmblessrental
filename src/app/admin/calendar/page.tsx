@@ -11,7 +11,7 @@ import AllCalendar, { type CalendarProduct } from "./all-calendar";
 import "./calendar.css";
 
 export const metadata = { title: "ปฏิทินทุกชุด | Charm Bless", robots: { index: false, follow: false } };
-type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; extensions?: Extension[]; items: { id: number; name: string; sku: string }[] };
+type BookingDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; returned?: unknown; extensions?: Extension[]; items: { id: number; name: string; sku: string }[] };
 type ProductDoc = { id: number; name: string; sku?: string; stock?: number; images?: string[] };
 type CalendarData = { rows: BookingDoc[]; products: ProductDoc[]; imported: Awaited<ReturnType<typeof legacyHolds>> };
 const calendarCache = new Map<string, { at: number; data: CalendarData }>();
@@ -23,7 +23,7 @@ async function loadCalendarData(db: Awaited<ReturnType<typeof database>>, from: 
   const running = calendarRuns.get(key);
   if (running) return running;
   const run = Promise.all([
-    db.collection<BookingDoc>("bookingRequests").find(blockingFilter(from, to), { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, extensions: 1, items: 1 } }).toArray(),
+    db.collection<BookingDoc>("bookingRequests").find({ $or: [blockingFilter(from, to), { status: { $ne: "cancelled" }, returned: { $exists: true }, $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] }] }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, returned: 1, extensions: 1, items: 1 } }).toArray(),
     db.collection<ProductDoc>("products").find({ active: { $ne: false } }, { projection: { _id: 0, id: 1, name: 1, sku: 1, stock: 1, images: 1 } }).sort({ sku: 1 }).toArray(),
     legacyHolds(db, from, to),
   ]).then(([rows, products, imported]) => ({ rows, products, imported }));
@@ -42,7 +42,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ month?: strin
   const byProduct = new Map<number, QueueBooking[]>();
   for (const row of rows) {
     const range = blockRange(row), end = lastUseDay(row);
-    const booking: QueueBooking = { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to };
+    const booking: QueueBooking = { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", returned: !!row.returned, ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to };
     for (const id of new Set(row.items.map(item => item.id))) byProduct.set(id, [...(byProduct.get(id) || []), booking]);
   }
   // Rentals from the old sheet, once per product however many of its pieces they hold.

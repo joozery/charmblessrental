@@ -97,7 +97,8 @@ const identityCard = (message: TextMessage, bookingId: string, url: string): Fle
 const shippedCard = (message: TextMessage, bookingId: string, url: string): FlexMessage => {
   const tracking = message.text.match(/\b[A-Z]{1,5}\d{8,}\b/)?.[0] || "";
   const trackingLine = message.text.split("\n").find(line => tracking && line.includes(tracking)) || "";
-  const carrier = trackingLine.replace(tracking, "").trim() || "Flash Express";
+  const messengerUrl = message.text.match(/แมสเซนเจอร์\s*\n(https?:\/\/[^\s)]+)/)?.[1] || "";
+  const carrier = messengerUrl ? "แมสเซนเจอร์" : trackingLine.replace(tracking, "").trim() || "Flash Express";
   const due = message.text.split("\n").find(line => line.includes("กำหนดส่งคืน"))?.replace(/^.*?กำหนดส่งคืน\s*/, "") || "ตามกำหนดในบิล";
   return {
     type: "flex",
@@ -109,7 +110,7 @@ const shippedCard = (message: TextMessage, bookingId: string, url: string): Flex
       body: { type: "box", layout: "vertical", paddingAll: "18px", contents: [
         { type: "box", layout: "vertical", backgroundColor: "#fff3f7", cornerRadius: "16px", paddingAll: "16px", contents: [{ type: "text", text: "✓　จัดส่งคำขอแล้วค่ะ", color: "#96395d", size: "xl", weight: "bold", wrap: true }, { type: "text", text: `เลขคำขอ　${bookingId}`, color: "#68748a", size: "sm", margin: "sm" }, { type: "text", text: "เรากำลังดำเนินการจัดส่งสินค้าของคุณ สามารถตรวจสอบสถานะได้ที่ลิงก์ด้านล่างค่ะ", color: "#68748a", size: "xs", wrap: true, margin: "md" }] },
         { type: "box", layout: "horizontal", margin: "lg", paddingAll: "12px", contents: [{ type: "text", text: "🚚", size: "xl", flex: 0 }, { type: "box", layout: "vertical", flex: 1, margin: "md", contents: [{ type: "text", text: "ขนส่ง", size: "sm", weight: "bold" }, { type: "text", text: carrier, size: "md", margin: "xs" }] }] },
-        ...(tracking ? [{ type: "box", layout: "horizontal", margin: "lg", paddingAll: "12px", contents: [{ type: "text", text: "📄", size: "xl", flex: 0 }, { type: "box", layout: "vertical", flex: 1, margin: "md", contents: [{ type: "text", text: "เลขพัสดุ", size: "sm", weight: "bold" }, { type: "text", text: tracking, size: "md", margin: "xs" }] }, { type: "button", style: "secondary", action: { type: "clipboard", label: "คัดลอก", clipboardText: tracking } }] }] : []),
+        ...(messengerUrl ? [{ type: "box", layout: "horizontal", margin: "lg", paddingAll: "12px", contents: [{ type: "text", text: "🔗", size: "xl", flex: 0 }, { type: "box", layout: "vertical", flex: 1, margin: "md", contents: [{ type: "text", text: "ลิงก์จัดส่ง", size: "sm", weight: "bold" }, { type: "text", text: messengerUrl, size: "sm", margin: "xs", wrap: true }] }, { type: "button", style: "primary", color: "#96395d", action: { type: "uri", label: "เปิดลิงก์", uri: messengerUrl } }] }] : tracking ? [{ type: "box", layout: "horizontal", margin: "lg", paddingAll: "12px", contents: [{ type: "text", text: "📄", size: "xl", flex: 0 }, { type: "box", layout: "vertical", flex: 1, margin: "md", contents: [{ type: "text", text: "เลขพัสดุ", size: "sm", weight: "bold" }, { type: "text", text: tracking, size: "md", margin: "xs" }] }, { type: "button", style: "secondary", action: { type: "clipboard", label: "คัดลอก", clipboardText: tracking } }] }] : []),
         { type: "box", layout: "horizontal", margin: "lg", paddingAll: "12px", contents: [{ type: "text", text: "📅", size: "xl", flex: 0 }, { type: "box", layout: "vertical", flex: 1, margin: "md", contents: [{ type: "text", text: "กำหนดส่งคืน", size: "sm", weight: "bold" }, { type: "text", text: due, size: "md", margin: "xs" }] }] },
       ] },
       footer: { type: "box", layout: "vertical", paddingAll: "18px", contents: [{ type: "button", style: "primary", color: "#96395d", action: { type: "uri", label: "📄　เปิดรายละเอียด　→", uri: url } }] },
@@ -140,11 +141,12 @@ const cardForText = (message: TextMessage): FlexMessage => {
   const text = message.text.trim();
   const [firstLine = "แจ้งเตือนจากร้าน"] = text.split("\n").filter(Boolean);
   const title = firstLine.replace(/[🎉✅📦💳📷🔍📝🌷🙏💗]/gu, "").trim().slice(0, 60) || "แจ้งเตือนจากร้าน";
-  const url = text.match(/https?:\/\/[^\s)]+/)?.[0];
+  const urls = [...text.matchAll(/https?:\/\/[^\s)]+/g)].map(match => match[0]);
+  const url = urls[0];
   const bookingId = text.match(/BR-\d{8}-[A-Za-z0-9]{6}/)?.[0];
   if (bookingId && url && text.includes("Instagram")) return identityCard(message, bookingId, url);
   if (bookingId && text.includes("ส่งคืนแล้ว")) return returnCard(message, bookingId);
-  if (bookingId && url && text.includes("กำหนดส่งคืน")) return shippedCard(message, bookingId, url);
+  if (bookingId && url && text.includes("กำหนดส่งคืน")) return shippedCard(message, bookingId, urls.at(-1) || url);
   return {
     type: "flex",
     altText: text.slice(0, 400),

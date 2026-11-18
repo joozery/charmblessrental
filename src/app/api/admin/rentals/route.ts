@@ -8,7 +8,7 @@ import { type UnitStatus } from "@/lib/products";
 
 // Moves a rental imported from the old sheet on: shipped, back at the shop, or cancelled. No LINE message is sent:
 // these customers booked outside the website. A returned or cancelled rental frees its pieces in the queue.
-const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
+const afterReturn: Record<string, UnitStatus> = { good: "available", damaged: "repair", missing: "unavailable" };
 const conditionLabels: Record<string, string> = { good: "สภาพปกติ", damaged: "ชำรุด", missing: "สูญหาย/ไม่ครบ" };
 const text = (value: unknown, max: number) => typeof value === "string" && value.length <= max;
 const validReturnItems = (value: unknown) => Array.isArray(value) && value.every((item: unknown) => !!item && typeof item === "object" && typeof (item as { unitSku?: unknown }).unitSku === "string" && Object.hasOwn(afterReturn, (item as { condition?: string }).condition || "") && text((item as { note?: unknown }).note, 500));

@@ -27,6 +27,8 @@ body:has(.bill-page){background:#f5f6f8}
 .bill-steps b{max-width:90px;font-weight:500}
 .bill-steps li.is-done{color:#79516c}.bill-steps li.is-done span{border-color:#79516c;background:#79516c;color:#fff}.bill-steps li.is-done:not(:last-child)::after{background:#c9a9bb}.bill-steps li.is-done b{font-weight:650}
 .bill-steps li.is-current span{box-shadow:0 0 0 4px #fff,0 0 0 7px #ecdde6}.bill-steps li.is-current b{color:#79516c;font-weight:750}
+.bill-steps button{position:relative;z-index:1;display:grid;justify-items:center;gap:8px;width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}.bill-steps button:focus-visible span{outline:3px solid #c9a9bb;outline-offset:3px}.bill-steps li.is-selected b{color:#79516c;text-decoration:underline;text-underline-offset:3px}.bill-steps li small{position:absolute;top:29px;z-index:2;font-size:10px;line-height:1}
+.bill-stage-photos{margin-top:12px;padding:12px 14px;border:1px solid #ecdde6;border-radius:10px;background:#fff8fb;font-size:14px;line-height:1.7}.bill-stage-photos strong{display:block;margin-bottom:8px;color:#79516c}.bill-stage-photos>div{display:flex;flex-wrap:wrap;gap:8px}.bill-stage-photos a{display:block}.bill-stage-photos img{display:block;width:88px;height:108px;border:1px solid #d0d5dd;border-radius:8px;object-fit:cover}.bill-stage-photos p{margin:0;color:#667085;font-size:13px}
 .bill-track-box{margin-top:12px;padding:12px 14px;border-radius:10px;background:#faf7f9;font-size:14px;line-height:1.7}
 .bill-track-box strong{display:block;margin-bottom:4px}
 .bill-track-box p{margin:0}

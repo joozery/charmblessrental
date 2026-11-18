@@ -14,6 +14,7 @@ import ReturnForm from "./return-form";
 import IdentityForm from "./identity-form";
 import RefundAccountForm from "./refund-account-form";
 import SlipForm, { type SlipState } from "./slip-form";
+import StageTimeline from "./stage-timeline";
 import { billDue, paymentSlips } from "@/lib/payment-slips";
 import { slip2goConfigured } from "@/lib/slip2go";
 import { deposits } from "@/lib/finance";
@@ -27,7 +28,7 @@ import "./bill.css";
 export const metadata = { title: "ใบรายละเอียดการเช่า | Charm Bless", robots: { index: false, follow: false } };
 type BillDoc = Omit<DocRow, "createdAt" | "items"> & {
   status: string; payment?: "unpaid" | "paid"; billToken: string; createdAt: Date; method?: string; waitlist?: { since: Date }; items: (DocRow["items"][number] & { unitSku?: string })[];
-  verification?: BookingVerification; refundAccount?: RefundAccount; extensions?: Extension[]; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returned?: { at: Date }; photos?: { return?: { url: string }[] };
+  verification?: BookingVerification; refundAccount?: RefundAccount; extensions?: Extension[]; shipment?: { carrier: string; trackingNumber: string; shippedAt: Date }; customerReturn?: { carrier: string; trackingNumber: string; at: Date }; returned?: { at: Date }; photos?: { beforeShipment?: { url: string }[]; received?: { url: string }[]; return?: { url: string }[]; returnReceipt?: { url: string }[] };
 };
 // What the next customer sees while their reserved piece is still being prepared.
 const prepText: Partial<Record<UnitStatus, string>> = { rented: "รอรับสินค้าคืนจากลูกค้ารอบก่อน", inspection: "กำลังตรวจสภาพสินค้า", washing: "กำลังซักและทำความสะอาด", repair: "กำลังดูแลซ่อมแซม" };
@@ -97,7 +98,7 @@ async function Content({ params }: PageProps) {
       : <>
         <section className="bill-track" aria-label="สถานะการเช่า">
           <h2>สถานะการเช่า</h2>
-          <ol className="bill-steps">{stageSteps.map((step, index) => { const current = stageSteps.indexOf(stage); return <li key={step} className={`${current >= index ? "is-done" : ""}${current === index ? " is-current" : ""}`} aria-current={current === index ? "step" : undefined}><span>{index + 1}</span><b>{stageLabel(step, row.method)}</b></li>; })}</ol>
+          <StageTimeline stages={stageSteps.map(step => ({ key: step, label: stageLabel(step, row.method) }))} current={stage} photos={{ preparing: extra?.photos?.beforeShipment?.map(photo => photo.url) || [], shipped: extra?.photos?.beforeShipment?.map(photo => photo.url) || [], received: extra?.photos?.received?.map(photo => photo.url) || [], returning: [...new Set([...(extra?.photos?.return || []), ...(extra?.photos?.returnReceipt || [])].map(photo => photo.url))], returned: [...new Set([...(extra?.photos?.return || []), ...(extra?.photos?.returnReceipt || [])].map(photo => photo.url))] }} />
           {preparing && <div className="bill-track-box"><strong>การเตรียมสินค้า</strong><ul>{row.items.map((item, index) => { const status = item.unitSku ? unitStatus.get(item.unitSku) : undefined; return <li key={index}><span>{item.name}</span>{status === "available" ? <b className="is-ready">เตรียมสินค้าเรียบร้อย {pickup ? "พร้อมให้รับ" : "พร้อมจัดส่ง"}</b> : <b>{(status && prepText[status]) || "ร้านกำลังจัดเตรียมสินค้า"}</b>}</li>; })}</ul></div>}
           {shipment && <div className="bill-track-box"><strong>{pickup ? "การรับสินค้า" : "การจัดส่ง"}</strong><p>{pickup ? `รับสินค้าที่ร้านแล้ว · ${when(shipment.shippedAt)}` : <>{shipment.carrier} <b className="bill-tracking">{shipment.trackingNumber}</b> · ส่งเมื่อ {when(shipment.shippedAt)}</>}</p><p>กำหนดส่งคืน <b>{dateLabel(returnDay(doc))}</b>{!returned && !customerReturn && " · ร้านจะส่ง LINE เตือนก่อนถึงกำหนด 1 วัน"}</p></div>}
           {shipment && !returned && <div className="bill-track-box"><strong>แจ้งส่งคืนสินค้า</strong>{customerReturn ? <p className="bill-reported">แจ้งแล้ว: {`${customerReturn.carrier} ${customerReturn.trackingNumber}`.trim()} · {when(customerReturn.at)}<br />รอร้านรับสินค้า ร้านจะยืนยันเมื่อได้รับพัสดุจริง</p> : <p>เมื่อส่งสินค้าคืนแล้ว กรุณาแจ้งขนส่งและเลขพัสดุด้านล่าง{doc.quote?.returnAddress ? ` (ที่อยู่ส่งคืน: ${doc.quote.returnAddress}${doc.quote.returnPhone ? ` · ${doc.quote.returnPhone}` : ""})` : ""}</p>}<ReturnForm token={token} reported={customerReturn ? { carrier: customerReturn.carrier, trackingNumber: customerReturn.trackingNumber } : null} existingPhotos={extra?.photos?.return || []} existingReceiptPhotos={extra?.photos?.returnReceipt || []} /></div>}

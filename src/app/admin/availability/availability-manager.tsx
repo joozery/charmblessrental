@@ -61,7 +61,7 @@ export default function AvailabilityManager({ products, initialProductId, initia
       {notice && <p className="admin-success" role="status"><Icon name="success" />{notice}</p>}
       <section className="availability-card">
         <div className="availability-summary"><strong>{current?.sku || current?.name}</strong>{loaded && <span>มีในสต๊อก {loaded.stock} ชิ้น</span>}<span className="availability-tip">แตะวันที่เพื่อเลือก เลือกได้หลายวัน</span></div>
-        <ul className="availability-legend"><li className="is-use">ลูกค้าใช้งาน</li><li className="is-ship">จัดส่ง</li><li className="is-return">ส่งคืน</li><li className="is-gap">พักชุด</li><li className="is-hold">กันคิวชั่วคราว</li><li className="is-closed">ร้านปิดรับ / ตั้งเอง</li></ul>
+        <ul className="availability-legend"><li className="is-use">ลูกค้าใช้งาน</li><li className="is-ship">จัดส่ง</li><li className="is-return">ส่งคืน</li><li className="is-returned">รับคืนแล้ว</li><li className="is-gap">พักชุด</li><li className="is-hold">กันคิวชั่วคราว</li><li className="is-closed">ร้านปิดรับ / ตั้งเอง</li></ul>
         <div className="availability-grid" aria-busy={!loaded}>
           {queueWeekdays.map(name => <span key={name} className="availability-weekday">{name}</span>)}
           {monthCells(month).map((day, index) => {
@@ -73,7 +73,7 @@ export default function AvailabilityManager({ products, initialProductId, initia
                 <b>{Number(day.slice(8))}</b>
                 {loaded && <small>{clash ? "⚠️ คิวซ้อน" : override === 0 ? "ปิดรับ" : left === 0 ? "เต็ม" : `ว่าง ${left}`}{override !== undefined && override > 0 ? ` (ตั้ง ${override})` : ""}</small>}
               </button>
-              {entries.map(({ booking, role }) => { const pieces = [...(booking.unitSkus || []), ...(booking.unassignedCount ? [`ยังไม่ระบุชิ้น ${booking.unassignedCount} ชิ้น`] : [])].join(", ") || "ยังไม่ระบุชิ้น"; return <Link key={booking.id} href={booking.href ?? `/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip is-${role}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${pieces} · ${booking.name} · ${queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{pieces} · {booking.name || booking.id.slice(-6)}</Link>; })}
+              {entries.map(({ booking, role }) => { const pieces = [...(booking.unitSkus || []), ...(booking.unassignedCount ? [`ยังไม่ระบุชิ้น ${booking.unassignedCount} ชิ้น`] : [])].join(", ") || "ยังไม่ระบุชิ้น"; return <Link key={booking.id} href={booking.href ?? `/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip is-${role}${booking.returned ? " is-returned" : ""}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${pieces} · ${booking.name} · ${booking.returned ? "รับคืนแล้ว" : queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{pieces} · {booking.name || booking.id.slice(-6)}</Link>; })}
             </div>;
           })}
         </div>

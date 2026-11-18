@@ -14,6 +14,7 @@ type CalendarRental = {
   returnDate?: string;
   enteredAt?: string;
   legacyStatus?: string;
+  returned?: boolean;
   total?: number | null;
   items: CalendarItem[];
 };

@@ -16,7 +16,7 @@ export const metadata = { title: "ภาพรวมร้าน | Charm Bless A
 type Rental = {
   legacyId: string; enteredAt?: Date | string | null; customerName?: string;
   shipDate?: Date | string | null; returnDate?: Date | string | null;
-  legacyStatus?: string; total?: number | null;
+  legacyStatus?: string; total?: number | null; returned?: boolean;
   // Set on bookings from the new website (see web-rentals.ts), which carry their own items.
   web?: true; items?: { productName?: string; sku?: string; image?: string }[];
 };

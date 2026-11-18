@@ -22,13 +22,14 @@ type ReturnedItem = { unitSku: string; condition: string; note: string };
 type Returned = { at: Date; condition: string; note: string; items?: ReturnedItem[]; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
 type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; items: { id: number; variantId?: string; name?: string; unitSku?: string }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
-// A returned piece is not rentable until it has been inspected, washed or repaired and an admin confirms it is ready.
-const afterReturn: Record<string, UnitStatus> = { good: "inspection", damaged: "repair", missing: "unavailable" };
+// A normal returned piece is ready for the next rental; damaged and missing pieces still need follow-up.
+const afterReturn: Record<string, UnitStatus> = { good: "available", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
 const dayLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 type QuoteInput = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string };
 const validQuote = (quote: unknown): quote is QuoteInput => { if (!quote || typeof quote !== "object") return false; const value = quote as Record<string, unknown>; return ["rental", "deposit", "shipping"].every(key => typeof value[key] === "number" && Number.isFinite(value[key]) && (value[key] as number) >= 0) && ["bank", "accountName", "accountNumber", "returnAddress", "returnPhone", "returnMethod"].every(key => typeof value[key] === "string" && (value[key] as string).length <= 500) && typeof value.qrImage === "string" && value.qrImage.length <= 2000; };
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim().length <= max;
+const validHttpUrl = (value: string) => { try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:"; } catch { return false; } };
 const validReturnItems = (value: unknown) => Array.isArray(value) && value.every((item: unknown) => !!item && typeof item === "object" && typeof (item as { unitSku?: unknown }).unitSku === "string" && conditions.includes((item as { condition?: string }).condition || "") && text((item as { note?: unknown }).note, 500));
 const validReceive = (body: Record<string, unknown>) => body.itemConditions !== undefined ? validReturnItems(body.itemConditions) : conditions.includes(body.condition as string) && text(body.note, 500);
 const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping", ackCondition: "shipping", setCondition: "shipping", delete: "bookings" };
@@ -36,7 +37,7 @@ const quoteFields = ["rental", "deposit", "shipping", "bank", "accountName", "ac
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.id !== "string" || body.id.length > 100 || (!statuses.includes(body.status) && !Object.hasOwn(actions, body.action)) || (body.action === "saveQuote" && !validQuote(body.quote)) || (body.action === "setPayment" && (typeof body.paid !== "boolean" || (body.paidOn !== undefined && !validDay(body.paidOn)))) || (body.action === "ship" && (!text(body.carrier, 60) || !text(body.trackingNumber, 60))) || (body.action === "receiveReturn" && !validReceive(body))) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
+  if (!body || typeof body.id !== "string" || body.id.length > 100 || (!statuses.includes(body.status) && !Object.hasOwn(actions, body.action)) || (body.action === "saveQuote" && !validQuote(body.quote)) || (body.action === "setPayment" && (typeof body.paid !== "boolean" || (body.paidOn !== undefined && !validDay(body.paidOn)))) || (body.action === "ship" && (!text(body.carrier, 60) || !text(body.trackingNumber, 2000))) || (body.action === "receiveReturn" && !validReceive(body))) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   const auth = await requireAdmin(body.action ? actions[body.action] : "bookings");
   if (auth.error) return auth.error;
   const admin = auth.admin, by = admin.email || admin.username;
@@ -139,13 +140,18 @@ export async function POST(request: Request) {
   if (body.action === "ship") {
     if (booking.status === "cancelled") return Response.json({ error: "คำขอนี้ถูกยกเลิกแล้ว" }, { status: 409 });
     if (booking.method !== "pickup" && !body.trackingNumber.trim()) return Response.json({ error: "กรุณากรอกเลขพัสดุ" }, { status: 400 });
+    if (body.carrier.trim() === "แมสเซนเจอร์" && !validHttpUrl(body.trackingNumber.trim())) return Response.json({ error: "กรุณากรอกลิงก์จัดส่งที่ถูกต้อง โดยต้องขึ้นต้นด้วย http:// หรือ https://" }, { status: 400 });
+    if (body.carrier.trim() !== "แมสเซนเจอร์" && body.trackingNumber.trim().length > 60) return Response.json({ error: "เลขพัสดุต้องไม่เกิน 60 ตัวอักษร" }, { status: 400 });
     if (booking.returned) return Response.json({ error: "รับคืนสินค้ารายการนี้แล้ว" }, { status: 409 });
     if (!((booking as BookingDoc & { photos?: { beforeShipment?: unknown[] } }).photos?.beforeShipment?.length)) return Response.json({ error: "กรุณาอัปโหลดรูปก่อนจัดส่งก่อนบันทึกเลขพัสดุ" }, { status: 409 });
-    const picks = body.units === undefined ? booking.items.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
+    // Older bookings can reach shipping without a physical unit assigned. Resolve those
+    // pieces at the point they leave the shop so return/preparation can track them later.
+    const assignedItems = body.units === undefined ? await assignUnits(db, booking) : booking.items;
+    const picks = body.units === undefined ? assignedItems.map(item => item.unitSku || "") : await validUnitPicks(db, booking, body.units);
     if (!picks) return Response.json({ error: "ชิ้นสินค้าที่เลือกไม่ถูกต้อง กรุณาโหลดหน้าใหม่" }, { status: 400 });
     // No deposit was taken, so the piece only leaves once the customer's identity has been checked.
     if (!booking.shipment && booking.verification?.mode === "identity" && booking.verification.status !== "approved") return Response.json({ error: "ลูกค้าเลือกไม่วางเงินมัดจำ ต้องตรวจเอกสารยืนยันตัวตนให้ผ่านก่อนจัดส่ง" }, { status: 409 });
-    const items = booking.items.map((item, index) => withUnit(item, picks[index]));
+    const items = assignedItems.map((item, index) => withUnit(item, picks[index]));
     const released = booking.items.map(item => item.unitSku).filter((sku): sku is string => !!sku && !picks.includes(sku));
     const shipment: Shipment = { carrier: body.carrier.trim(), trackingNumber: body.trackingNumber.trim(), shippedAt: booking.shipment?.shippedAt || new Date(), by, byName: admin.name };
     await bookings.updateOne({ _id: body.id }, { $set: { shipment, items, updatedAt: new Date(), updatedBy: by } });
@@ -159,9 +165,10 @@ export async function POST(request: Request) {
       const billToken = booking.billToken || randomBytes(18).toString("base64url");
       if (!booking.billToken) await bookings.updateOne({ _id: body.id }, { $set: { billToken } });
       const billUrl = `${requestOrigin(request)}/bill/${billToken}`;
+      const shipmentLine = shipment.carrier === "แมสเซนเจอร์" ? `แมสเซนเจอร์\n${shipment.trackingNumber}` : `${shipment.carrier} ${shipment.trackingNumber}`;
       const text = booking.method === "pickup"
         ? `ส่งมอบสินค้าคำขอ ${booking._id} เรียบร้อยแล้วค่ะ\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nเมื่อส่งคืนแล้ว แจ้งเลขพัสดุได้ที่ ${billUrl}`
-        : `จัดส่งสินค้าคำขอ ${booking._id} แล้วค่ะ 📦\n${shipment.carrier} ${shipment.trackingNumber}\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nติดตามสถานะและแจ้งเลขพัสดุตอนส่งคืนได้ที่ ${billUrl}`;
+        : `จัดส่งสินค้าคำขอ ${booking._id} แล้วค่ะ 📦\n${shipmentLine}\nกำหนดส่งคืน ${dayLabel(returnDay(booking))}\nติดตามสถานะและแจ้งเลขพัสดุตอนส่งคืนได้ที่ ${billUrl}`;
       try { await pushLine(booking.lineUserId, [{ type: "text", text }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE shipping notice failed:", error); }
     }
     return Response.json({ ok: true, lineNotified, items, shipment: { ...shipment, shippedAt: shipment.shippedAt.toISOString() } });
