@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { needsTracking, returnCarriers } from "@/lib/rental-stage";
-import ConditionForm from "./condition-form";
 
 type Reported = { carrier: string; trackingNumber: string } | null;
 type ReturnPhoto = { url: string };
@@ -38,9 +37,9 @@ export default function ReturnForm({ token, reported, existingPhotos = [], exist
 
   const receiptSection = <section className="bill-return-photos"><strong>รูปใบเสร็จ/หลักฐานส่งคืนพัสดุ</strong>{existingReceiptPhotos.length > 0 && <div>{existingReceiptPhotos.map((photo, index) => <img key={`${photo.url}-${index}`} src={photo.url} alt={`หลักฐานส่งคืน ${index + 1}`} />)}</div>}</section>;
   const returnSection = existingPhotos.length > 0 ? <section className="bill-return-photos"><strong>รูปตอนส่งคืนสินค้า</strong><div>{existingPhotos.map((photo, index) => <img key={`${photo.url}-${index}`} src={photo.url} alt={`รูปตอนส่งคืน ${index + 1}`} />)}</div></section> : null;
-  if (!open) return <><ConditionForm token={token} />{receiptSection}{returnSection}<button type="button" className="bill-link-button" onClick={() => setOpen(true)}>อัปโหลดรูปเพิ่ม / แก้ไขข้อมูลการส่งคืน</button></>;
+  if (!open) return <>{receiptSection}{returnSection}<button type="button" className="bill-link-button" onClick={() => setOpen(true)}>อัปโหลดรูปเพิ่ม / แก้ไขข้อมูลการส่งคืน</button></>;
 
-  return <><ConditionForm token={token} />{receiptSection}{returnSection}<form className="bill-return-form" onSubmit={submit}>
+  return <>{receiptSection}{returnSection}<form className="bill-return-form" onSubmit={submit}>
     <label>ส่งคืนทาง<select value={carrier} onChange={event => setCarrier(event.target.value)}>{returnCarriers.map(item => <option key={item}>{item}</option>)}</select></label>
     {tracking && <label>เลขพัสดุ<input required maxLength={60} value={trackingNumber} onChange={event => setTrackingNumber(event.target.value.toUpperCase())} placeholder="เช่น TH0123456789" /></label>}
     <label className="bill-return-upload">อัปโหลดรูปใบเสร็จ/หลักฐานส่งคืนพัสดุ (บังคับ)<input type="file" accept="image/png,image/jpeg,image/webp" multiple required={!existingReceiptPhotos.length} disabled={busy} onChange={event => setReceiptFiles(Array.from(event.target.files || []).slice(0, 5))} /><small>แนบอย่างน้อย 1 รูป รูปละไม่เกิน 5 MB</small></label>
