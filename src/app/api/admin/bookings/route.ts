@@ -15,13 +15,14 @@ import { cleanCode, couponDiscountAmount, couponType, customerDiscount, discount
 import { claimBill } from "@/lib/bill-owner";
 import { requestOrigin } from "@/lib/request-origin";
 import { legacyRentalCount } from "@/lib/legacy-rentals";
+import type { Extension } from "@/lib/extension";
 const statuses = ["new", "contacted", "confirmed", "cancelled"];
 const conditions = ["good", "damaged", "missing"];
 type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: string; byName: string };
 type ReturnedItem = { unitSku: string; condition: string; note: string };
 type Returned = { at: Date; condition: string; note: string; items?: ReturnedItem[]; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; days: number; items: { id: number; variantId?: string; name?: string; unitSku?: string; dailyRate?: number | null; rentalPrice?: number | null; quantity?: number }[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; days: number; items: { id: number; variantId?: string; name?: string; unitSku?: string; dailyRate?: number | null; rentalPrice?: number | null; quantity?: number }[]; extensions?: Extension[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A normal returned piece is ready for the next rental; damaged and missing pieces still need follow-up.
 const afterReturn: Record<string, UnitStatus> = { good: "available", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -102,6 +103,22 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, paidAt: body.paid ? `${paidOn}T12:00:00.000Z` : "" });
   }
   if (body.action === "saveQuote") {
+    const pendingExtension = booking.payment === "paid" ? booking.extensions?.find(item => item.status === "unpaid" && item.awaitingQuoteReview) : undefined;
+    if (pendingExtension) {
+      const currentQuote = booking.quote || {};
+      const savedQuote = { ...currentQuote, ...Object.fromEntries(["bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod"].map(key => [key, body.quote[key]])), updatedAt: new Date(), updatedBy: by };
+      await bookings.updateOne({ _id: body.id }, { $set: { quote: savedQuote, updatedAt: new Date(), updatedBy: by } });
+      await claimBill(db, booking._id, admin);
+      let lineNotified = false;
+      if (booking.lineUserId && !booking.lineUserId.startsWith("pending:") && lineConfigured(booking.lineOa)) {
+        const billUrl = `${requestOrigin(request)}/bill/${pendingExtension.billToken}`;
+        const message = { type: "text" as const, text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${pendingExtension.amount.toLocaleString("th-TH")} บาท\nกรุณาชำระผ่าน QR Code ในบิลนี้ภายใน 1 ชั่วโมงค่ะ\n${billUrl}` };
+        try { await pushLine(booking.lineUserId, [message], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE booking difference notice failed:", error); }
+      }
+      if (lineNotified) await bookings.updateOne({ _id: booking._id, "extensions.id": pendingExtension.id }, { $set: { "extensions.$.awaitingQuoteReview": false, "extensions.$.lineSentAt": new Date() } });
+      await log("booking.extension_quote_saved", lineNotified ? "ตรวจสอบใบสรุปส่วนต่างและส่งบิลทาง LINE" : "ตรวจสอบใบสรุปส่วนต่างแล้ว แต่ยังส่ง LINE ไม่สำเร็จ");
+      return Response.json({ ok: true, quote: savedQuote, extension: { ...pendingExtension, ...(lineNotified ? { awaitingQuoteReview: false } : {}) }, lineNotified });
+    }
     if (booking.payment === "paid" && ["rental", "deposit", "shipping"].some(key => booking.quote?.[key] !== body.quote[key])) return Response.json({ error: "รายการนี้ยืนยันชำระแล้ว หากต้องแก้ยอดเงิน กรุณายกเลิกสถานะชำระก่อน" }, { status: 409 });
     // Always derive the pre-discount rent from the current booking items. The client can
     // still have an old quote open when an item is added/removed, so accepting its cached

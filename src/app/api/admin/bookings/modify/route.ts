@@ -9,9 +9,7 @@ import { getStoreSettings } from "@/lib/store-settings";
 import { adminUseQueue } from "@/lib/admin-availability";
 import type { Product } from "@/lib/products";
 import { setUnitStatuses } from "@/lib/product-store";
-import { lineConfigured, pushLine } from "@/lib/line";
 import type { Extension } from "@/lib/extension";
-import { requestOrigin } from "@/lib/request-origin";
 
 type InputItem = { id: number; variantId?: string; quantity: number; rental?: number; deposit?: number; note?: string };
 type BookingItem = { id: number; variantId?: string; color?: string; size?: string; name: string; sku: string; image: string; dailyRate: number | null; unitSku?: string; quantity?: number; depositPrice?: number; rentalPrice?: number | null };
@@ -76,14 +74,10 @@ export async function POST(request: Request) {
     booking.lineUserId = pendingCustomerId;
   }
   if (difference < 0 && !booking.lineUserId) return Response.json({ error: "รายการนี้ยังไม่เชื่อม LINE จึงยังบันทึกเครดิตส่วนต่างไม่ได้" }, { status: 409 });
-  const extension: Extension | undefined = difference > 0 ? { id: randomUUID(), fromEnd: booking.end, toEnd: end, addedDays: Math.max(0, days - booking.days), amount: difference, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken: randomBytes(18).toString("base64url"), dueAt: new Date(now.getTime() + 3600000), chargeType: "standard", note: "บิลส่วนต่างจากการแก้ไขสินค้า/วันเช่า" } : undefined;
+  const extension: Extension | undefined = difference > 0 ? { id: randomUUID(), fromEnd: booking.end, toEnd: end, addedDays: Math.max(0, days - booking.days), amount: difference, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken: randomBytes(18).toString("base64url"), dueAt: new Date(now.getTime() + 3600000), chargeType: "standard", awaitingQuoteReview: true, note: "บิลส่วนต่างจากการแก้ไขสินค้า/วันเช่า" } : undefined;
   const extensions = [extension, penaltyExtension].filter((item): item is Extension => !!item);
   if (difference < 0 && booking.lineUserId) await grantCredit(db, { customerId: booking.lineUserId, amount: Math.abs(difference), reason: "ส่วนต่างจากการแก้ไขสินค้า/วันเช่า", bookingId: booking._id, billToken: booking.billToken, createdBy: auth.admin.email || auth.admin.username, createdByName: auth.admin.name });
   await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: newTotal, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(extensions.length ? { $push: { extensions: { $each: extensions } } } : {}) });
   await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: `แก้ไขสินค้า/วันเช่าหลังชำระเงิน · ส่วนต่าง ${difference} บาท` });
-  let lineNotified = false;
-  if (extension?.billToken && booking.lineUserId && !booking.lineUserId.startsWith("pending:") && lineConfigured(booking.lineOa)) {
-    try { await pushLine(booking.lineUserId, [{ type: "text", text: `มีการแก้ไขรายการจอง ${booking._id} ค่ะ\nยอดส่วนต่าง ${difference.toLocaleString("th-TH")} บาท\nบิลใหม่ต้องชำระภายใน 1 ชั่วโมง: ${requestOrigin(request)}/bill/${extension.billToken}` }], booking.lineOa); lineNotified = true; } catch (error) { console.error("LINE booking modification notice failed:", error); }
-  }
-  return Response.json({ ok: true, ...details, items, start, end, days, schedule, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, penalty: penaltyExtension, lineNotified });
+  return Response.json({ ok: true, ...details, items, start, end, days, schedule, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, penalty: penaltyExtension, lineNotified: false });
 }
