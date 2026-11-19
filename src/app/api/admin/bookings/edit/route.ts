@@ -103,8 +103,10 @@ export async function POST(request: Request) {
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
   if (result.conflicts.length && body.allowClash !== true) return Response.json({ error: "คิวซ้อนกับลูกค้าคนอื่น ติ๊กยืนยันก่อนบันทึก" }, { status: 409 });
   if (result.conflicts.length && !note) return Response.json({ error: "คิวซ้อนกับลูกค้าคนอื่น กรุณาใส่หมายเหตุ" }, { status: 400 });
-  if (typeof body.rental !== "number" || !Number.isFinite(body.rental) || body.rental < 0 || body.rental > 1000000) return Response.json({ error: "กรุณากรอกค่าเช่าใหม่" }, { status: 400 });
-  const rental = Math.round(body.rental * 100) / 100, now = new Date(), paid = booking.payment === "paid";
+  if (body.rental !== undefined && (typeof body.rental !== "number" || !Number.isFinite(body.rental) || body.rental < 0 || body.rental > 1000000)) return Response.json({ error: "กรุณากรอกค่าเช่าใหม่" }, { status: 400 });
+  // The server preview is authoritative for the normal flow. Only use a rental
+  // supplied by the admin when the UI explicitly marks it as a manual override.
+  const rental = Math.round((body.rental === undefined ? result.rental ?? 0 : body.rental) * 100) / 100, now = new Date(), paid = booking.payment === "paid";
   const difference = Math.round((rental - result.current) * 100) / 100;
   // Pieces stay with an item whose product and dates did not change; otherwise the shop picks again.
   const sameDates = booking.start === body.start && booking.end === body.end;

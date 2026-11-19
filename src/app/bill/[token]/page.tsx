@@ -59,7 +59,7 @@ async function Content({ params }: PageProps) {
   const askRefund = !row.waitlist && !verification && row.status !== "cancelled" && (!row.quote || (row.quote.deposit || 0) > 0);
   const deposit = askRefund ? await deposits(db).findOne({ _id: String(row._id) }) : null;
   const refunded = deposit?.refund && deposit.status !== "held" && deposit.status !== "void" ? deposit.refund : null;
-  const doc: DocRow = { ...rest, items: rest.items.map(item => ({ ...item, deposit: item.deposit ?? item.depositPrice ?? depositByProduct.get(item.id) ?? 0 })), verification: verification || null, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
+  const doc: DocRow = { ...rest, extensions: extensionBill ? [] : extensions, items: rest.items.map(item => ({ ...item, deposit: item.deposit ?? item.depositPrice ?? depositByProduct.get(item.id) ?? 0 })), verification: verification || null, _id: String(row._id), createdAt: new Date(row.createdAt).toISOString() };
   const store = { logoImage: settings.logoImage, lineUrl: settings.lineUrl, instagramUrl: settings.instagramUrl, rentalRules: settings.rentalRules, rentalDocument: settings.rentalDocument };
   const quote = quoteForRow(doc, settings.rentalDocument);
   const paid = row.waitlist ? true : extensionBill ? extensionBill.status === "paid" : row.payment === "paid";

@@ -49,7 +49,7 @@ export default function EditBookingPanel({ row, permissions, onChange }: { row: 
   const find = () => run(async () => { const data = await send({ action: "search", q: search }); setFound(data.products); });
   const apply = () => run(async () => {
     if (!form || !preview) return;
-    const data = await send({ action: "apply", id: row._id, start: form.start, end: form.end, itemIds: form.pieces.map(piece => piece.id), rental: Number(form.rental) || 0, note: form.note, allowClash: form.allowClash });
+    const data = await send({ action: "apply", id: row._id, start: form.start, end: form.end, itemIds: form.pieces.map(piece => piece.id), ...(form.touched ? { rental: Number(form.rental) || 0 } : {}), note: form.note, allowClash: form.allowClash });
     onChange({ ...data.booking, ...(data.adjustment ? { adjustments: [...adjustments, data.adjustment] } : {}) });
     setForm(null); setPreview(null);
     setNotice(`บันทึกการแก้ไขแล้ว${data.adjustment ? ` · ${data.adjustment.amount > 0 ? "ลูกค้าต้องชำระเพิ่ม" : "ร้านต้องคืนเงิน"} ${money(Math.abs(data.adjustment.amount))} บาท` : ""}${data.lineNotified ? " · ส่ง LINE แจ้งลูกค้าแล้ว" : ""}`);

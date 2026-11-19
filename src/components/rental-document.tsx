@@ -4,24 +4,19 @@ import type { RentalDocumentDefaults } from "@/lib/store-settings";
 
 export type Quote = { rental: number; deposit: number; shipping: number; bank: string; accountName: string; accountNumber: string; qrImage: string; returnAddress: string; returnPhone: string; returnMethod: string; rentalBeforeDiscount?: number; discountAmount?: number; discountPercent?: number; discountLabel?: string; discountCode?: string };
 export type StoreInfo = { logoImage: string; lineUrl: string; instagramUrl: string; rentalRules: string[]; rentalDocument: RentalDocumentDefaults };
-export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; schedule?: ScheduleRecord | null; verification?: { mode: "identity"; status: string } | null; deliveryFee: number; quote?: Partial<Quote>; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; deposit?: number | null; depositPrice?: number | null; quantity?: number; variantId?: string; color?: string; size?: string }[]; createdAt: string };
+export type DocRow = { _id: string; name: string; phone: string; address: string; start: string; end: string; days: number; schedule?: ScheduleRecord | null; verification?: { mode: "identity"; status: string } | null; deliveryFee: number; quote?: Partial<Quote>; extensions?: { amount: number; status: string }[]; items: { id: number; name: string; sku: string; image: string; dailyRate: number | null; rentalPrice?: number | null; deposit?: number | null; depositPrice?: number | null; quantity?: number; variantId?: string; color?: string; size?: string }[]; createdAt: string };
 // Price for the whole rental: the package price saved with the booking, else the old per-day rate × days.
 export const itemPrice = (item: DocRow["items"][number], days: number) => item.rentalPrice ?? (item.dailyRate === null ? null : item.dailyRate * days);
 export const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
 export const money = (value: number | null) => value === null ? "สอบถามราคา" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export function safeUrl(value: string) { try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) ? url.href : ""; } catch { return ""; } }
 // Line prices on the paper add up to the rent set in the quote (before discount). A line price includes its quantity.
-export function shownPrices(row: DocRow, quote: Pick<Quote, "rental" | "rentalBeforeDiscount">) {
-  const base = row.items.map(item => { const price = itemPrice(item, row.days); return price === null ? null : price * (item.quantity ?? 1); }), target = quote.rentalBeforeDiscount ?? quote.rental;
+export function shownPrices(row: DocRow) {
+  const base = row.items.map(item => { const price = itemPrice(item, row.days); return price === null ? null : price * (item.quantity ?? 1); });
   if (base.some(price => price === null)) return base;
-  const sum = base.reduce<number>((total, price) => total + (price || 0), 0);
-  if (Math.abs(sum - target) < 0.005 || !base.length) return base;
-  let left = target;
-  return base.map((price, index) => {
-    if (index === base.length - 1) return Math.round(left * 100) / 100;
-    const share = Math.round((sum ? target * (price || 0) / sum : target / base.length) * 100) / 100;
-    left -= share; return share;
-  });
+  // Item rows are the actual product prices. Discounts, manual quote changes and
+  // post-payment differences belong in the summary, never by rewriting line prices.
+  return base;
 }
 const blankQuote = (row: DocRow, defaults: RentalDocumentDefaults): Quote => ({ ...defaults, rental: row.items.every(item => itemPrice(item, row.days) !== null) ? row.items.reduce((sum, item) => sum + (itemPrice(item, row.days) || 0) * (item.quantity ?? 1), 0) : 0, deposit: row.items.reduce((sum, item) => sum + (item.deposit ?? item.depositPrice ?? 0) * (item.quantity ?? 1), 0), shipping: row.deliveryFee || 0, ...(row.verification?.mode === "identity" ? { deposit: 0 } : {}) });
 export function quoteForRow(row: DocRow, defaults: RentalDocumentDefaults): Quote {
@@ -34,7 +29,7 @@ export function quoteForRow(row: DocRow, defaults: RentalDocumentDefaults): Quot
 
 export function RentalDocument({ row, quote, store, printOnly = false, qrPending = false, qrImageOverride = "" }: { row: DocRow; quote: Quote; store: StoreInfo; printOnly?: boolean; qrPending?: boolean; qrImageOverride?: string }) {
   const dayMonth = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "numeric", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
-  const prices = shownPrices(row, quote);
+  const prices = shownPrices(row), extraTotal = (row.extensions || []).filter(item => item.status !== "cancelled").reduce((sum, item) => sum + item.amount, 0), total = quote.rental + quote.deposit + quote.shipping + extraTotal;
   return <article className="rental-paper" id={printOnly ? undefined : "rental-paper"}>
     <header className="rental-paper-brand"><div className="rental-paper-wordmark">{store.logoImage && <Image unoptimized src={store.logoImage} alt="" width={76} height={76} />}<span><strong>CHARM BLESS <i>Rental</i></strong><small>CLOTHES FOR SPECIAL MOMENTS</small></span></div><div className="rental-paper-title"><strong>ใบรายละเอียดการเช่า</strong><small>RENTAL DETAILS</small></div></header>
     <div className="rental-paper-columns">
@@ -43,7 +38,7 @@ export function RentalDocument({ row, quote, store, printOnly = false, qrPending
     </div>
     <section className="rental-paper-section rental-paper-items"><h3>รายการสินค้าเช่า</h3><table><thead><tr><th>ลำดับ</th><th>รูป</th><th>รหัสสินค้า / รายการ</th><th>จำนวน</th><th>ราคาเช่า (บาท)</th></tr></thead><tbody>{row.items.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{item.image ? <Image unoptimized src={item.image} alt="" width={45} height={56} /> : <span>—</span>}</td><td><b>{item.sku}</b><span>{item.name}</span></td><td>{item.quantity ?? 1}</td><td>{prices[index] === null ? "สอบถาม" : money(prices[index])}</td></tr>)}</tbody></table></section>
     <div className="rental-paper-columns rental-paper-payment-row">
-      <section className="rental-paper-section rental-paper-total"><h3>สรุปยอดค่าเช่า</h3>{quote.discountAmount ? <p><span>ค่าเช่าก่อนลด</span><b>{money(quote.rentalBeforeDiscount ?? quote.rental + quote.discountAmount)}</b></p> : null}<p><span>ค่าเช่ารวม{quote.discountAmount ? ` · ลด ${quote.discountPercent}%` : ""}</span><b>{money(quote.rental)}{quote.discountAmount ? ` (ลด ${money(quote.discountAmount)})` : ""}</b></p>{quote.discountLabel && <small className="rental-paper-discount-note">{quote.discountLabel}{quote.discountCode && !quote.discountLabel.toUpperCase().includes(quote.discountCode.toUpperCase()) ? ` · โค้ด ${quote.discountCode}` : ""}</small>}<p><span>เงินมัดจำ{row.verification?.mode === "identity" && quote.deposit === 0 ? " (ยืนยันตัวตนแทน)" : ""}</span><b>{money(quote.deposit)}</b></p><p><span>ค่าจัดส่ง</span><b>{money(quote.shipping)}</b></p><strong><span>ยอดรวมสุทธิ</span><b>{money(quote.rental + quote.deposit + quote.shipping)} บาท</b></strong></section>
+      <section className="rental-paper-section rental-paper-total"><h3>สรุปยอดค่าเช่า</h3>{quote.discountAmount ? <p><span>ค่าเช่าก่อนลด</span><b>{money(quote.rentalBeforeDiscount ?? quote.rental + quote.discountAmount)}</b></p> : null}<p><span>ค่าเช่ารวม{quote.discountAmount ? ` · ลด ${quote.discountPercent}%` : ""}</span><b>{money(quote.rental)}{quote.discountAmount ? ` (ลด ${money(quote.discountAmount)})` : ""}</b></p>{quote.discountLabel && <small className="rental-paper-discount-note">{quote.discountLabel}{quote.discountCode && !quote.discountLabel.toUpperCase().includes(quote.discountCode.toUpperCase()) ? ` · โค้ด ${quote.discountCode}` : ""}</small>}<p><span>เงินมัดจำ{row.verification?.mode === "identity" && quote.deposit === 0 ? " (ยืนยันตัวตนแทน)" : ""}</span><b>{money(quote.deposit)}</b></p><p><span>ค่าจัดส่ง</span><b>{money(quote.shipping)}</b></p>{extraTotal > 0 && <p><span>ส่วนต่างจากการแก้ไข</span><b>{money(extraTotal)}</b></p>}<strong><span>ยอดรวมสุทธิ</span><b>{money(total)} บาท</b></strong></section>
       <section className="rental-paper-section rental-paper-bank"><h3>ช่องทางชำระเงิน</h3><div><span className="rental-paper-qr">{qrPending ? <>กำลังสร้าง<br />QR Code</> : qrImageOverride ? <img src={qrImageOverride} alt="QR ชำระเงิน" width={130} height={130} /> : quote.qrImage && safeUrl(quote.qrImage) ? <Image unoptimized src={safeUrl(quote.qrImage)} alt="QR ชำระเงิน" width={130} height={130} /> : <>QR<br />ชำระเงิน</>}</span><p><b>ข้อมูลบัญชีร้าน</b><span>ธนาคาร　:　{quote.bank || "กรอกชื่อธนาคาร"}</span><span>เลขที่บัญชี　:　{quote.accountNumber || "กรอกเลขบัญชี"}</span><span>ชื่อบัญชี　:　{quote.accountName || "กรอกชื่อบัญชี"}</span></p></div><small>ตรวจสอบยอดและบัญชีก่อนโอน</small></section>
     </div>
     <div className="rental-paper-reminder"><strong>ส่งคืนภายในวันที่กำหนด {dateLabel(returnDay(row))} ก่อน 14:00 น.</strong></div>
