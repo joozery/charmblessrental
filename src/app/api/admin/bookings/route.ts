@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     // Count only completed rentals before this booking. The LINE link increments bookingCount
     // for the current request, so using that field here incorrectly grants the first booking 5% off.
     const completedBookings = booking.lineUserId
-      ? await bookings.countDocuments({ lineUserId: booking.lineUserId, status: "confirmed", _id: { $ne: booking._id } })
+      ? await bookings.countDocuments({ lineUserId: booking.lineUserId, status: { $ne: "cancelled" }, returned: { $exists: true }, _id: { $ne: booking._id } })
       : 0;
     // Rentals through the old sheet count too, matched by the phone number on this booking.
     const loyalty = customerDiscount(completedBookings + await legacyRentalCount(db, booking.phone), customer?.reviewCount ?? 0);

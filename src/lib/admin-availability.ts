@@ -22,7 +22,8 @@ export async function adminUseQueue(db: Db, productId: number, from: string, to:
     const reserved = bookings.reduce((sum, booking) => {
       if (date < booking.start || date > booking.end) return sum;
       const item = booking.items?.find(row => row.id === productId && (!variant || row.variantId === variant));
-      return sum + (item?.quantity ?? 1);
+      // A booking for another variant of the same product does not occupy this variant.
+      return sum + (item?.quantity ?? 0);
     }, 0) + imported.filter(hold => hold.start <= date && date <= hold.end).length;
     days.push({ date, remaining: Math.max(0, (capacity.get(date) ?? stock) - reserved) });
   }

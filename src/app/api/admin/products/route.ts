@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       if (error instanceof Error && error.message === "MERGE_HAS_BOOKINGS") return Response.json({ error: "รวมไม่ได้ เพราะสินค้าต้นทางมีรายการจองที่ยังไม่ยกเลิก" }, { status: 409 });
       if (error instanceof Error && error.message === "SKU_TAKEN") return Response.json({ error: "รหัสสินค้าแม่นี้ถูกใช้แล้ว กรุณาใช้รหัสอื่น" }, { status: 409 });
       if (error instanceof Error && error.message === "MERGE_SOURCE_NOT_FOUND") return Response.json({ error: "สินค้าต้นทางเปลี่ยนแปลง กรุณาโหลดหน้าใหม่" }, { status: 409 });
+      if (error instanceof Error && ["VARIANT_MAPPING_REQUIRED", "VARIANT_MAPPING_INVALID"].includes(error.message)) return Response.json({ error: "ไม่สามารถรวมสินค้าได้ เพราะชิ้นสินค้าเดิมยังไม่ได้ผูกกับสี/ไซซ์อย่างถูกต้อง กรุณาตรวจสอบการผูกสีของสินค้าต้นทางก่อน" }, { status: 409 });
       if (error && typeof error === "object" && "code" in error && error.code === 11000) return Response.json({ error: "รวมไม่ได้ เพราะมีรหัสสินค้า/รหัสชิ้นซ้ำ กรุณาเว้นรหัสสินค้าใหม่เพื่อให้ระบบสร้างรหัสอัตโนมัติ" }, { status: 409 });
       return Response.json({ error: "รวมสินค้าไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
     }
@@ -149,6 +150,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message === "SKU_TAKEN") return Response.json({ error: "รหัสสินค้านี้ถูกใช้แล้ว กรุณาใช้รหัสอื่น" }, { status: 409 });
     if (error instanceof Error && error.message === "VARIANT_HAS_STOCK") return Response.json({ error: "ลบสี/ไซซ์นี้ไม่ได้ เพราะยังมีชิ้นสินค้าอยู่ กรุณาเลิกใช้หรือลบชิ้นสินค้าก่อน" }, { status: 409 });
+    if (error instanceof Error && ["VARIANT_MAPPING_REQUIRED", "VARIANT_MAPPING_INVALID"].includes(error.message)) return Response.json({ error: "บันทึกไม่ได้ เพราะชิ้นสินค้าเดิมยังไม่ได้ผูกกับสี/ไซซ์อย่างถูกต้อง กรุณาตรวจสอบการผูกสีของแต่ละชิ้นก่อน" }, { status: 409 });
     if (error instanceof Error && error.message === "PRODUCT_NOT_FOUND") return Response.json({ error: "ไม่พบสินค้า กรุณาโหลดหน้าใหม่" }, { status: 404 });
     return Response.json({ error: "บันทึกไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
   }

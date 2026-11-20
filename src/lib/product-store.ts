@@ -87,6 +87,16 @@ const pieceNumber = (sku: string, code: string) => sku.startsWith(`${code}-`) ? 
 const pieceCode = (code: string, number: number) => `${code}-${String(number).padStart(2, "0")}`;
 const variantUnitCode = (productCode: string, variant: { id: string; colorCode?: string; size: string }) => `${productCode}-${(variant.colorCode || variant.id).toUpperCase()}${variant.size ? `-${variant.size.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 12)}` : ""}`;
 
+// A product with variants must never have an in-service piece without a valid
+// variant. Otherwise the admin editor treats that piece as a new piece and
+// can accidentally add it to the first colour when counts are recalculated.
+function assertVariantInventory(variants: ProductVariant[] | undefined, units: ProductUnit[]) {
+  if (!variants?.length) return;
+  const ids = new Set(variants.map(variant => variant.id));
+  if (units.some(unit => inService(unit.status) && (!unit.variantId || !ids.has(unit.variantId)))) throw new Error("VARIANT_MAPPING_REQUIRED");
+  if (units.some(unit => unit.variantId && !ids.has(unit.variantId))) throw new Error("VARIANT_MAPPING_INVALID");
+}
+
 async function skuTaken(db: Db, sku: string, excludeId?: number) { return !!await products(db).findOne({ $and: [{ $or: [{ "units.sku": sku }, { sku }] }, ...(excludeId === undefined ? [] : [{ id: { $ne: excludeId } }])] }, { projection: { _id: 1 } }); }
 async function activeSkuTaken(db: Db, sku: string, excludeId?: number) { return !!await products(db).findOne({ $and: [{ deletedAt: { $exists: false } }, { $or: [{ "units.sku": sku }, { sku }] }, ...(excludeId === undefined ? [] : [{ id: { $ne: excludeId } }])] }, { projection: { _id: 1 } }); }
 // Next free product code: A0330, A0331… The counter is seeded by the merge script.
@@ -127,6 +137,7 @@ export async function convertProduct(fields: ProductFields, row: ProductMergeRow
   const variant = { id: "v1", color: row.color.trim(), colorCode: row.colorCode.trim().toUpperCase(), size: row.size.trim(), images: existing.images?.length ? [...new Set(existing.images)] : existing.image ? [existing.image] : [] };
   const sourceUnits = existing.units?.length ? existing.units : existing.stock ? unitsOf(existing).slice(0, existing.stock) : [];
   const units = sourceUnits.map(unit => ({ ...unit, cost: row.cost ?? unit.cost, variantId: variant.id }));
+  assertVariantInventory([variant], units);
   const next: Product = { ...existing, ...fields, sku: existing.sku, color: variant.color, size: variant.size, variants: [{ ...variant, cost: row.cost ?? units[0]?.cost ?? null }], images: variant.images, image: variant.images[0] || existing.image, units, ...derived(units) };
   await products(db).replaceOne({ id: existing.id }, next);
   return { id: existing.id, code: existing.sku || String(existing.id), units, sources: [existing] };
@@ -165,6 +176,7 @@ export async function mergeProducts(fields: ProductFields, rows: ProductMergeRow
       return { ...unit, sku, legacyId: unit.legacyId || unit.sku, cost: row.cost, variantId: variant.id, legacyProductId: source.id };
     });
   });
+  assertVariantInventory(variants, units);
   const idCounter = await db.collection<{ _id: string; sequence: number }>("counters").findOneAndUpdate(
     { _id: "products" }, [{ $set: { sequence: { $add: [{ $ifNull: ["$sequence", 0] }, 1] } } }], { upsert: true, returnDocument: "after" }
   );
@@ -211,6 +223,7 @@ export async function updateProduct(id: number, fields: ProductFields, requested
   if (requestedSku && requestedSku !== existing.sku && await activeSkuTaken(db, requestedSku, id)) throw new Error("SKU_TAKEN");
   let units = unitsOf(existing);
   if (variantUpdates?.length) {
+    assertVariantInventory(existing.variants, units);
     const keptVariants = new Set(variantUpdates.map(variant => variant.id));
     if ((existing.variants || []).some(variant => !keptVariants.has(variant.id) && units.some(unit => unit.variantId === variant.id))) throw new Error("VARIANT_HAS_STOCK");
     const code = requestedSku || existing.sku || await nextProductCode(db);
@@ -234,6 +247,7 @@ export async function updateProduct(id: number, fields: ProductFields, requested
       if (!variant.costMixed) for (let index = 0; index < nextUnits.length; index++) if (nextUnits[index].variantId === variant.id && inService(nextUnits[index].status)) nextUnits[index] = { ...nextUnits[index], cost: variant.cost };
     }
     units = nextUnits;
+    assertVariantInventory(variantUpdates, units);
   }
   await products(db).updateOne({ id }, { $set: { ...fields, ...(requestedSku ? { sku: requestedSku } : {}), units, ...derived(units) } });
   return existing;

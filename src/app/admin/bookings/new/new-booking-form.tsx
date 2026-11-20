@@ -34,6 +34,14 @@ export default function NewBookingForm({ products, methods, shipping, verificati
   const [error, setError] = useState("");
   const [shippingMode] = useState<"auto" | "manual">(initial ? "manual" : "auto");
   const [availability, setAvailability] = useState<Record<string, number>>({});
+  const fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    if (editId && typeof input === "string" && input.startsWith("/api/admin/bookings/availability?")) {
+      const url = new URL(input, window.location.origin);
+      url.searchParams.set("bookingId", editId);
+      input = url.toString();
+    }
+    return globalThis.fetch(input, init);
+  };
   const [depositMode, setDepositModeState] = useState<"deposit" | "identity">("deposit");
   const setDepositMode = (mode: "deposit" | "identity") => { setDepositModeState(mode); setForm(current => ({ ...current, depositMode: mode })); };
   const change = (key: keyof typeof form, value: string) => { setForm(current => ({ ...current, [key]: value })); if (key === "start" || key === "end") setItems(current => current.map(item => { const start = key === "start" ? value : form.start; const end = key === "end" ? value : form.end; const price = priceFor(product(item.id)?.pricing, Math.max(1, countUseDays(start, end))); return { ...item, rental: price === null ? "" : String(price) }; })); };

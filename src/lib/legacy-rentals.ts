@@ -64,5 +64,5 @@ export async function legacyHolds(db: Db, from: string, to: string, productId?: 
 // Times a customer rented through the old sheet, matched by phone number (`phoneKey` is normalizePhone(phone)).
 export async function legacyRentalCount(db: Db, phone?: string) {
   const key = phone ? normalizePhone(phone) : "";
-  return key.length >= 9 ? legacyRentals(db).countDocuments({ phoneKey: key, legacyStatus: { $ne: "ยกเลิก" } }) : 0;
+  return key.length >= 9 ? legacyRentals(db).countDocuments({ phoneKey: key, returned: { $exists: true } }) : 0;
 }
