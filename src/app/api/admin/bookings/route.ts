@@ -22,7 +22,7 @@ type Shipment = { carrier: string; trackingNumber: string; shippedAt: Date; by: 
 type ReturnedItem = { unitSku: string; condition: string; note: string };
 type Returned = { at: Date; condition: string; note: string; items?: ReturnedItem[]; by: string; byName: string };
 type CustomerReturn = { carrier: string; trackingNumber: string; at: Date };
-type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; days: number; items: { id: number; variantId?: string; name?: string; unitSku?: string; dailyRate?: number | null; rentalPrice?: number | null; quantity?: number }[]; extensions?: Extension[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
+type BookingDoc = { _id: string; status: string; phone?: string; method?: string; billToken?: string; payment?: "unpaid" | "paid"; waitlist?: { since?: Date }; lineUserId?: string; lineOa?: string; lineName?: string; lineChatUrl?: string; lineSentAt?: Date; discountCode?: string; quote?: Record<string, unknown>; name?: string; paidAt?: Date | null; updatedAt?: Date; updatedBy?: string; start: string; end: string; days: number; items: { id: number; variantId?: string; name?: string; unitSku?: string; dailyRate?: number | null; rentalPrice?: number | null; quantity?: number }[]; extensions?: Extension[]; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; schedule?: ScheduleRecord; verification?: BookingVerification };
 // A normal returned piece is ready for the next rental; damaged and missing pieces still need follow-up.
 const afterReturn: Record<string, UnitStatus> = { good: "available", damaged: "repair", missing: "unavailable" };
 const withUnit = <T extends { unitSku?: string }>(item: T, sku: string) => { const rest = { ...item }; delete rest.unitSku; return sku ? { ...rest, unitSku: sku } : rest; };
@@ -33,12 +33,12 @@ const text = (value: unknown, max: number) => typeof value === "string" && value
 const validHttpUrl = (value: string) => { try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:"; } catch { return false; } };
 const validReturnItems = (value: unknown) => Array.isArray(value) && value.every((item: unknown) => !!item && typeof item === "object" && typeof (item as { unitSku?: unknown }).unitSku === "string" && conditions.includes((item as { condition?: string }).condition || "") && text((item as { note?: unknown }).note, 500));
 const validReceive = (body: Record<string, unknown>) => body.itemConditions !== undefined ? validReturnItems(body.itemConditions) : conditions.includes(body.condition as string) && text(body.note, 500);
-const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping", ackCondition: "shipping", setCondition: "shipping", delete: "bookings" };
+const actions: Record<string, Permission> = { saveQuote: "pricing", billLink: "bookings", sendLine: "bookings", saveLineChatUrl: "bookings", setPayment: "payments", ship: "shipping", receiveReturn: "shipping", ackCondition: "shipping", setCondition: "shipping", delete: "bookings" };
 const quoteFields = ["rental", "deposit", "shipping", "bank", "accountName", "accountNumber", "qrImage", "returnAddress", "returnPhone", "returnMethod", "rentalBeforeDiscount", "discountAmount", "discountPercent", "discountLabel", "discountCode"];
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.id !== "string" || body.id.length > 100 || (!statuses.includes(body.status) && !Object.hasOwn(actions, body.action)) || (body.action === "saveQuote" && !validQuote(body.quote)) || (body.action === "setPayment" && (typeof body.paid !== "boolean" || (body.paidOn !== undefined && !validDay(body.paidOn)))) || (body.action === "ship" && (!text(body.carrier, 60) || !text(body.trackingNumber, 2000))) || (body.action === "receiveReturn" && !validReceive(body))) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
+  if (!body || typeof body.id !== "string" || body.id.length > 100 || (!statuses.includes(body.status) && !Object.hasOwn(actions, body.action)) || (body.action === "saveQuote" && !validQuote(body.quote)) || (body.action === "saveLineChatUrl" && (typeof body.lineChatUrl !== "string" || (body.lineChatUrl !== "" && (!validHttpUrl(body.lineChatUrl) || !body.lineChatUrl.startsWith("https://chat.line.biz/"))))) || (body.action === "setPayment" && (typeof body.paid !== "boolean" || (body.paidOn !== undefined && !validDay(body.paidOn)))) || (body.action === "ship" && (!text(body.carrier, 60) || !text(body.trackingNumber, 2000))) || (body.action === "receiveReturn" && !validReceive(body))) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   const auth = await requireAdmin(body.action ? actions[body.action] : "bookings");
   if (auth.error) return auth.error;
   const admin = auth.admin, by = admin.email || admin.username;
@@ -80,6 +80,16 @@ export async function POST(request: Request) {
     await bookings.updateOne({ _id: body.id }, { $set: { lineSentAt: new Date() } });
     await log("booking.bill_sent", "ส่งบิลทาง LINE");
     return Response.json({ ok: true, billToken });
+  }
+  if (body.action === "saveLineChatUrl") {
+    const lineChatUrl = String(body.lineChatUrl || "").trim();
+    await bookings.updateOne({ _id: body.id }, { ...(lineChatUrl ? { $set: { lineChatUrl, updatedAt: new Date(), updatedBy: by } } : { $unset: { lineChatUrl: "" }, $set: { updatedAt: new Date(), updatedBy: by } }) });
+    if (booking.lineUserId) {
+      const customers = db.collection<{ _id: string; lineChatUrl?: string }>("customers");
+      await customers.updateOne({ _id: booking.lineUserId }, lineChatUrl ? { $set: { lineChatUrl, updatedAt: new Date() } } : { $unset: { lineChatUrl: "" }, $set: { updatedAt: new Date() } });
+    }
+    await log("booking.line_chat_url_saved", lineChatUrl ? "บันทึกลิงก์แชท LINE ของลูกค้า" : "ลบลิงก์แชท LINE ของลูกค้า", [{ field: "lineChatUrl", before: booking.lineChatUrl || null, after: lineChatUrl || null }]);
+    return Response.json({ ok: true, lineChatUrl });
   }
   if (body.action === "setPayment") {
     if (body.paid === (booking.payment === "paid")) return Response.json({ error: body.paid ? "รายการนี้ยืนยันชำระแล้ว" : "รายการนี้ยังไม่ได้ชำระ" }, { status: 409 });

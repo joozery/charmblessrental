@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { requireAdmin, sameOrigin } from "@/lib/admin-auth";
-import { audit } from "@/lib/audit";
+import { audit, diff } from "@/lib/audit";
 import { grantCredit } from "@/lib/customer-credits";
 import { effectivePricing, priceFor } from "@/lib/pricing";
 import { database } from "@/lib/mongodb";
@@ -43,6 +43,15 @@ export async function POST(request: Request) {
   const items = inputs.map(input => { const product = products.find(item => item.id === input.id)!; const variant = product.variants?.find(item => item.id === input.variantId); const previous = booking.items.find(item => item.id === product.id && item.variantId === input.variantId); return { id: product.id, ...(variant ? { variantId: variant.id, color: variant.color, size: variant.size } : {}), name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || product.image || "", dailyRate: product.dailyRate, ...(previous?.unitSku ? { unitSku: previous.unitSku } : {}), rentalPrice: input.rental ?? priceFor(effectivePricing(product, settings.rentalPricing, settings.extraDayRates), days), depositPrice: input.deposit ?? product.deposit ?? 0, quantity: input.quantity, note: input.note || "", stock: variant ? (product.units || []).filter(unit => unit.variantId === variant.id && unit.status !== "unavailable" && unit.status !== "retired").length : product.stock ?? 1 }; });
   const calculatedRental = items.reduce((sum, item) => sum + (item.rentalPrice || 0) * item.quantity, 0), calculatedDeposit = items.reduce((sum, item) => sum + (item.depositPrice || 0) * item.quantity, 0);
   const schedule = scheduleRecord(plan, returnMethod), now = new Date();
+  const beforeItems = booking.items.map(item => ({ sku: item.unitSku || item.sku, variantId: item.variantId || "", quantity: item.quantity || 1 }));
+  const afterItems = items.map(item => ({ sku: item.unitSku || item.sku, variantId: item.variantId || "", quantity: item.quantity || 1 }));
+  const changes = diff(
+    { items: beforeItems, start: booking.start, end: booking.end, days: booking.days, returnDate: booking.schedule?.returnDate || booking.end },
+    { items: afterItems, start, end, days, returnDate: schedule.returnDate },
+    ["items", "start", "end", "days", "returnDate"],
+  );
+  const itemChanged = JSON.stringify(beforeItems) !== JSON.stringify(afterItems), dateChanged = booking.start !== start || booking.end !== end || booking.days !== days;
+  const changeSummary = [itemChanged ? "เปลี่ยนรหัสชุด" : "", dateChanged ? "เปลี่ยนวันเช่า" : ""].filter(Boolean).join(" และ ") || "แก้ไขรายละเอียดคำขอ";
   const penaltyExtension: Extension | undefined = penaltyAmount > 0 ? { id: randomUUID(), fromEnd: booking.end, toEnd: booking.end, addedDays: 0, amount: Math.round(penaltyAmount * 100) / 100, status: "unpaid", createdAt: now, createdByName: auth.admin.name, billToken: randomBytes(18).toString("base64url"), dueAt: new Date(now.getTime() + 3600000), chargeType: "penalty", note: penaltyReason } : undefined;
   const nextSkus = new Set(items.map(item => item.unitSku).filter((sku): sku is string => !!sku));
   const releasedSkus = booking.items.map(item => item.unitSku).filter((sku): sku is string => !!sku && !nextSkus.has(sku));
@@ -63,7 +72,7 @@ export async function POST(request: Request) {
   if (booking.payment !== "paid") {
     const quote = booking.quote ? { ...booking.quote, rental, deposit, shipping, rentalBeforeDiscount: calculatedRental, discountAmount, discountPercent } : booking.quote;
     await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, shipping: shippingRecord, deliveryFee: shipping, ...(quote ? { quote } : {}), estimatedTotal: rental + deposit + shipping, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(penaltyExtension ? { $push: { extensions: penaltyExtension } } : {}) });
-    await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: "แก้ไขสินค้าและวันเช่าก่อนชำระเงิน" });
+    await audit(request, auth.admin, { action: "booking.edited", targetType: "booking", targetId: booking._id, summary: `${changeSummary} ก่อนชำระเงิน`, changes });
     return Response.json({ ok: true, ...details, items, start, end, days, schedule, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: rental + deposit + shipping, quote, penalty: penaltyExtension });
   }
   const oldTotal = (booking.quote?.rental || 0) + (booking.quote?.deposit || 0) + (booking.quote?.shipping || booking.deliveryFee || 0), newTotal = rental + deposit + shipping, difference = Math.round((newTotal - oldTotal) * 100) / 100;
@@ -78,6 +87,6 @@ export async function POST(request: Request) {
   const extensions = [extension, penaltyExtension].filter((item): item is Extension => !!item);
   if (difference < 0 && booking.lineUserId) await grantCredit(db, { customerId: booking.lineUserId, amount: Math.abs(difference), reason: "ส่วนต่างจากการแก้ไขสินค้า/วันเช่า", bookingId: booking._id, billToken: booking.billToken, createdBy: auth.admin.email || auth.admin.username, createdByName: auth.admin.name });
   await bookings.updateOne({ _id: booking._id }, { $set: { ...details, start, end, days, schedule, items, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: newTotal, updatedAt: now, updatedBy: auth.admin.email || auth.admin.username }, ...(extensions.length ? { $push: { extensions: { $each: extensions } } } : {}) });
-  await audit(request, auth.admin, { action: "booking.modified", targetType: "booking", targetId: booking._id, summary: `แก้ไขสินค้า/วันเช่าหลังชำระเงิน · ส่วนต่าง ${difference} บาท` });
+  await audit(request, auth.admin, { action: "booking.edited", targetType: "booking", targetId: booking._id, summary: `${changeSummary} หลังชำระเงิน · ส่วนต่าง ${difference} บาท`, changes });
   return Response.json({ ok: true, ...details, items, start, end, days, schedule, shipping: shippingRecord, deliveryFee: shipping, estimatedTotal: newTotal, difference, credit: difference < 0 ? Math.abs(difference) : 0, extension, penalty: penaltyExtension, lineNotified: false });
 }

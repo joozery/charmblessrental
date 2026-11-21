@@ -1,10 +1,11 @@
 export type RentalStage = "cancelled" | "pending" | "paid" | "preparing" | "shipped" | "received" | "returning" | "returned";
-type StageInput = { status: string; payment?: string; method?: string; shipment?: unknown; customerReturn?: unknown; returned?: unknown; receivedCondition?: unknown; photos?: { beforeShipment?: unknown[] } };
+type StageInput = { status: string; payment?: string; method?: string; shipment?: unknown; customerReturn?: unknown; returned?: unknown; receivedCondition?: unknown; receivedDeadlinePassed?: boolean; photos?: { beforeShipment?: unknown[] } };
 export function rentalStage(row: StageInput): RentalStage {
   if (row.status === "cancelled") return "cancelled";
   if (row.returned) return "returned";
   if (row.customerReturn) return "returning";
   if (row.receivedCondition) return "received";
+  if (row.receivedDeadlinePassed) return "returning";
   if (row.shipment) return "shipped";
   if (row.payment === "paid" && row.photos?.beforeShipment?.length) return "preparing";
   return row.payment === "paid" ? "paid" : "pending";
