@@ -66,4 +66,24 @@ export const valueLabels: Record<string, string> = {
   new: "ใหม่", contacted: "ติดต่อแล้ว", confirmed: "ยืนยันแล้ว", cancelled: "ยกเลิก", paid: "ชำระแล้ว", unpaid: "รอชำระ",
   available: "พร้อมเช่า", rented: "อยู่กับลูกค้า", inspection: "รอตรวจสภาพ", washing: "รอซัก", repair: "รอซ่อม / ชำรุด", unavailable: "ไม่พร้อมเช่า", retired: "เลิกใช้แล้ว", held: "ถือไว้", refunded: "คืนเต็มจำนวน", partial: "คืนบางส่วน", forfeited: "ยึดทั้งหมด", good: "สภาพปกติ", damaged: "ชำรุด", missing: "สูญหาย/ไม่ครบ", true: "ใช่", false: "ไม่ใช่",
 };
-export const showValue = (value: unknown) => value === null || value === undefined || value === "" ? "—" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : valueLabels[String(value)] || String(value);
+const dateFields = new Set(["start", "end", "returnDate", "date", "paidOn"]);
+
+const showDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+};
+
+const showItem = (value: Record<string, unknown>) => {
+  const code = value.unitSku || value.sku || value.name || value.id;
+  if (code === undefined || code === null) return JSON.stringify(value);
+  const quantity = Number(value.quantity);
+  return quantity > 1 ? `${String(code)} × ${quantity}` : String(code);
+};
+
+export const showValue = (value: unknown, field?: string): string => {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "string" && field && dateFields.has(field)) return showDate(value) || value;
+  if (Array.isArray(value)) return value.map(item => item && typeof item === "object" ? showItem(item as Record<string, unknown>) : showValue(item)).join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return valueLabels[String(value)] || String(value);
+};

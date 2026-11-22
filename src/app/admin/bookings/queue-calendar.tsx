@@ -8,18 +8,18 @@ import { monthCells, monthLabel, queueRole, queueRoleLabels, queueWeekdays, shif
 
 // One piece's queue for a month: who has it on each day, so the shop can see whether a rental can run longer.
 // `preview` marks days an extension would add, before it is saved.
-export default function QueueCalendar({ productId, label, highlight, preview, startMonth, onClose }: { productId: number; label: string; highlight?: string; preview?: { from: string; to: string } | null; startMonth: string; onClose: () => void }) {
+export default function QueueCalendar({ productId, variantId, unitSku, label, highlight, preview, startMonth, onClose }: { productId: number; variantId?: string; unitSku?: string; label: string; highlight?: string; preview?: { from: string; to: string } | null; startMonth: string; onClose: () => void }) {
   const [month, setMonth] = useState(startMonth.slice(0, 7));
   const [data, setData] = useState<{ key: string; days: { date: string; remaining: number; over: number }[]; bookings: QueueBooking[] } | null>(null);
   const [error, setError] = useState("");
-  const key = `${productId}:${month}`;
+  const key = `${productId}:${variantId || ""}:${unitSku || ""}:${month}`;
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/admin/queue?productId=${productId}&month=${month}`, { signal: controller.signal, cache: "no-store" })
+    fetch(`/api/admin/queue?productId=${productId}&month=${month}${variantId ? `&variantId=${encodeURIComponent(variantId)}` : ""}${unitSku ? `&unitSku=${encodeURIComponent(unitSku)}` : ""}`, { signal: controller.signal, cache: "no-store" })
       .then(async response => { const result = await response.json(); if (!response.ok) throw new Error(result.error || "โหลดคิวไม่สำเร็จ"); setData({ key, ...result }); setError(""); })
       .catch(cause => { if (cause.name !== "AbortError") setError(cause instanceof Error ? cause.message : "โหลดคิวไม่สำเร็จ"); });
     return () => controller.abort();
-  }, [productId, month, key]);
+  }, [productId, variantId, unitSku, month, key]);
   const loaded = data?.key === key ? data : null;
   const cells = monthCells(month);
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}><Dialog.Portal><Dialog.Overlay className="admin-dialog-overlay" /><Dialog.Content className="admin-dialog queue-dialog" aria-describedby={undefined}>

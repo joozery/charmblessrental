@@ -4,7 +4,7 @@ import { addDays, blockRange, type ScheduleRecord } from "./schedule";
 import { lastUseDay, type Extension } from "./extension";
 import type { QueueBooking, QueueClash } from "./queue";
 import { legacyHolds, type LegacyHold } from "./legacy-rentals";
-import { inService, stockForVariant, unitsForVariant, type Product } from "./products";
+import { inService, stockForVariant, unitsForVariant, unitsOf, type Product } from "./products";
 
 type Capacity = { productId: number; date: string; capacity: number };
 type BlockingBooking = { _id: string; start: string; end: string; items: { id: number; variantId?: string; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; schedule?: ScheduleRecord };
@@ -67,12 +67,12 @@ function tallyReservations(bookings: BlockingBooking[], imported: LegacyHold[], 
 // Every day in [from, to): a hand-set capacity wins, otherwise the pieces in service (stock) are the capacity.
 // `over` counts bookings beyond the pieces that exist (an extension the shop let run into the next rental): a real clash.
 // With `variantId`, the queue of one colour/size: its pieces in service are the capacity (a hand-set product capacity still caps it).
-async function getQueueUncached(db: Db, productId: number, from: string, to: string, exceptId?: string, variantId?: string) {
-  if (variantId) {
+async function getQueueUncached(db: Db, productId: number, from: string, to: string, exceptId?: string, variantId?: string, unitSku?: string) {
+  if (variantId || unitSku) {
     const product = await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, units: 1, variants: 1 } });
-    if (product?.variants?.length) {
-      const units = unitsForVariant(product, variantId).filter(unit => inService(unit.status));
-      const stock = stockForVariant(product, variantId), scope = { id: variantId, unitSkus: new Set(units.map(unit => unit.sku)) };
+    if (product) {
+      const units = (unitSku ? unitsOf(product).filter(unit => unit.sku === unitSku) : unitsForVariant(product, variantId)).filter(unit => inService(unit.status));
+      const stock = unitSku ? (units.length ? 1 : 0) : stockForVariant(product, variantId), scope = { id: variantId || unitSku!, unitSkus: new Set(units.map(unit => unit.sku)) };
       const [capacities, reservations, firm] = await Promise.all([
         db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
         getReservationCounts(db, productId, from, to, exceptId, false, scope),
@@ -129,35 +129,38 @@ export async function getQueues(db: Db, requests: { productId: number; from: str
 const queueCache = new Map<string, { at: number; value: Awaited<ReturnType<typeof getQueueUncached>> }>();
 const queueRuns = new Map<string, Promise<Awaited<ReturnType<typeof getQueueUncached>>>>();
 // `useCache = false` reads fresh counts (confirming a booking must not trust a 5-second-old queue).
-async function getQueueCached(db: Db, productId: number, from: string, to: string, exceptId?: string, useCache = true, variantId?: string) {
-  const key = `${productId}:${variantId || ""}:${from}:${to}:${exceptId || ""}`, now = Date.now(), cached = queueCache.get(key);
-  if (!useCache) return getQueueUncached(db, productId, from, to, exceptId, variantId);
+async function getQueueCached(db: Db, productId: number, from: string, to: string, exceptId?: string, useCache = true, variantId?: string, unitSku?: string) {
+  const key = `${productId}:${variantId || ""}:${unitSku || ""}:${from}:${to}:${exceptId || ""}`, now = Date.now(), cached = queueCache.get(key);
+  if (!useCache) return getQueueUncached(db, productId, from, to, exceptId, variantId, unitSku);
   if (cached && now - cached.at < 5000) return cached.value;
   // Drop expired entries now and then so the cache does not grow with every range ever asked for.
   if (queueCache.size > 2000) for (const [stale, entry] of queueCache) if (now - entry.at >= 5000) queueCache.delete(stale);
   const running = queueRuns.get(key);
   if (running) return running;
-  const run = getQueueUncached(db, productId, from, to, exceptId, variantId);
+  const run = getQueueUncached(db, productId, from, to, exceptId, variantId, unitSku);
   queueRuns.set(key, run);
   try { const value = await run; queueCache.set(key, { at: Date.now(), value }); return value; } finally { queueRuns.delete(key); }
 }
 export const getQueue = cache(getQueueCached);
 
-type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; returned?: unknown; items: { id: number; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
+type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; returned?: unknown; items: { id: number; variantId?: string; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
 // Every booking or hold that takes this piece out of the queue in [from, to), with the days of each step (admin calendars).
-export async function queueBookings(db: Db, productId: number, from: string, to: string): Promise<QueueBooking[]> {
+export async function queueBookings(db: Db, productId: number, from: string, to: string, variantId?: string, unitSku?: string): Promise<QueueBooking[]> {
+  const variantUnitSkus = variantId ? new Set((await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, units: 1 } }))?.units?.filter(unit => unit.variantId === variantId).map(unit => unit.sku) || []) : null;
   const [rows, imported] = await Promise.all([
     db.collection<QueueDoc>("bookingRequests").find({ $or: [blockingFilter(from, to), { status: { $ne: "cancelled" }, returned: { $exists: true }, $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] }], "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, returned: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray(),
     legacyHolds(db, from, to, productId),
   ]);
   const web = rows.map(row => {
-    const item = row.items.find(entry => entry.id === productId), range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row);
-    const matching = row.items.filter(entry => entry.id === productId), unitSkus = matching.map(entry => entry.unitSku).filter((sku): sku is string => !!sku), unassignedCount = matching.reduce((sum, entry) => sum + Math.max(0, (entry.quantity ?? 1) - (entry.unitSku ? 1 : 0)), 0);
+    const matching = row.items.filter(entry => entry.id === productId && (unitSku ? entry.unitSku === unitSku : !variantId || entry.variantId === variantId || (!!entry.unitSku && variantUnitSkus?.has(entry.unitSku))));
+    const item = matching[0], range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row), unitSkus = matching.map(entry => entry.unitSku).filter((sku): sku is string => !!sku), unassignedCount = matching.reduce((sum, entry) => sum + Math.max(0, (entry.quantity ?? 1) - (entry.unitSku ? 1 : 0)), 0);
     return { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", returned: !!row.returned, ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to, unitSkus, unassignedCount };
-  });
+  }).filter(row => !variantId || !!row.unitSkus?.length || !!row.unassignedCount);
   // One entry per old-sheet rental, with every piece of this product it holds.
   const old = new Map<string, QueueBooking>();
   for (const hold of imported) {
+    if (unitSku && !(hold.unitSkus || [hold.unitSku]).includes(unitSku)) continue;
+    if (!unitSku && variantId && !(hold.unitSkus || [hold.unitSku]).some(sku => variantUnitSkus?.has(sku))) continue;
     const seen = old.get(hold.id);
     old.set(hold.id, seen ? { ...seen, unitSkus: [...(seen.unitSkus || []), ...(hold.unitSkus || [])], unassignedCount: (seen.unassignedCount || 0) + (hold.unassignedCount || 0) }
       : { id: hold.id, name: hold.name, confirmed: hold.confirmed, ship: hold.ship, start: hold.start, end: hold.end, returnDate: hold.returnDate, ready: hold.ready, unitSkus: hold.unitSkus, unassignedCount: hold.unassignedCount, href: hold.href });

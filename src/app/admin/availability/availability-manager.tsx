@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { monthCells, monthLabel, queueRole, queueRoleLabels, queueWeekdays, shiftMonth, type QueueBooking, type QueueRole } from "@/lib/queue";
 
-type Product = { id: number; name: string; sku?: string };
+type Product = { id: number; name: string; sku?: string; variants: { id: string; color: string; size: string }[]; units: { sku: string; variantId?: string }[] };
 type MonthData = { key: string; stock: number; overrides: Record<string, number>; left: Record<string, number>; over: Record<string, number>; bookings: QueueBooking[] | null };
 type Mode = "stock" | "closed" | "custom";
 const shortDay = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
@@ -14,6 +14,7 @@ const shortDay = (value: string) => new Intl.DateTimeFormat("th-TH", { day: "num
 // One piece's month: who has it each day, what is still free, and the days the shop closes or limits by hand.
 export default function AvailabilityManager({ products, initialProductId, initialMonth, today }: { products: Product[]; initialProductId?: number; initialMonth: string; today: string }) {
   const [productId, setProductId] = useState(initialProductId || products[0]?.id || 0);
+  const [variantId, setVariantId] = useState("");
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState(initialMonth);
   const [data, setData] = useState<MonthData | null>(null);
@@ -22,19 +23,21 @@ export default function AvailabilityManager({ products, initialProductId, initia
   const [mode, setMode] = useState<Mode>("closed");
   const [custom, setCustom] = useState("");
   const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
-  const key = `${productId}:${month}:${version}`;
+  const key = `${productId}:${variantId}:${month}:${version}`;
   useEffect(() => {
     if (!productId) return;
     const controller = new AbortController();
-    fetch(`/api/admin/availability?productId=${productId}&month=${month}`, { signal: controller.signal, cache: "no-store" })
+    fetch(`/api/admin/availability?productId=${productId}&month=${month}${variantId ? `&variantId=${encodeURIComponent(variantId)}` : ""}`, { signal: controller.signal, cache: "no-store" })
       .then(async response => { const result = await response.json(); if (!response.ok) throw new Error(result.error || "โหลดคิวไม่สำเร็จ"); return result; })
       .then(result => setData({ key, stock: result.stock, bookings: result.bookings, overrides: Object.fromEntries(result.overrides.map((day: { date: string; capacity: number }) => [day.date, day.capacity])), left: Object.fromEntries(result.days.map((day: { date: string; remaining: number }) => [day.date, day.remaining])), over: Object.fromEntries(result.days.map((day: { date: string; over: number }) => [day.date, day.over])) }))
       .catch(cause => { if (cause.name !== "AbortError") setError(cause instanceof Error ? cause.message : "โหลดคิวไม่สำเร็จ"); });
     return () => controller.abort();
-  }, [productId, month, key]);
+  }, [productId, variantId, month, key]);
   const loaded = data?.key === key ? data : null;
   const matches = search.trim() ? products.filter(product => `${product.sku || ""} ${product.name}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) : products;
   const current = products.find(product => product.id === productId);
+  const variantForSku = (sku: string) => current?.units.find(unit => unit.sku === sku)?.variantId;
+  const currentVariantLabel = (product: Product | undefined, id: string) => { const variant = product?.variants.find(item => item.id === id); return variant ? `${variant.color || "ไม่ระบุสี"} / ${variant.size || "ไม่ระบุไซซ์"}` : ""; };
   const reset = () => { setSelected([]); setError(""); setNotice(""); };
   const toggle = (day: string) => { setNotice(""); setSelected(list => list.includes(day) ? list.filter(item => item !== day) : [...list, day].sort()); };
 
@@ -54,13 +57,14 @@ export default function AvailabilityManager({ products, initialProductId, initia
     {!products.length ? <section className="availability-card">ยังไม่มีสินค้าในระบบ</section> : <>
       <section className="availability-card availability-controls">
         <label>ค้นหาชุด<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="รหัสหรือชื่อชุด" /></label>
-        <label>ชุด<select value={productId} onChange={event => { reset(); setProductId(Number(event.target.value)); }}>{!matches.some(product => product.id === productId) && current && <option value={current.id}>{current.sku ? `${current.sku} · ` : ""}{current.name}</option>}{matches.map(product => <option value={product.id} key={product.id}>{product.sku ? `${product.sku} · ` : ""}{product.name}</option>)}</select></label>
+        <label>ชุด<select value={productId} onChange={event => { reset(); setVariantId(""); setProductId(Number(event.target.value)); }}>{!matches.some(product => product.id === productId) && current && <option value={current.id}>{current.sku ? `${current.sku} · ` : ""}{current.name}</option>}{matches.map(product => <option value={product.id} key={product.id}>{product.sku ? `${product.sku} · ` : ""}{product.name}</option>)}</select></label>
+        {!!current?.variants.length && <label>สี / ไซซ์<select value={variantId} onChange={event => { reset(); setVariantId(event.target.value); }}><option value="">ทั้งหมด</option>{current.variants.map(variant => <option key={variant.id} value={variant.id}>{variant.color || "ไม่ระบุสี"} / {variant.size || "ไม่ระบุไซซ์"}</option>)}</select></label>}
         <div className="availability-month"><button type="button" onClick={() => { reset(); setMonth(shiftMonth(month, -1)); }} aria-label="เดือนก่อน"><Icon name="chevronLeft" /></button><strong>{monthLabel(month)}</strong><button type="button" onClick={() => { reset(); setMonth(shiftMonth(month, 1)); }} aria-label="เดือนถัดไป"><Icon name="chevron" /></button></div>
       </section>
       {error && <p className="admin-error" role="alert">{error}</p>}
       {notice && <p className="admin-success" role="status"><Icon name="success" />{notice}</p>}
       <section className="availability-card">
-        <div className="availability-summary"><strong>{current?.sku || current?.name}</strong>{loaded && <span>มีในสต๊อก {loaded.stock} ชิ้น</span>}<span className="availability-tip">แตะวันที่เพื่อเลือก เลือกได้หลายวัน</span></div>
+        <div className="availability-summary"><strong>{current?.sku || current?.name}{variantId && currentVariantLabel(current, variantId) ? ` · ${currentVariantLabel(current, variantId)}` : ""}</strong>{loaded && <span>มีในสต๊อก {loaded.stock} ชิ้น</span>}{variantId && <span>กำลังดูคิวเฉพาะสี/ไซซ์นี้</span>}<span className="availability-tip">แตะวันที่เพื่อเลือก เลือกได้หลายวัน</span></div>
         <ul className="availability-legend"><li className="is-use">ลูกค้าใช้งาน</li><li className="is-ship">จัดส่ง</li><li className="is-return">ส่งคืน</li><li className="is-returned">รับคืนแล้ว</li><li className="is-gap">พักชุด</li><li className="is-hold">กันคิวชั่วคราว</li><li className="is-closed">ร้านปิดรับ / ตั้งเอง</li></ul>
         <div className="availability-grid" aria-busy={!loaded}>
           {queueWeekdays.map(name => <span key={name} className="availability-weekday">{name}</span>)}
@@ -73,13 +77,13 @@ export default function AvailabilityManager({ products, initialProductId, initia
                 <b>{Number(day.slice(8))}</b>
                 {loaded && <small>{clash ? "⚠️ คิวซ้อน" : override === 0 ? "ปิดรับ" : left === 0 ? "เต็ม" : `ว่าง ${left}`}{override !== undefined && override > 0 ? ` (ตั้ง ${override})` : ""}</small>}
               </button>
-              {entries.map(({ booking, role }) => { const pieces = [...(booking.unitSkus || []), ...(booking.unassignedCount ? [`ยังไม่ระบุชิ้น ${booking.unassignedCount} ชิ้น`] : [])].join(", ") || "ยังไม่ระบุชิ้น"; return <Link key={booking.id} href={booking.href ?? `/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip is-${role}${booking.returned ? " is-returned" : ""}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${pieces} · ${booking.name} · ${booking.returned ? "รับคืนแล้ว" : queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{pieces} · {booking.name || booking.id.slice(-6)}</Link>; })}
+              {entries.map(({ booking, role }) => { const pieces = [...(booking.unitSkus || []), ...(booking.unassignedCount ? [`ยังไม่ระบุชิ้น ${booking.unassignedCount} ชิ้น`] : [])].join(", ") || "ยังไม่ระบุชิ้น"; return <span key={booking.id} className={`availability-booking-entry is-${role}`}><Link href={booking.href ?? `/admin/bookings?id=${encodeURIComponent(booking.id)}`} className={`availability-chip${booking.returned ? " is-returned" : ""}${booking.confirmed ? "" : " is-hold"}`} title={`${booking.id} · ${pieces} · ${booking.name} · ${booking.returned ? "รับคืนแล้ว" : queueRoleLabels[role]}${booking.confirmed ? "" : " (กันคิวชั่วคราว)"}`}>{(booking.unitSkus || []).map(sku => <span role="button" tabIndex={0} key={sku} className="availability-sku-filter" onClick={event => { event.preventDefault(); event.stopPropagation(); const nextVariant = variantForSku(sku); if (nextVariant) { reset(); setVariantId(nextVariant); } }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); const nextVariant = variantForSku(sku); if (nextVariant) { reset(); setVariantId(nextVariant); } } }}>{sku}</span>)}{booking.unassignedCount ? <span>ยังไม่ระบุชิ้น {booking.unassignedCount} ชิ้น</span> : null}{!booking.unitSkus?.length && !booking.unassignedCount ? "ยังไม่ระบุชิ้น" : null} · {booking.name || booking.id.slice(-6)}</Link></span>; })}
             </div>;
           })}
         </div>
         {loaded && !loaded.bookings && <p className="availability-note">บัญชีนี้ไม่มีสิทธิ์ดูคำขอจอง จึงไม่แสดงชื่อลูกค้า</p>}
       </section>
-      {selected.length > 0 && <section className="availability-editor" aria-label="ตั้งค่าวันที่เลือก">
+      {selected.length > 0 && !variantId && <section className="availability-editor" aria-label="ตั้งค่าวันที่เลือก">
         <p><strong>เลือก {selected.length} วัน</strong><span>{selected.map(shortDay).join(", ")}</span></p>
         <div className="availability-modes">
           <label className={mode === "closed" ? "is-active" : ""}><input type="radio" name="mode" checked={mode === "closed"} onChange={() => setMode("closed")} />ปิดรับ<small>ไม่รับจองเพิ่ม คิวเดิมยังอยู่</small></label>

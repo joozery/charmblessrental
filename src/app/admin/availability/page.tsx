@@ -7,7 +7,13 @@ import "./availability.css";
 export const metadata = { title: "คิวชุดและวันปิดรับ | Charm Bless", robots: { index: false, follow: false } };
 async function Content({ searchParams }: { searchParams: Promise<{ productId?: string }> }) {
   await pageAdmin("products");
-  const products = (await getProducts()).map(product => ({ id: product.id, name: product.name, sku: product.sku }));
+  const products = (await getProducts()).map(product => ({
+    id: product.id,
+    name: product.name,
+    sku: product.sku,
+    variants: product.variants?.map(variant => ({ id: variant.id, color: variant.color, size: variant.size })) || [],
+    units: (product.units || []).map(unit => ({ sku: unit.sku, variantId: unit.variantId })),
+  }));
   const query = await searchParams, requested = Number(query.productId), initialProductId = products.some(product => product.id === requested) ? requested : undefined;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return <AvailabilityManager products={products} initialProductId={initialProductId} initialMonth={today.slice(0, 7)} today={today} />;

@@ -28,14 +28,14 @@ async function send(body: Record<string, unknown>) {
 // Each piece's queue at a glance, and renting the same pieces for more days with a second payment on the same bill.
 export default function ExtensionPanel({ row, permissions, onChange }: { row: FulfillmentRow; permissions: Permission[]; onChange: (patch: Partial<FulfillmentRow>) => void }) {
   const canExtend = permissions.includes("bookings"), canPay = permissions.includes("payments");
-  const [calendar, setCalendar] = useState<{ id: number; label: string } | null>(null);
+  const [calendar, setCalendar] = useState<{ id: number; label: string; variantId?: string; unitSku?: string } | null>(null);
   const [form, setForm] = useState<{ toEnd: string; amount: string; touched: boolean; note: string; allowClash: boolean; returnMethod: ReturnMethod } | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [paying, setPaying] = useState<{ id: string; day: string } | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const end = lastUseDay(row), extensions = row.extensions || [], latest = activeExtensions(extensions).at(-1);
   const canStart = (row.status === "confirmed" || row.payment === "paid" || !!row.shipment) && !row.returned && !!row.schedule && !extensions.some(item => item.status === "unpaid");
-  const items = row.items.filter((item, index) => row.items.findIndex(other => other.id === item.id) === index);
+  const items = row.items.filter((item, index) => row.items.findIndex(other => other.id === item.id && other.variantId === item.variantId && other.unitSku === item.unitSku) === index);
 
   async function run(task: () => Promise<void>) { setBusy(true); setError(""); setNotice(""); try { await task(); } catch (cause) { setError(cause instanceof Error ? cause.message : "ทำรายการไม่สำเร็จ"); } finally { setBusy(false); } }
   const previewFor = async (toEnd: string, returnMethod: ReturnMethod) => {
@@ -70,7 +70,7 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
 
   return <div id="extension" className="bookings-detail-section bookings-extension"><Icon name="calendar" /><div>
     <h3>คิวและการเช่าต่อ</h3>
-    <p className="bookings-queue-links">ดูคิว:{items.map(item => <button key={item.id} type="button" onClick={() => setCalendar({ id: item.id, label: item.sku || item.name })}><Icon name="calendar" />{item.sku || item.name}</button>)}</p>
+    <p className="bookings-queue-links">ดูคิว:{items.map(item => <button key={`${item.id}:${item.variantId || ""}:${item.unitSku || ""}`} type="button" onClick={() => setCalendar({ id: item.id, label: item.unitSku || item.sku || item.name, variantId: item.variantId, unitSku: item.unitSku })}><Icon name="calendar" />{item.unitSku || item.sku || item.name}</button>)}</p>
     {extensions.length > 0 && <ul className="bookings-extension-list">{extensions.map(item => <li key={item.id} className={`is-${item.status}`}>
       <span><strong>+{item.addedDays} วัน · ใช้งานถึง {day(item.toEnd)}</strong><small>{item.lateDays ? `ค่าปรับล่าช้า ${money(item.amount)} บาท (${item.lateDays} วัน × 100)` : `ค่าเช่าต่อ ${money(item.amount)} บาท`} · {item.createdByName}{item.paidOn ? ` · ชำระ ${day(item.paidOn)}` : item.dueAt ? " · ต้องชำระภายใน 1 ชั่วโมง" : ""}</small>{item.billToken && item.status === "unpaid" && <small><a href={`/bill/${item.billToken}`} target="_blank" rel="noopener noreferrer">เปิดบิลเพิ่มเติม</a></small>}{item.note && <small className="bookings-extension-note">หมายเหตุ: {item.note}</small>}{item.clashDates?.length ? <small className="bookings-clash-text">ขยายทับคิวคนอื่น {item.clashDates.map(day).join(", ")}</small> : null}</span>
       <b className={`bookings-extension-badge is-${item.status}`}>{extensionLabels[item.status]}</b>
@@ -95,10 +95,10 @@ export default function ExtensionPanel({ row, permissions, onChange }: { row: Fu
           : <p className="is-free"><Icon name="success" />คิวว่าง ขยายวันได้</p>}
       </div>}
       <label className="is-wide">หมายเหตุ{preview?.conflicts.length ? " (จำเป็นเมื่อคิวซ้อน)" : " (ไม่บังคับ)"}<input value={form.note} maxLength={500} onChange={event => setForm({ ...form, note: event.target.value })} placeholder="เช่น เครื่องบินดีเลย์ ลูกค้าคืนชุดวันที่ 23" /></label>
-      <div><button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); }}>ยกเลิก</button>{items[0] && <button type="button" disabled={!preview} onClick={() => setCalendar({ id: items[0].id, label: items[0].sku || items[0].name })}>ดูในปฏิทิน</button>}<button type="button" className="is-primary" disabled={busy || !preview || preview.toEnd !== form.toEnd || (preview.conflicts.length > 0 && (!form.allowClash || !form.note.trim())) || form.amount.trim() === ""} onClick={create}>{busy ? "กำลังตรวจ…" : "ยืนยันขยายวันและแจ้งลูกค้า"}</button></div>
+      <div><button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); }}>ยกเลิก</button>{items[0] && <button type="button" disabled={!preview} onClick={() => setCalendar({ id: items[0].id, label: items[0].unitSku || items[0].sku || items[0].name, variantId: items[0].variantId, unitSku: items[0].unitSku })}>ดูในปฏิทิน</button>}<button type="button" className="is-primary" disabled={busy || !preview || preview.toEnd !== form.toEnd || (preview.conflicts.length > 0 && (!form.allowClash || !form.note.trim())) || form.amount.trim() === ""} onClick={create}>{busy ? "กำลังตรวจ…" : "ยืนยันขยายวันและแจ้งลูกค้า"}</button></div>
     </div>}
     {error && <p className="admin-error" role="alert">{error}</p>}
     {notice && !error && <p className="admin-success" role="status"><Icon name="success" /> {notice}</p>}
-    {calendar && <QueueCalendar productId={calendar.id} label={calendar.label} highlight={row._id} preview={preview && row.schedule ? { from: row.schedule.ready, to: preview.schedule.ready } : null} startMonth={preview?.toEnd || end} onClose={() => setCalendar(null)} />}
+    {calendar && <QueueCalendar productId={calendar.id} variantId={calendar.variantId} unitSku={calendar.unitSku} label={calendar.label} highlight={row._id} preview={preview && row.schedule ? { from: row.schedule.ready, to: preview.schedule.ready } : null} startMonth={preview?.toEnd || end} onClose={() => setCalendar(null)} />}
   </div></div>;
 }

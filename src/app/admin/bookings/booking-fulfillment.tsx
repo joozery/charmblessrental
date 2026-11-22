@@ -22,7 +22,7 @@ export type Shipment = { carrier: string; trackingNumber: string; shippedAt: str
 export type Returned = { at: string; condition: string; note: string; byName: string };
 export type Deposit = { amount: number; status: "held" | "refunded" | "partial" | "forfeited" | "void"; receivedAt: string; receivedByName: string; refund?: { amount: number; deducted: number; reason: string; transferRef?: string; date: string; evidence: string[]; at: string; byName: string } };
 export type CustomerReturn = { carrier: string; trackingNumber: string; at: string; via?: "line" | "bill" };
-export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string };
+export type FulfillmentItem = { id: number; name: string; sku: string; unitSku?: string; variantId?: string };
 export type FulfillmentRow = { _id: string; method: string; status: string; start: string; end: string; schedule?: ScheduleRecord; items: FulfillmentItem[]; payment?: "unpaid" | "paid"; shipment?: Shipment; returned?: Returned; customerReturn?: CustomerReturn; returnReminderSentAt?: string; suggestedUnits?: string[]; verification?: BookingVerification; deposit?: Deposit; refundAccount?: RefundAccount; extensions?: Extension[]; penalties?: BookingPenalty[]; clashes?: QueueClash[]; lateDays?: number; risks?: NextRisk[]; lateNoticeSentAt?: string; lineLinked?: boolean; lateReturn?: LateReturn };
 // Returned to the shop while its deposit is still held: the refund is the step left to do.
 export const awaitingRefund = (row: FulfillmentRow) => row.status !== "cancelled" && !!row.returned && row.deposit?.status === "held";
@@ -208,7 +208,7 @@ export default function BookingFulfillment({ row, permissions, unitChoices, fine
     <div className="bookings-detail-section bookings-timeline"><Icon name="history" /><div>
       <h3>ประวัติการทำรายการ</h3>
       {!logs ? <button type="button" className="bookings-timeline-load" disabled={busy} onClick={loadLogs}>ดูว่าใครทำอะไรกับคำขอนี้</button>
-        : logs.length ? <ol>{logs.map(log => <li key={log._id}><strong>{log.summary}</strong><small>{stamp(log.at)} · {log.actorName || log.actorEmail}</small>{!!log.changes.length && log.action !== "booking.payment_confirmed" && <ul>{log.changes.map(change => <li key={change.field}><span>{fieldLabels[change.field] || change.field}</span>{showValue(change.before)} → <b>{showValue(change.after)}</b></li>)}</ul>}</li>)}</ol>
+        : logs.length ? <ol>{logs.map(log => <li key={log._id}><strong>{log.summary}</strong><small>{stamp(log.at)} · {log.actorName || log.actorEmail}</small>{!!log.changes.length && log.action !== "booking.payment_confirmed" && <ul>{log.changes.map(change => <li key={change.field}><span>{fieldLabels[change.field] || change.field}</span>{showValue(change.before, change.field)} → <b>{showValue(change.after, change.field)}</b></li>)}</ul>}</li>)}</ol>
         : <p className="bookings-fulfillment-wait">ยังไม่มีประวัติที่บันทึกไว้</p>}
     </div></div>
   </>;

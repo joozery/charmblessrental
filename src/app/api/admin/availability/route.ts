@@ -20,14 +20,14 @@ const monthRange = (month: string) => { const from = `${month}-01`, end = new Da
 export async function GET(request: Request) {
   const auth = await requireAdmin("products");
   if (auth.error) return auth.error;
-  const url = new URL(request.url), month = url.searchParams.get("month"), productId = Number(url.searchParams.get("productId"));
+  const url = new URL(request.url), month = url.searchParams.get("month"), productId = Number(url.searchParams.get("productId")), variantId = url.searchParams.get("variantId") || undefined;
   if (!validMonth(month) || !Number.isSafeInteger(productId) || productId < 1) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   const { from, to } = monthRange(month!);
   const db = await database();
   const [overrides, days, bookings, product] = await Promise.all([
     db.collection<Day>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
-    getQueue(db, productId, from, to),
-    can(auth.admin, "bookings") ? queueBookings(db, productId, from, to) : Promise.resolve(null),
+    getQueue(db, productId, from, to, undefined, true, variantId),
+    can(auth.admin, "bookings") ? queueBookings(db, productId, from, to, variantId) : Promise.resolve(null),
     db.collection<{ id: number; stock?: number }>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1 } }),
   ]);
   return Response.json({ stock: product?.stock ?? 0, overrides, days, bookings });

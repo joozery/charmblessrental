@@ -43,8 +43,15 @@ export async function POST(request: Request) {
   const items = inputs.map(input => { const product = products.find(item => item.id === input.id)!; const variant = product.variants?.find(item => item.id === input.variantId); const previous = booking.items.find(item => item.id === product.id && item.variantId === input.variantId); return { id: product.id, ...(variant ? { variantId: variant.id, color: variant.color, size: variant.size } : {}), name: product.thai || product.name, sku: product.sku || "", image: product.images?.[0] || product.image || "", dailyRate: product.dailyRate, ...(previous?.unitSku ? { unitSku: previous.unitSku } : {}), rentalPrice: input.rental ?? priceFor(effectivePricing(product, settings.rentalPricing, settings.extraDayRates), days), depositPrice: input.deposit ?? product.deposit ?? 0, quantity: input.quantity, note: input.note || "", stock: variant ? (product.units || []).filter(unit => unit.variantId === variant.id && unit.status !== "unavailable" && unit.status !== "retired").length : product.stock ?? 1 }; });
   const calculatedRental = items.reduce((sum, item) => sum + (item.rentalPrice || 0) * item.quantity, 0), calculatedDeposit = items.reduce((sum, item) => sum + (item.depositPrice || 0) * item.quantity, 0);
   const schedule = scheduleRecord(plan, returnMethod), now = new Date();
-  const beforeItems = booking.items.map(item => ({ sku: item.unitSku || item.sku, variantId: item.variantId || "", quantity: item.quantity || 1 }));
-  const afterItems = items.map(item => ({ sku: item.unitSku || item.sku, variantId: item.variantId || "", quantity: item.quantity || 1 }));
+  // Keep the audit value human-readable. Storing item objects here makes a
+  // shallow array renderer fall back to "[object Object]" in old clients.
+  const auditItem = (item: { sku?: string; unitSku?: string; quantity?: number }) => {
+    const code = item.unitSku || item.sku || "ไม่ระบุรหัส";
+    const quantity = item.quantity || 1;
+    return quantity > 1 ? `${code} × ${quantity}` : code;
+  };
+  const beforeItems = booking.items.map(auditItem);
+  const afterItems = items.map(auditItem);
   const changes = diff(
     { items: beforeItems, start: booking.start, end: booking.end, days: booking.days, returnDate: booking.schedule?.returnDate || booking.end },
     { items: afterItems, start, end, days, returnDate: schedule.returnDate },

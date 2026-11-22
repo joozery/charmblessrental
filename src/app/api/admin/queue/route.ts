@@ -7,10 +7,10 @@ export async function GET(request: Request) {
   const auth = await requireAdmin("bookings");
   if (auth.error) return auth.error;
   const params = new URL(request.url).searchParams;
-  const productId = Number(params.get("productId")), month = params.get("month") || "";
+  const productId = Number(params.get("productId")), month = params.get("month") || "", variantId = params.get("variantId") || undefined, unitSku = params.get("unitSku") || undefined;
   if (!Number.isSafeInteger(productId) || productId < 1 || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return Response.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   const from = `${month}-01`, next = new Date(`${from}T12:00:00Z`); next.setUTCMonth(next.getUTCMonth() + 1);
   const to = next.toISOString().slice(0, 10), db = await database();
-  const [days, bookings] = await Promise.all([getQueue(db, productId, from, to), queueBookings(db, productId, from, to)]);
+  const [days, bookings] = await Promise.all([getQueue(db, productId, from, to, undefined, true, variantId, unitSku), queueBookings(db, productId, from, to, variantId, unitSku)]);
   return Response.json({ days, bookings });
 }
