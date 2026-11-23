@@ -143,18 +143,18 @@ async function getQueueCached(db: Db, productId: number, from: string, to: strin
 }
 export const getQueue = cache(getQueueCached);
 
-type QueueDoc = { _id: string; name?: string; status: string; start: string; end: string; schedule?: ScheduleRecord; returned?: unknown; items: { id: number; variantId?: string; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
+type QueueDoc = { _id: string; name?: string; status: string; payment?: string; createdAt?: Date | string; holdUntil?: Date | string | null; waitlist?: unknown; verification?: { status: string } | null; start: string; end: string; schedule?: ScheduleRecord; returned?: unknown; items: { id: number; variantId?: string; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
 // Every booking or hold that takes this piece out of the queue in [from, to), with the days of each step (admin calendars).
 export async function queueBookings(db: Db, productId: number, from: string, to: string, variantId?: string, unitSku?: string): Promise<QueueBooking[]> {
   const variantUnitSkus = variantId ? new Set((await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, units: 1 } }))?.units?.filter(unit => unit.variantId === variantId).map(unit => unit.sku) || []) : null;
   const [rows, imported] = await Promise.all([
-    db.collection<QueueDoc>("bookingRequests").find({ $or: [blockingFilter(from, to), { status: { $ne: "cancelled" }, returned: { $exists: true }, $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] }], "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, start: 1, end: 1, schedule: 1, returned: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray(),
+    db.collection<QueueDoc>("bookingRequests").find({ $or: [blockingFilter(from, to), { status: { $ne: "cancelled" }, returned: { $exists: true }, $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] }], "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, payment: 1, createdAt: 1, holdUntil: 1, waitlist: 1, verification: 1, start: 1, end: 1, schedule: 1, returned: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray(),
     legacyHolds(db, from, to, productId),
   ]);
   const web = rows.map(row => {
     const matching = row.items.filter(entry => entry.id === productId && (unitSku ? entry.unitSku === unitSku : !variantId || entry.variantId === variantId || (!!entry.unitSku && variantUnitSkus?.has(entry.unitSku))));
     const item = matching[0], range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row), unitSkus = matching.map(entry => entry.unitSku).filter((sku): sku is string => !!sku), unassignedCount = matching.reduce((sum, entry) => sum + Math.max(0, (entry.quantity ?? 1) - (entry.unitSku ? 1 : 0)), 0);
-    return { id: row._id, name: row.name || "", confirmed: row.status === "confirmed", returned: !!row.returned, ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to, unitSkus, unassignedCount };
+    return { id: row._id, name: row.name || "", confirmed: isFirm(row), returned: !!row.returned, ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to, unitSkus, unassignedCount };
   }).filter(row => !variantId || !!row.unitSkus?.length || !!row.unassignedCount);
   // One entry per old-sheet rental, with every piece of this product it holds.
   const old = new Map<string, QueueBooking>();
