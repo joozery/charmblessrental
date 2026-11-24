@@ -5,6 +5,7 @@ export type FinanceTransaction = {
   _id: string; type: "income" | "expense"; category: string; amount: number; date: Date; note: string;
   createdAt: Date; createdBy: string; createdByName?: string;
   bookingId?: string; source?: "manual" | "booking" | "deposit" | "extension" | "late" | "adjustment";
+  attachments?: string[];
   voided?: { at: Date; by: string; byName: string; reason: string };
 };
 export type DepositRefund = { amount: number; deducted: number; reason: string; transferRef?: string; date: Date; evidence: string[]; at: Date; by: string; byName: string };
