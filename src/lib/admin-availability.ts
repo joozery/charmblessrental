@@ -15,7 +15,11 @@ export async function adminUseQueue(db: Db, productId: number, from: string, to:
     legacyHolds(db, from, to, productId),
   ]);
   const variant = product?.variants?.some(row => row.id === variantId) ? variantId : undefined;
-  const stock = variant ? (product?.units || []).filter(unit => unit.variantId === variant && unit.status !== "unavailable" && unit.status !== "retired").length : product?.stock ?? 0;
+  const stock = variant
+    ? (product?.units || []).filter(unit => unit.variantId === variant && unit.status !== "unavailable" && unit.status !== "retired").length
+    : product?.variants?.length
+      ? (product.units || []).filter(unit => unit.status !== "unavailable" && unit.status !== "retired").length
+      : product?.stock ?? 0;
   const capacity = new Map(capacities.map(row => [row.date, Math.min(row.capacity, stock)]));
   const days: { date: string; remaining: number }[] = [];
   for (let date = from; date < to; date = addDays(date, 1)) {

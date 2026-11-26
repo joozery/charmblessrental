@@ -102,7 +102,9 @@ try {
         images: [...new Set([...(keep.images || []), ...rows.flatMap(row => row.images || [])].filter(Boolean))],
         active: rows.some(row => row.active !== false),
         cost: sum(units.map(unit => unit.cost)), legacyRevenue: sum(units.map(unit => unit.legacyRevenue)), legacyProfit: sum(units.map(unit => unit.legacyProfit)),
-        stock: units.filter(unit => unit.status === "available").length,
+        // Keep the aggregate consistent with the application: rented or being
+        // prepared pieces are still part of the product's rentable inventory.
+        stock: units.filter(unit => !["unavailable", "retired"].includes(unit.status)).length,
       },
     };
   }).sort((a, b) => b.units.length - a.units.length || a.product.name.localeCompare(b.product.name));

@@ -3,6 +3,7 @@ import { audit } from "@/lib/audit";
 import { database } from "@/lib/mongodb";
 import { can } from "@/lib/permissions";
 import { getQueue, queueBookings } from "@/lib/availability-store";
+import { stockForVariant, type Product } from "@/lib/products";
 
 const validMonth = (value: string | null) => !!value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
@@ -28,9 +29,9 @@ export async function GET(request: Request) {
     db.collection<Day>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
     getQueue(db, productId, from, to, undefined, true, variantId),
     can(auth.admin, "bookings") ? queueBookings(db, productId, from, to, variantId) : Promise.resolve(null),
-    db.collection<{ id: number; stock?: number }>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1 } }),
+    db.collection<Pick<Product, "id" | "stock" | "variants" | "units">>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1, variants: 1, units: 1 } }),
   ]);
-  return Response.json({ stock: product?.stock ?? 0, overrides, days, bookings });
+  return Response.json({ stock: product ? stockForVariant(product) : 0, overrides, days, bookings });
 }
 
 export async function POST(request: Request) {

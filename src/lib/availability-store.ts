@@ -26,7 +26,7 @@ export const blockingFilter = (from: string, to: string, firmOnly = false) => ({
 ] });
 
 // With `variant`, only lines booked for that colour/size and old-sheet holds on its pieces count.
-type VariantScope = { id: string; unitSkus: Set<string> };
+type VariantScope = { id: string; unitSkus: Set<string>; includeUnassigned?: boolean };
 export async function getReservationCounts(db: Db, productId: number, from: string, to: string, exceptId?: string, firmOnly = false, variant?: VariantScope) {
   const [bookings, imported] = await Promise.all([
     db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to, firmOnly), "items.id": productId, ...(exceptId ? { _id: { $ne: exceptId } } : {}) }, { projection: { _id: 1, start: 1, end: 1, items: 1, schedule: 1 } }).toArray(),
@@ -42,7 +42,7 @@ const reservationFields = { _id: 1, start: 1, end: 1, schedule: 1, "items.id": 1
 function tallyReservations(bookings: BlockingBooking[], imported: LegacyHold[], productId: number, from: string, to: string, firmOnly: boolean, variant?: VariantScope) {
   const result = new Map<string, number>();
   for (const booking of bookings) {
-    const matching = booking.items.filter(item => item.id === productId && (!variant || item.variantId === variant.id || (!item.variantId && !!item.unitSku && variant.unitSkus.has(item.unitSku))));
+    const matching = booking.items.filter(item => item.id === productId && (!variant || item.variantId === variant.id || (!item.variantId && (!!item.unitSku && variant.unitSkus.has(item.unitSku) || !item.unitSku && variant.includeUnassigned))));
     // An assigned unit is still reserved for this booking even while its
     // inventory status remains `available` before the shipment date. Count
     // every matching line instead of treating that unit as free.
@@ -72,7 +72,7 @@ async function getQueueUncached(db: Db, productId: number, from: string, to: str
     const product = await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, id: 1, sku: 1, cost: 1, active: 1, units: 1, variants: 1 } });
     if (product) {
       const units = (unitSku ? unitsOf(product).filter(unit => unit.sku === unitSku) : unitsForVariant(product, variantId)).filter(unit => inService(unit.status));
-      const stock = unitSku ? (units.length ? 1 : 0) : stockForVariant(product, variantId), scope = { id: variantId || unitSku!, unitSkus: new Set(units.map(unit => unit.sku)) };
+      const stock = unitSku ? (units.length ? 1 : 0) : stockForVariant(product, variantId), scope = { id: variantId || unitSku!, unitSkus: new Set(units.map(unit => unit.sku)), includeUnassigned: !unitSku && product.variants?.length === 1 };
       const [capacities, reservations, firm] = await Promise.all([
         db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
         getReservationCounts(db, productId, from, to, exceptId, false, scope),
@@ -85,9 +85,9 @@ async function getQueueUncached(db: Db, productId: number, from: string, to: str
     db.collection<Capacity>("productAvailability").find({ productId, date: { $gte: from, $lt: to } }, { projection: { _id: 0, date: 1, capacity: 1 } }).toArray(),
     getReservationCounts(db, productId, from, to, exceptId),
     getReservationCounts(db, productId, from, to, exceptId, true),
-    db.collection<{ id: number; stock?: number }>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1 } }),
+    db.collection<Pick<Product, "id" | "stock" | "variants" | "units">>("products").findOne({ id: productId }, { projection: { _id: 0, stock: 1, variants: 1, units: 1 } }),
   ]);
-  return queueDays(from, to, capacities, reservations, firm, product?.stock ?? 0);
+  return queueDays(from, to, capacities, reservations, firm, product ? stockForVariant(product) : 0);
 }
 type QueueDay = { date: string; capacity: number; remaining: number; over: number; waitable: boolean };
 function queueDays(from: string, to: string, capacities: { date: string; capacity: number }[], reservations: Map<string, number>, firm: Map<string, number>, stock: number) {
@@ -109,9 +109,9 @@ export async function getQueues(db: Db, requests: { productId: number; from: str
     db.collection<Capacity>("productAvailability").find({ productId: { $in: ids }, date: { $gte: from, $lt: to } }, { projection: { _id: 0, productId: 1, date: 1, capacity: 1 } }).toArray(),
     db.collection<BlockingBooking & HoldState>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": { $in: ids } }, { projection: { ...reservationFields, status: 1, payment: 1, "verification.status": 1 } }).toArray(),
     legacyHolds(db, from, to),
-    db.collection<{ id: number; stock?: number }>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, stock: 1 } }).toArray(),
+    db.collection<Pick<Product, "id" | "stock" | "variants" | "units">>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, stock: 1, variants: 1, units: 1 } }).toArray(),
   ]);
-  const stockOf = new Map(stocks.map(product => [product.id, product.stock ?? 0]));
+  const stockOf = new Map(stocks.map(product => [product.id, stockForVariant(product)]));
   const byProduct = <T,>(rows: T[], idsOf: (row: T) => number[]) => {
     const map = new Map<number, T[]>();
     for (const row of rows) for (const id of new Set(idsOf(row))) map.set(id, [...map.get(id) || [], row]);
@@ -146,14 +146,19 @@ export const getQueue = cache(getQueueCached);
 type QueueDoc = { _id: string; name?: string; status: string; payment?: string; createdAt?: Date | string; holdUntil?: Date | string | null; waitlist?: unknown; verification?: { status: string } | null; start: string; end: string; schedule?: ScheduleRecord; returned?: unknown; items: { id: number; variantId?: string; unitSku?: string; quantity?: number; schedule?: ScheduleRecord }[]; extensions?: Extension[] };
 // Every booking or hold that takes this piece out of the queue in [from, to), with the days of each step (admin calendars).
 export async function queueBookings(db: Db, productId: number, from: string, to: string, variantId?: string, unitSku?: string): Promise<QueueBooking[]> {
-  const variantUnitSkus = variantId ? new Set((await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, units: 1 } }))?.units?.filter(unit => unit.variantId === variantId).map(unit => unit.sku) || []) : null;
+  const variantProduct = variantId ? await db.collection<Product>("products").findOne({ id: productId }, { projection: { _id: 0, units: 1, variants: 1 } }) : null;
+  const variantUnitSkus = variantId ? new Set(variantProduct?.units?.filter(unit => unit.variantId === variantId).map(unit => unit.sku) || []) : null;
+  const includeUnassigned = !!variantId && variantProduct?.variants?.length === 1;
   const [rows, imported] = await Promise.all([
     db.collection<QueueDoc>("bookingRequests").find({ $or: [blockingFilter(from, to), { status: { $ne: "cancelled" }, returned: { $exists: true }, $or: [{ "schedule.ship": { $lt: to }, "schedule.ready": { $gt: from } }, { schedule: { $exists: false }, start: { $lt: to }, end: { $gt: from } }] }], "items.id": productId }, { projection: { _id: 1, name: 1, status: 1, payment: 1, createdAt: 1, holdUntil: 1, waitlist: 1, verification: 1, start: 1, end: 1, schedule: 1, returned: 1, extensions: 1, items: 1 } }).sort({ start: 1 }).toArray(),
     legacyHolds(db, from, to, productId),
   ]);
   const web = rows.map(row => {
-    const matching = row.items.filter(entry => entry.id === productId && (unitSku ? entry.unitSku === unitSku : !variantId || entry.variantId === variantId || (!!entry.unitSku && variantUnitSkus?.has(entry.unitSku))));
-    const item = matching[0], range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row), unitSkus = matching.map(entry => entry.unitSku).filter((sku): sku is string => !!sku), unassignedCount = matching.reduce((sum, entry) => sum + Math.max(0, (entry.quantity ?? 1) - (entry.unitSku ? 1 : 0)), 0);
+    const matching = row.items.filter(entry => entry.id === productId && (unitSku ? entry.unitSku === unitSku : !variantId || entry.variantId === variantId || (!!entry.unitSku && variantUnitSkus?.has(entry.unitSku)) || (!entry.variantId && !entry.unitSku && includeUnassigned)));
+    const item = matching[0], range = item?.schedule ? blockRange({ ...row, schedule: item.schedule }) : blockRange(row), end = lastUseDay(row);
+    const canInferUnit = !unitSku && !!variantId && variantUnitSkus?.size === 1;
+    const unitSkus = matching.flatMap(entry => entry.unitSku ? [entry.unitSku] : canInferUnit ? [...variantUnitSkus!] : []);
+    const unassignedCount = matching.reduce((sum, entry) => sum + Math.max(0, (entry.quantity ?? 1) - (entry.unitSku || canInferUnit ? 1 : 0)), 0);
     return { id: row._id, name: row.name || "", confirmed: isFirm(row), returned: !!row.returned, ship: range.from, start: row.start, end, returnDate: row.schedule?.returnDate ?? addDays(end, 1), ready: range.to, unitSkus, unassignedCount };
   }).filter(row => !variantId || !!row.unitSkus?.length || !!row.unassignedCount);
   // One entry per old-sheet rental, with every piece of this product it holds.
@@ -182,9 +187,9 @@ export async function queueClashes(db: Db, rows: ClashRow[]) {
   const [bookings, imported, stocks] = await Promise.all([
     db.collection<BlockingBooking>("bookingRequests").find({ ...blockingFilter(from, to), "items.id": { $in: ids } }, { projection: reservationFields }).toArray(),
     legacyHolds(db, from, to),
-    db.collection<{ id: number; stock?: number }>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, stock: 1 } }).toArray(),
+    db.collection<Pick<Product, "id" | "stock" | "variants" | "units">>("products").find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, stock: 1, variants: 1, units: 1 } }).toArray(),
   ]);
-  const stockOf = new Map(stocks.map(product => [product.id, product.stock ?? 0]));
+  const stockOf = new Map(stocks.map(product => [product.id, stockForVariant(product)]));
   const bookingsOf = new Map<number, BlockingBooking[]>(), holdsOf = new Map<number, LegacyHold[]>();
   for (const booking of bookings) for (const id of new Set(booking.items.map(item => item.id))) bookingsOf.set(id, [...bookingsOf.get(id) || [], booking]);
   for (const hold of imported) holdsOf.set(hold.productId, [...holdsOf.get(hold.productId) || [], hold]);

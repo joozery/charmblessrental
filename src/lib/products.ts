@@ -41,9 +41,15 @@ export const unitsForVariant = (p: Product, variantId?: string) => {
   return units.filter(unit => target === "legacy" ? !unit.variantId || unit.variantId === "legacy" : unit.variantId === target);
 };
 // Variant stock must come from units assigned to that variant; aggregate stock cannot be copied to every colour.
-export const stockForVariant = (p: Product, variantId?: string) => {
-  if (!variantId || variantId === "legacy") return p.stock ?? unitsForVariant(p, "legacy").filter(unit => inService(unit.status)).length;
-  return unitsForVariant(p, variantId).filter(unit => inService(unit.status)).length;
+type StockProduct = Pick<Product, "stock" | "variants" | "units">;
+export const stockForVariant = (p: StockProduct, variantId?: string) => {
+  const units = p.units || [];
+  // For variant products, the physical units are the source of truth for the
+  // aggregate too. The stored product.stock can be stale after older imports,
+  // which made the unfiltered availability view report zero while a variant
+  // view (which already counted units) was correct.
+  if (!variantId || variantId === "legacy") return p.variants?.length ? units.filter(unit => inService(unit.status)).length : p.stock ?? units.filter(unit => !unit.variantId && inService(unit.status)).length;
+  return units.filter(unit => unit.variantId === variantId && inService(unit.status)).length;
 };
 export const categoryLabels: Record<string, string> = {
   dress: "ชุดออกงาน", winter: "เสื้อกันหนาว", jacket: "แจ็กเก็ต", boots: "รองเท้า",

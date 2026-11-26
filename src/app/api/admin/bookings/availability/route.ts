@@ -9,13 +9,13 @@ export async function GET(request: Request) {
   // Same-origin GET fetches may omit Origin; a supplied Origin must still match.
   if (request.headers.get("origin") && !sameOrigin(request)) return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 403 });
   const auth = await requireAdmin("bookings"); if (auth.error) return auth.error;
-  const url = new URL(request.url), start = url.searchParams.get("start"), end = url.searchParams.get("end"), returnMethod = url.searchParams.get("returnMethod") || "parcel", exceptId = url.searchParams.get("bookingId") || undefined;
+  const url = new URL(request.url), start = url.searchParams.get("start"), end = url.searchParams.get("end"), returnMethod = url.searchParams.get("returnMethod") || "parcel", exceptId = url.searchParams.get("bookingId") || undefined, variantId = url.searchParams.get("variantId") || undefined;
   const ids = (url.searchParams.get("ids") || "").split(",").map(Number).filter(Number.isSafeInteger);
   if (!day(start) || !day(end) || end! < start! || !ids.length || !isReturnMethod(returnMethod)) return Response.json({ error: "ช่วงวันหรือรายการสินค้าไม่ถูกต้อง" }, { status: 400 });
   const db = await database();
   const products = await db.collection<{ id: number; stock?: number; gapDays?: number | null }>("products").find({ id: { $in: ids }, active: { $ne: false }, stock: { $gt: 0 } }, { projection: { _id: 0, id: 1, stock: 1, gapDays: 1 } }).toArray();
   const availability = Object.fromEntries(await Promise.all(products.map(async product => {
-    const queue = await adminUseQueue(db, product.id, start!, addDays(end!, 1), exceptId);
+    const queue = await adminUseQueue(db, product.id, start!, addDays(end!, 1), exceptId, variantId || undefined);
     return [product.id, Math.min(product.stock ?? 0, ...queue.map(item => item.remaining))] as const;
   })));
   return Response.json({ availability }, { headers: { "Cache-Control": "private, no-store" } });
